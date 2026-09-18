@@ -64,10 +64,14 @@ var ui_open := false     # a screen (inventory) is open: ignore game input
 @onready var _camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
 @onready var _model: Node3D = $Model
 @onready var _highlight: MeshInstance3D = $Highlight
-@onready var _arm_l: Node3D = $Model/ArmL
-@onready var _arm_r: Node3D = $Model/ArmR
-@onready var _leg_l: Node3D = $Model/LegL
-@onready var _leg_r: Node3D = $Model/LegR
+
+## Built by _build_model() at the start of _ready() (not @onready: these
+## nodes don't exist yet at @onready time, since the whole point is that
+## Model starts empty and the rig is assembled from player.glb in code).
+var _arm_l: Node3D
+var _arm_r: Node3D
+var _leg_l: Node3D
+var _leg_r: Node3D
 
 var _walk_cycle := 0.0    # advances while walking; drives the limb swing
 var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
@@ -93,6 +97,7 @@ var _mining := false   # arm keeps swinging while true
 
 
 func _ready() -> void:
+	_build_model()
 	_setup_input_actions()
 	_arm.add_excluded_object(get_rid())   # camera arm ignores our own body
 	_pivot.rotation.y = _yaw
@@ -101,6 +106,83 @@ func _ready() -> void:
 	_no_input = "--no-input" in OS.get_cmdline_user_args()
 	if not _no_input:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+# ---------------------------------------------------------------- model
+
+const PLAYER_GLB := preload("res://blocky/models/player.glb")
+const SWORD_GLB := preload("res://blocky/models/short_sword.glb")
+const MODEL_HEIGHT := 1.3   # matches the collision capsule; the source
+                            # asset is authored at real human scale (~1.85 m)
+const SWORD_SCALE := 0.42   # extra shrink so a "short" sword looks short on us
+
+## Parts that don't animate on their own: everything except the four limbs.
+const STATIC_PARTS := ["torso", "belt", "buckle", "head",
+	"hair_cap", "hair_shard_main", "hair_shard_side", "hair_shard_bang",
+	"hair_brow", "hair_lock_front", "hair_back", "hair_side_L", "hair_side_R",
+	"eye_L", "eye_R"]
+
+## Assembles the player's visible model from player.glb: rigs the four
+## limbs onto rotation pivots (so the walk animation can swing them),
+## moves everything else onto Model directly, scales the whole thing
+## down to our chunky character height, and hangs a sword off the hand.
+func _build_model() -> void:
+	var rig: Node3D = PLAYER_GLB.instantiate()
+	_model.add_child(rig)   # so global positions below are meaningful
+
+	var head := rig.find_child("head", true, false) as MeshInstance3D
+	var head_aabb := head.get_aabb()
+	var head_top: float = head.global_position.y + head_aabb.position.y + head_aabb.size.y
+	var scale_factor: float = MODEL_HEIGHT / head_top
+
+	_arm_l = _rig_limb(rig, "arm_L", ["hand_L"])
+	_arm_r = _rig_limb(rig, "arm_R", ["hand_R"])
+	_leg_l = _rig_limb(rig, "leg_L", ["boot_L"])
+	_leg_r = _rig_limb(rig, "leg_R", ["boot_R"])
+
+	for part_name in STATIC_PARTS:
+		_move_to(rig.find_child(part_name, true, false), _model)
+
+	rig.queue_free()   # empty shell (plus any import wrapper node) left behind
+	_model.scale = Vector3(scale_factor, scale_factor, scale_factor)
+
+	# A sword, held loosely at the character's side. Its own local origin
+	# sits at the pommel with the blade pointing up, so flipping it 180
+	# hangs the blade down beside the hand. Not wielded in combat yet.
+	# It's authored at ~1.7 units (nearly our whole 1.3-tall body) because
+	# the asset assumes a real human-scale wearer, so it needs its own
+	# extra scale-down on top of the body's, or the blade drives into
+	# the ground when it hangs.
+	var sword: Node3D = SWORD_GLB.instantiate()
+	var hand_r: Node = _arm_r.find_child("hand_R", true, false)
+	hand_r.add_child(sword)
+	sword.rotation.x = PI
+	sword.scale = Vector3.ONE * SWORD_SCALE
+
+
+## Makes a pivot at the top-centre of `upper_name` (where that limb
+## joins the body) and moves it, plus everything named in `hanging`,
+## underneath it — keeping their appearance exactly as authored.
+## Rotating the returned pivot swings the whole limb from that joint.
+func _rig_limb(rig: Node3D, upper_name: String, hanging: Array) -> Node3D:
+	var upper := rig.find_child(upper_name, true, false) as MeshInstance3D
+	var aabb := upper.get_aabb()
+	var top_y: float = upper.global_position.y + aabb.position.y + aabb.size.y
+	var pivot := Node3D.new()
+	_model.add_child(pivot)
+	pivot.global_position = Vector3(upper.global_position.x, top_y, upper.global_position.z)
+	for part_name in ([upper_name] + hanging):
+		_move_to(rig.find_child(part_name, true, false), pivot)
+	return pivot
+
+
+## Reparents `part` under `new_parent`, keeping its world transform
+## (position *and* rotation — a few of the hair pieces are rotated).
+func _move_to(part: Node3D, new_parent: Node3D) -> void:
+	var t := part.global_transform
+	part.get_parent().remove_child(part)
+	new_parent.add_child(part)
+	part.global_transform = t
 
 
 ## Points the camera. Used by tests; the mouse handler does the same thing.

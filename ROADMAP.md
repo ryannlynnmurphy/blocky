@@ -86,15 +86,34 @@ and verified before the next starts. No system gets built "all at once."
       hotbar is the first row, tools must be held. 2×2 / 3×3 crafting
       grids with shaped and shapeless recipes, a result slot, drag/drop,
       split and shift-craft. Right-click a Workbench to open the 3×3.
+- [x] **M20 — Real textures and a real player model.** Vendored a
+      generated asset pack at `res://blocky/` (16×16 block/item
+      textures, 21 GLB models, palette). Chunks now emit UVs from
+      `BlockAtlas` instead of flat vertex color (biome tint on grass
+      top/leaves survives as a multiply tint over neutral texture); the
+      water plane got a tiled texture. The player is now `player.glb`
+      (21 named parts) rigged at runtime in `player.gd::_build_model()` —
+      pivots computed from live mesh AABBs, not hand-copied numbers —
+      scaled to our 1.3-tall body, with a short sword attached to the
+      right hand (cosmetic only, no swing/combat yet). See `PLAN.md`
+      for the full multi-phase asset-integration plan this milestone
+      started, and `ART.md` for the asset-by-asset checklist.
 
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
 how much they'd change the feel of the game:
 
+- [ ] Icon textures: swap the flat-color hotbar/inventory/item squares
+      for the generated icon PNGs (small, mechanical, low risk).
+- [ ] Environment props as GLBs (trees/rocks/flowers/reeds) — first
+      needs a decision: keep voxel trees (minable, consistent) or
+      switch to the nicer-silhouette GLB trees, or both by biome.
+- [ ] Named wildlife (rabbit/deer/fox/boar/bird) with their own GLBs
+      and behaviors, built on the existing `creature.gd` base.
 - [ ] Shelter matters: Shades can't path through walls but will wait;
       beds to skip the night; torches that keep them away.
-- [ ] Tool durability and a held-item model in the hand.
+- [ ] Tool durability; give the sword an actual swing/hitbox.
 - [ ] A simple generated music loop.
 - [ ] Furnace: smelt iron ore properly; torches from coal + sticks.
-- [ ] Water you can swim in.
+- [ ] Water you can swim in (or the proper GLB water/shoreline system).

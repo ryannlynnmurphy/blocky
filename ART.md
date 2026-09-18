@@ -1,99 +1,97 @@
 # Art checklist
 
-Everything in the game that could take real graphics. Today all of it
-is flat colour (per-face block colours, coloured boxes, drawn rectangles).
-Counts are exact as of 2026-09-18.
+Everything in the game that could take real graphics, and what's
+actually landed. A generated asset pack arrived 2026-09-18 and is
+vendored at `res://blocky/` (see `blocky/README.md` for its own notes,
+and `PLAN.md` for the full multi-phase integration plan this is
+tracking against). Updated 2026-09-18 evening.
 
-Suggested formats are in brackets. Block and item art at **16×16 px**
-keeps the chunky look and matches the 1-block = 1 metre scale.
+## 1. Blocks — 11 ✅ textured
 
-## 1. Blocks — 11 (16×16 PNG per face)
+Real 16×16 textures via `BlockAtlas` + `blocky/textures/blocks/` are
+live in the chunk mesher (`chunk.gd`/`blocks.gd`). Grass top and
+leaves still multiply a biome tint over the (neutral) texture, exactly
+as designed. **Water** surface is textured too (tiled on the existing
+flat plane — no shoreline/mesh upgrade, that's `blocky/models/water_tile.glb`
+territory, deliberately deferred).
 
-Most blocks use one texture for all faces; the ones marked *top/side*
-want two or three.
+| Block | Status |
+|---|---|
+| Grass, Dirt, Stone, Sand, Log, Leaves, Snow, Planks, Workbench, Coal Ore, Iron Ore | ✅ |
+| Water surface | ✅ (flat plane, textured) |
 
-| Block | Faces | Notes |
+## 2. Items — 10 — ⬜ not textured yet
+
+Meat, Stick, Coal, Iron, Wooden/Stone/Iron Pickaxe, Wooden/Stone/Iron
+Axe. Textures exist (`blocky/textures/items/`, 16×16 + an atlas) but
+`hud.gd`/`inventory_ui.gd` still draw a flat color square per slot —
+swapping that for the real icon is small, mechanical, low-risk. Next
+natural pass.
+
+## 3. Characters — 3, mixed
+
+| Character | Asset | Status |
 |---|---|---|
-| Grass | top / side / bottom | top is tinted by biome (keep it greyscale-green) |
-| Dirt | all same | |
-| Stone | all same | |
-| Sand | all same | |
-| Log | top / side | end-grain rings on top |
-| Leaves | all same | tinted by biome; could be cut-out transparent |
-| Snow | all same | |
-| Planks | all same | |
-| Workbench | top / side | a tool grid on top would sell it |
-| Coal Ore | all same | stone with black flecks |
-| Iron Ore | all same | stone with rust flecks |
+| Player | `blocky/models/player.glb` — 21 separate part meshes (leg/boot/torso/belt/buckle/arm/hand ×L,R, head, 8 hair pieces, 2 eyes), each with its own baked texture | ✅ rigged at runtime (`player.gd::_build_model()`); scaled from real-human-scale to our 1.3-tall body; short sword attached to the right hand (cosmetic, no swing yet) |
+| Critter | `blocky/textures/skins/critter_{tan,brown,sandy,white}.png` — **skin sheets only, no GLB** | ⬜ still flat-color boxes. Needs custom per-part UVs matching the sheet's box layout (head 8×8×8, torso 8×12×4, limbs 4×12×4 on a 64×32 sheet) — Godot's default BoxMesh UV won't sample the right sub-region per part, so this isn't a quick texture swap like the player was. |
+| Shade | `blocky/textures/skins/shade.png` — same story as Critter | ⬜ same work needed |
 
-Also: **Water** surface (currently a translucent blue plane; a scrolling
-or animated texture would do a lot).
-
-## 2. Items — 10 (16×16 PNG icons)
-
-Shown in hotbar/inventory slots and as the dropped-item cube.
-
-Meat, Stick, Coal, Iron, Wooden Pickaxe, Wooden Axe, Stone Pickaxe,
-Stone Axe, Iron Pickaxe, Iron Axe.
-
-(The 11 blocks above also need an *icon* view — usually just the top or
-side texture, no extra work.)
-
-## 3. Characters — 3 (box-model skins, Minecraft-style 64×64)
-
-| Character | Parts | Notes |
-|---|---|---|
-| Player | head (face, hair), torso, 2 arms (sleeve + hand), 2 legs | 1.3 blocks tall |
-| Critter | body, head, 2 eyes, 4 legs | 4 coat colours by biome: tan, brown, sandy, white |
-| Shade | body, head, 2 glowing eyes, 2 arms, 2 legs | 1.7 blocks tall, near-black |
+The 8 new creatures from the asset drop (rabbit, deer, fox, boar,
+bird, goblin, wisp, witch) **do** come as full GLBs like the player,
+each with its own baked textures — no custom UV work needed for
+those, just rigging (once they exist as gameplay entities at all;
+today only the generic Critter and the Shade exist, and neither
+matches these new species).
 
 ## 4. World / environment
 
-- Sky: day, sunset, night gradients (procedural now); optional sun disc
-  art, a **moon** (there is moonlight but no visible moon), clouds (none).
-- Trees are just log + leaf blocks — covered by block art.
-- Cave interiors: no art needed, but darkness/torch light later.
+- Sky: day, sunset, night gradients are still procedural (`day_night.gd`);
+  the generated `day.png`/`sunset.png`/`night.png` strip textures,
+  `sun.png`, `moon.png`, `cloud.png` are unused. There's moonlight but
+  no visible sun/moon disc or clouds.
+- Trees are voxel logs+leaves (world_gen.gd), not the GLB
+  pine/broadleaf/crooked trees — an explicit fork in the road (see
+  Milestone F in PLAN.md): keep minable voxel trees, switch to
+  GLB props for silhouette, or split by biome.
+- Rocks, grass tufts, flower patches, mushroom clusters, reeds:
+  GLBs exist (`blocky/models/`), nothing spawns them yet.
+- Cave interiors: no art needed yet, darkness/torch light is future.
 
-## 5. Effects
+## 5. Effects — sprites exist, not wired in
 
-- Block break: crack overlay stages (now the highlight box just darkens).
-- Hit flash on creatures (now a red tint) and the hurt screen vignette
-  (now a flat red overlay).
-- Pickup / craft feedback, footstep dust, Shade burning at dawn — none
-  exist yet; particles would be new.
+`blocky/textures/effects/`: break_0..3 (crack stages), hit_flash,
+hurt_vignette, pickup_spark, footstep_puff, shade_ember, + an atlas.
+The *mechanics* they'd decorate already exist and use plain draw
+calls / color lerps instead: hold-to-break has a progress bar (not
+crack-stage sprites), hits flash creatures red (not `hit_flash.png`),
+taking damage flat-red-overlays the screen (not `hurt_vignette.png`),
+picking things up shows a magnet + text popup (not `pickup_spark.png`).
+Swapping in the real sprites is cosmetic, not new mechanics.
 
-## 6. UI (9-slice PNGs or simple sprites)
+## 6. UI — shapes exist, drawn not textured
 
-- Hotbar: slot frame, selected-slot frame, slot numbers.
-- Inventory / Workbench screen: panel background, slot frame, crafting
-  arrow, result-slot frame, the cursor stack.
-- Health: 10–12 **hearts** (currently red squares); Hunger: 10
-  **drumsticks** (currently orange squares); empty/full states.
-- Crosshair; break-progress bar.
-- Buttons (normal / hover / pressed) for title, pause, death screens;
-  seed text box; sound slider.
-- Title logo **BLOCKY** and subtitle; death-screen tint; "Night falls" /
-  "Dawn" / "Saved" message style.
-- A pixel font (everything uses Godot's default font now).
+Hotbar, inventory/workbench panel, health row, hunger row, crosshair,
+break-progress bar, title/pause/death screens and buttons, a sound
+slider, message text — all already functional, all drawn with plain
+`_draw()` calls (rectangles, lines, `Label`s) rather than the
+generated `hotbar_slot.png` / `slot_frame.png` / `slot_selected.png` /
+`inventory_panel.png` / `heart_*` / `drumstick_*` / `crosshair.png` /
+`break_bar.png` / `button*.png` / `sound_slider.png` / `message_text.png`
+/ `logo.png`. This is the single biggest remaining "make it look like
+Blocky instead of a wireframe prototype" pass, and it's low-risk
+(swap what a `draw_rect`/`draw_texture` call points at, no gameplay
+logic changes) — a good candidate for the next art-focused session.
 
-## What the code needs before textures can be used
+## Suggested order by impact, updated
 
-1. **Block textures**: the chunk mesher (`chunk.gd`) emits vertex colours,
-   not UVs. Adding a texture atlas means emitting a UV per vertex and
-   swapping the material for one with the atlas — about a day's work, and
-   it replaces the block colour table with tile indices.
-2. **Item icons**: hotbar/inventory slots draw a coloured square; they'd
-   draw a texture instead (small change in `hud.gd` / `inventory_ui.gd`).
-3. **Character skins**: each box mesh gets a material with a texture and
-   UVs mapped to the skin sheet (per-part, moderate work).
-4. **UI**: Godot themes can take 9-slice textures with no code changes.
-
-## Suggested order by impact
-
-1. Block textures (changes the whole look)
-2. Item icons
-3. Player skin
-4. Hearts / drumsticks and hotbar frames
-5. Critter and Shade skins
-6. Title logo and buttons
-7. Water, sky, moon, particles
+1. ~~Block textures~~ ✅ done
+2. Item icons (small, mechanical)
+3. UI chrome (hotbar/inventory frames, hearts, hunger, crosshair,
+   break bar, buttons, logo) — biggest visible jump left
+4. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
+5. Critter and Shade skins (needs custom per-part UV work — see §3)
+6. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
+   voxel-vs-GLB for trees first
+7. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
+   sprites, named wildlife GLBs (rabbit/deer/fox/boar/bird/goblin/wisp/witch)
+</content>

@@ -4,6 +4,7 @@ extends RefCounted
 ## Emits `changed` whenever a count moves so the HUD can redraw.
 
 signal changed
+signal added(id: int, amount: int)   # something was picked up (for "+1 Dirt" popups)
 
 var _counts := {}   # block id -> int
 
@@ -15,6 +16,7 @@ func count(id: int) -> int:
 func add(id: int, n: int = 1) -> void:
 	_counts[id] = count(id) + n
 	changed.emit()
+	added.emit(id, n)
 
 
 ## Removes n of a block. Returns false (and takes nothing) if you don't

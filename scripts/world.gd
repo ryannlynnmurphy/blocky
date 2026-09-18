@@ -501,6 +501,7 @@ func creature_count() -> int:
 func spawn_drop(pos: Vector3, item_id: int) -> Drop:
 	var d := Drop.new()
 	d.item_id = item_id
+	d.player = player
 	_drops.add_child(d)
 	d.global_position = pos
 	return d

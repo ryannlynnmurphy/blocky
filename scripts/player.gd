@@ -9,6 +9,7 @@ signal died
 signal xp_changed(xp: int, xp_needed: int, level: int)
 signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
+signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -76,6 +77,13 @@ const RUN_LEAN := 0.14    # radians of forward lean while sprinting
 ## Tests drive movement through these when input is locked out.
 var test_move := Vector2.ZERO
 var test_run := false
+var test_hold_break := false
+
+# ---- breaking blocks takes time ----
+const NO_TARGET := Vector3i(1 << 20, 0, 0)
+var _break_target := NO_TARGET
+var _break_progress := 0.0
+var _mining := false   # arm keeps swinging while true
 
 
 func _ready() -> void:
@@ -195,6 +203,10 @@ func _physics_process(delta: float) -> void:
 	_model.rotation.x = lerp_angle(_model.rotation.x, -RUN_LEAN if running else 0.0, 8.0 * delta)
 	_camera.fov = lerpf(_camera.fov, RUN_FOV if running else BASE_FOV, 6.0 * delta)
 
+	var holding := test_hold_break
+	if not _no_input:
+		holding = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	_update_breaking(delta, holding)
 	_animate_limbs(delta, moving and is_on_floor(), speed, running)
 	_tick_hunger(delta, running)
 	_update_highlight()
@@ -212,7 +224,10 @@ func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) ->
 	_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, swing, k)
 	_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, -swing, k)
 	_leg_r.rotation.x = lerp_angle(_leg_r.rotation.x, swing, k)
-	if _punch_timer > 0.0:
+	if _mining:
+		# Repeated chopping swing while holding on a block.
+		_arm_r.rotation.x = 1.0 + sin(Time.get_ticks_msec() / 1000.0 * 18.0) * 0.5
+	elif _punch_timer > 0.0:
 		_punch_timer -= delta
 		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, 1.5, 30.0 * delta)
 	else:
@@ -363,8 +378,9 @@ func gain_xp(amount: int) -> void:
 
 # ---------------------------------------------------------------- combat
 
-## Left click: punch a creature if one is under the crosshair and close,
-## otherwise break the block.
+## Left click: punch a creature if one is under the crosshair and close.
+## Blocks aren't broken by a click — you hold the button (see
+## _update_breaking), so a click on a block just starts the swing.
 func _attack_or_break() -> void:
 	_punch_timer = 0.25   # arm swing, whatever we hit
 	var target := _aim_creature()
@@ -373,8 +389,43 @@ func _attack_or_break() -> void:
 			return
 		_punch_cooldown = PUNCH_COOLDOWN
 		target.take_hit(PUNCH_DAMAGE, global_position, self)
+
+
+## Called every physics frame with whether the break button is held.
+## Progress builds while you keep aiming at the same block, at a rate set
+## by that block's hardness; it resets if you let go or look elsewhere.
+func _update_breaking(delta: float, holding: bool) -> void:
+	if not holding or _aim_creature() != null:
+		_reset_breaking()
 		return
-	_break_block()
+	var hit := _aim_ray()
+	if hit.is_empty():
+		_reset_breaking()
+		return
+	var block := Vector3i((hit.position - hit.normal * 0.5).floor())
+	var id := world.get_block(block.x, block.y, block.z)
+	if id == Blocks.AIR:
+		_reset_breaking()
+		return
+	if block != _break_target:
+		_break_target = block
+		_break_progress = 0.0
+	_mining = true
+	_break_progress += delta / Blocks.hardness(id)
+	if _break_progress >= 1.0:
+		world.set_block(block.x, block.y, block.z, Blocks.AIR)
+		world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), id)   # pops out as an item
+		_reset_breaking()
+		return
+	break_progress_changed.emit(_break_progress)
+
+
+func _reset_breaking() -> void:
+	if _break_progress > 0.0 or _mining:
+		break_progress_changed.emit(0.0)
+	_break_target = NO_TARGET
+	_break_progress = 0.0
+	_mining = false
 
 
 ## The creature under the crosshair within punching range, or null.
@@ -416,8 +467,12 @@ func _update_highlight() -> void:
 	var block := Vector3i((hit.position - hit.normal * 0.5).floor())
 	_highlight.visible = true
 	_highlight.global_position = Vector3(block) + Vector3(0.5, 0.5, 0.5)
+	# The box darkens as the block gets closer to breaking.
+	var mat: StandardMaterial3D = _highlight.get_surface_override_material(0)
+	mat.albedo_color = Color(1, 1, 1, 0.25).lerp(Color(0.05, 0.05, 0.05, 0.7), _break_progress)
 
 
+## Instant break, used by tests and dev tools. Play uses _update_breaking.
 func _break_block() -> void:
 	var hit := _aim_ray()
 	if hit.is_empty():

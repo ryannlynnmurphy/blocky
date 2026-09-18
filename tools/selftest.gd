@@ -2,7 +2,7 @@ extends Node
 ## Dev tool: exercises the game's real code paths and prints what
 ## happened. Added by main.gd when the game is run with `-- --selftest`.
 ##
-##   frames  40 / 80   break a block, place it back  (inventory)
+##   frames  40..100   hold to break a block, magnet-collect it, place it back
 ##   frames 120..200   spawn a critter, punch it dead, pick up its drop (combat)
 ##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
 ##   frames 300..320   kill two critters, reach level 2 (progression)
@@ -25,12 +25,18 @@ func _physics_process(_delta: float) -> void:
 	_frame += 1
 	match _frame:
 		1:
-			player.set_look(0.0, -0.8)   # look down at the ground ahead
+			player.set_look(0.0, -1.0)   # look down at the ground just ahead
 		40:
 			print("selftest: inventory before break: %s" % player.inventory.summary())
-			player._break_block()
-			print("selftest: inventory after break:  %s" % player.inventory.summary())
-		80:
+			player.test_hold_break = true   # hold the button...
+		60:
+			print("selftest: mid-break progress %.2f (grass takes %.2f s)" % [player._break_progress, Blocks.hardness(Blocks.GRASS)])
+		100:
+			# ...grass takes 0.6 s (36 physics frames); the drop then magnets in.
+			player.test_hold_break = false
+			print("selftest: inventory after hold-break + pickup: %s, drops left %d"
+				% [player.inventory.summary(), world.drop_count()])
+		110:
 			# Select whatever we picked up, then put it back down.
 			for i in Blocks.HOTBAR.size():
 				if player.inventory.count(Blocks.HOTBAR[i]) > 0:

@@ -5,6 +5,9 @@ extends CanvasLayer
 
 var _clock_label: Label
 var _message_label: Label
+var _pickup_label: Label
+var _pickup_timer := 0.0
+var _crosshair: Crosshair
 var _health_bar: SquareBar
 var _hunger_bar: SquareBar
 var _hotbar: HotbarView
@@ -15,15 +18,26 @@ var _player: Player
 var _message_timer := 0.0
 
 
-## A Control that just draws a crosshair in its centre.
+## A crosshair in the centre, with a small progress bar under it while
+## you're breaking a block.
 class Crosshair extends Control:
+	var progress := 0.0
+
 	func _ready() -> void:
 		resized.connect(queue_redraw)
+
+	func set_progress(p: float) -> void:
+		progress = p
+		queue_redraw()
 
 	func _draw() -> void:
 		var c := size / 2.0
 		draw_line(c + Vector2(-8, 0), c + Vector2(8, 0), Color.WHITE, 2.0)
 		draw_line(c + Vector2(0, -8), c + Vector2(0, 8), Color.WHITE, 2.0)
+		if progress > 0.0:
+			var bar := Rect2(c + Vector2(-30, 16), Vector2(60, 6))
+			draw_rect(bar, Color(0, 0, 0, 0.6))
+			draw_rect(Rect2(bar.position, Vector2(60 * progress, 6)), Color.WHITE)
 
 
 ## A row of chunky squares: filled = what you have, dark = what you lost.
@@ -123,10 +137,19 @@ func _ready() -> void:
 	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_damage_flash)
 
-	var cross := Crosshair.new()
-	cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(cross)
+	_crosshair = Crosshair.new()
+	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_crosshair)
+
+	# "+1 Dirt" popup just above the health row.
+	_pickup_label = _make_label()
+	_pickup_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_pickup_label.offset_top = -112
+	_pickup_label.offset_bottom = -88
+	_pickup_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pickup_label.visible = false
+	add_child(_pickup_label)
 
 	# Bottom stack, from the bottom up: hotbar, then health + hunger row.
 	_hotbar = HotbarView.new()
@@ -177,6 +200,8 @@ func bind_player(player: Player) -> void:
 	_player = player
 	player.hotbar_changed.connect(func(_i: int): _hotbar.refresh(player))
 	player.inventory.changed.connect(func(): _hotbar.refresh(player))
+	player.inventory.added.connect(_show_pickup)
+	player.break_progress_changed.connect(_crosshair.set_progress)
 	player.health_changed.connect(_health_bar.set_value)
 	player.hunger_changed.connect(_hunger_bar.set_value)
 	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
@@ -184,6 +209,13 @@ func bind_player(player: Player) -> void:
 	_health_bar.set_value(player.health, player.max_health)
 	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
 	_hotbar.refresh(player)
+
+
+func _show_pickup(id: int, amount: int) -> void:
+	_pickup_label.text = "+%d %s" % [amount, Blocks.NAMES[id]]
+	_pickup_label.modulate.a = 1.0
+	_pickup_label.visible = true
+	_pickup_timer = 1.5
 
 
 ## Big centred text for a couple of seconds.
@@ -209,6 +241,11 @@ func _process(delta: float) -> void:
 		_message_timer -= delta
 		if _message_timer <= 0.0:
 			_message_label.visible = false
+	if _pickup_timer > 0.0:
+		_pickup_timer -= delta
+		_pickup_label.modulate.a = clampf(_pickup_timer / 0.5, 0.0, 1.0)   # fade in the last half second
+		if _pickup_timer <= 0.0:
+			_pickup_label.visible = false
 
 	var parts: PackedStringArray = []
 	if _world != null and _player != null:

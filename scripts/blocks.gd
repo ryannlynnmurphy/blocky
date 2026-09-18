@@ -17,6 +17,16 @@ const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow"
 ## Items (not blocks) worth listing on the HUD.
 const ITEMS := [MEAT]
 
+## Seconds of holding the button it takes to break each block by hand.
+const HARDNESS := {
+	GRASS: 0.6, DIRT: 0.5, STONE: 1.5, SAND: 0.5,
+	LOG: 1.0, LEAVES: 0.25, SNOW: 0.3, PLANKS: 0.9,
+}
+
+
+static func hardness(id: int) -> float:
+	return HARDNESS.get(id, 1.0)
+
 ## Blocks you can pick with keys 1-8 and place.
 const HOTBAR := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, PLANKS, SNOW]
 

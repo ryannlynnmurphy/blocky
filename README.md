@@ -24,7 +24,8 @@ godot --path .
 | Mouse | Look |
 | Space | Jump |
 | Shift | Run |
-| Left click | Punch a creature under the crosshair (within 3 blocks), otherwise break the highlighted block |
+| Left click | Punch a creature under the crosshair (within 3 blocks) |
+| Left click (hold) | Break the highlighted block — leaves take 0.25 s, dirt 0.5 s, stone 1.5 s. It pops out as an item that flies to you when you're close |
 | Right click | Place the selected block |
 | 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
 | E | Eat one Meat (+4 hunger) |

@@ -24,7 +24,7 @@ var _last_player_chunk := Vector2i(1 << 20, 1 << 20)
 const MAX_CREATURES := 40
 const CREATURE_SCENE := preload("res://scenes/creature.tscn")
 ## Chance that a freshly built chunk gets a group of animals, per biome.
-const SPAWN_CHANCE := [0.35, 0.25, 0.08, 0.2]   # Plains, Forest, Desert, Tundra
+const SPAWN_CHANCE := [0.16, 0.12, 0.04, 0.1]   # Plains, Forest, Desert, Tundra
 const COAT_COLORS := [
 	Color(0.85, 0.70, 0.50),   # Plains: tan
 	Color(0.55, 0.38, 0.25),   # Forest: brown
@@ -198,11 +198,16 @@ func spawn_creature(wx: int, wz: int) -> Creature:
 		return null   # beach or under water
 	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
 		return null   # something (a tree?) is in the way
+	return spawn_creature_at(Vector3(wx + 0.5, h + 1.5, wz + 0.5))
+
+
+## Puts one animal at an exact position, no questions asked (tests use this).
+func spawn_creature_at(pos: Vector3) -> Creature:
 	var c: Creature = CREATURE_SCENE.instantiate()
 	c.world = self
-	c.body_color = COAT_COLORS[gen.biome_at(wx, wz)]
+	c.body_color = COAT_COLORS[gen.biome_at(int(floor(pos.x)), int(floor(pos.z)))]
 	_creatures.add_child(c)
-	c.global_position = Vector3(wx + 0.5, h + 1.5, wz + 0.5)
+	c.global_position = pos
 	return c
 
 

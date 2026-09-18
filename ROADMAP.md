@@ -38,9 +38,12 @@ and verified before the next starts. No system gets built "all at once."
       flash red, get knocked back and flee; at 0 they die and leave a
       Meat drop you walk over to collect (`drop.gd`).
 
+- [x] **M10 — Player health.** 10 health, fall damage past 3 blocks, red
+      hurt flash, "You died" + respawn at spawn with full health, E eats
+      Meat to heal 4. Chunky health bar above the hotbar.
+
 ## Next (in order)
 
-- [ ] M10 — Player stats: health bar, taking damage, respawn.
 - [ ] M11 — RPG progression: XP from creatures, levels raise health.
 - [ ] M12 — Saving: world edits, inventory and position survive a restart.
 

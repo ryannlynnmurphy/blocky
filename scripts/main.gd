@@ -28,6 +28,7 @@ func _ready() -> void:
 		sx += 4
 	var spawn := Vector3(sx + 0.5, world.height_at(sx, sz) + 2.0, sz + 0.5)
 	player.global_position = spawn
+	player.spawn_point = spawn
 
 	# Build the ground under the player immediately so they don't fall
 	# through the world while the rest streams in.

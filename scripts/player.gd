@@ -3,6 +3,9 @@ extends CharacterBody3D
 ## The character you control: movement, jumping, camera, and block editing.
 
 signal hotbar_changed(index: int)
+signal health_changed(health: int, max_health: int)
+signal damaged(amount: int)
+signal died
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -16,9 +19,18 @@ const PUNCH_COOLDOWN := 0.35
 
 var _punch_cooldown := 0.0
 
+const MAX_HEALTH := 10
+const SAFE_FALL := 3.0    # blocks you can drop without getting hurt
+const MEAT_HEAL := 4
+
 var world: VoxelWorld
 var selected := 0    # index into Blocks.HOTBAR
 var inventory := Inventory.new()
+var health := MAX_HEALTH
+var spawn_point := Vector3.ZERO   # where you come back to life
+
+var _was_on_floor := true
+var _peak_y := 0.0   # highest point of the current fall
 
 var _yaw := 0.0
 var _pitch := -0.3
@@ -103,6 +115,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if n >= 0 and n < Blocks.HOTBAR.size():
 			selected = n
 			hotbar_changed.emit(selected)
+		elif key.keycode == KEY_E:
+			eat()
 
 
 func _physics_process(delta: float) -> void:
@@ -124,6 +138,7 @@ func _physics_process(delta: float) -> void:
 	velocity.z = dir.z * speed
 
 	move_and_slide()
+	_check_fall_damage()
 
 	# Turn the model to face the way we're walking.
 	if dir.length() > 0.1:
@@ -131,6 +146,60 @@ func _physics_process(delta: float) -> void:
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 12.0 * delta)
 
 	_update_highlight()
+
+
+# ---------------------------------------------------------------- health
+
+## Remembers the top of each fall; landing from higher than SAFE_FALL
+## costs one health per extra block.
+func _check_fall_damage() -> void:
+	var on_floor := is_on_floor()
+	if not on_floor:
+		if _was_on_floor:
+			_peak_y = global_position.y
+		_peak_y = maxf(_peak_y, global_position.y)
+	elif not _was_on_floor:
+		var fall := _peak_y - global_position.y
+		if fall > SAFE_FALL:
+			take_damage(int(fall - SAFE_FALL))
+	_was_on_floor = on_floor
+
+
+func take_damage(amount: int) -> void:
+	if amount <= 0 or health <= 0:
+		return
+	health = maxi(health - amount, 0)
+	damaged.emit(amount)
+	health_changed.emit(health, MAX_HEALTH)
+	if health == 0:
+		_die()
+
+
+func heal(amount: int) -> void:
+	health = mini(health + amount, MAX_HEALTH)
+	health_changed.emit(health, MAX_HEALTH)
+
+
+## Eats one Meat for MEAT_HEAL health. Returns false if you can't.
+func eat() -> bool:
+	if health >= MAX_HEALTH or not inventory.take(Blocks.MEAT):
+		return false
+	heal(MEAT_HEAL)
+	return true
+
+
+func _die() -> void:
+	died.emit()
+	respawn()
+
+
+func respawn() -> void:
+	global_position = spawn_point
+	velocity = Vector3.ZERO
+	_peak_y = spawn_point.y
+	_was_on_floor = false
+	health = MAX_HEALTH
+	health_changed.emit(health, MAX_HEALTH)
 
 
 # ---------------------------------------------------------------- combat

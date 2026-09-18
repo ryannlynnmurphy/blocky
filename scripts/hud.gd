@@ -3,9 +3,13 @@ extends CanvasLayer
 
 var _hotbar_label: Label
 var _clock_label: Label
+var _death_label: Label
+var _health_bar: HealthBar
+var _damage_flash: ColorRect
 var _day_night: DayNight
 var _world: VoxelWorld
 var _player: Player
+var _death_timer := 0.0
 
 
 ## A Control that just draws a crosshair in its centre.
@@ -19,14 +23,62 @@ class Crosshair extends Control:
 		draw_line(c + Vector2(0, -8), c + Vector2(0, 8), Color.WHITE, 2.0)
 
 
+## A row of chunky squares: red = health you have, dark = health you lost.
+class HealthBar extends Control:
+	const CELL := 18.0
+	const GAP := 4.0
+	var health := 10
+	var max_health := 10
+
+	func _ready() -> void:
+		resized.connect(queue_redraw)
+
+	func set_health(h: int, m: int) -> void:
+		health = h
+		max_health = m
+		queue_redraw()
+
+	func _draw() -> void:
+		var total := max_health * CELL + (max_health - 1) * GAP
+		var x0 := (size.x - total) / 2.0
+		for i in max_health:
+			var r := Rect2(x0 + i * (CELL + GAP), 0, CELL, CELL)
+			var col := Color(0.9, 0.2, 0.25) if i < health else Color(0.1, 0.1, 0.12, 0.6)
+			draw_rect(r, col)
+			draw_rect(r, Color(0, 0, 0, 0.5), false, 2.0)
+
+
 func _ready() -> void:
+	# Red screen flash when hurt (drawn first so everything else sits on top).
+	_damage_flash = ColorRect.new()
+	_damage_flash.color = Color(0.8, 0.0, 0.0, 0.0)
+	_damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_damage_flash)
+
 	var cross := Crosshair.new()
 	cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cross)
 
+	_health_bar = HealthBar.new()
+	_health_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_health_bar.offset_top = -74
+	_health_bar.offset_bottom = -56
+	_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_health_bar)
+
+	_death_label = _make_label()
+	_death_label.text = "You died"
+	_death_label.add_theme_font_size_override("font_size", 48)
+	_death_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_death_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_death_label.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_death_label.visible = false
+	add_child(_death_label)
+
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   T fast-forward   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   E eat   T fast-forward   Esc free mouse"
 	hint.position = Vector2(12, 8)
 	add_child(hint)
 
@@ -52,6 +104,12 @@ func bind_player(player: Player) -> void:
 	_player = player
 	player.hotbar_changed.connect(_refresh_hotbar)
 	player.inventory.changed.connect(func(): _refresh_hotbar(player.selected))
+	player.health_changed.connect(_health_bar.set_health)
+	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
+	player.died.connect(func():
+		_death_label.visible = true
+		_death_timer = 2.0)
+	_health_bar.set_health(player.health, Player.MAX_HEALTH)
 	_refresh_hotbar(player.selected)
 
 
@@ -64,7 +122,14 @@ func bind_world(world: VoxelWorld, player: Player) -> void:
 	_player = player
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Fade the hurt flash and the death message.
+	_damage_flash.color.a = move_toward(_damage_flash.color.a, 0.0, 1.2 * delta)
+	if _death_timer > 0.0:
+		_death_timer -= delta
+		if _death_timer <= 0.0:
+			_death_label.visible = false
+
 	var parts: PackedStringArray = []
 	if _world != null and _player != null:
 		var p := _player.global_position

@@ -4,11 +4,13 @@ extends Node
 ##
 ##   frames  40 / 80   break a block, place it back  (inventory)
 ##   frames 120..200   spawn a critter, punch it dead, pick up its drop (combat)
+##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
 
 var player: Player
 var world: VoxelWorld
 var _frame := 0
 var _critter: Creature
+var _deaths := 0
 
 
 func _physics_process(_delta: float) -> void:
@@ -38,9 +40,7 @@ func _physics_process(_delta: float) -> void:
 				print("selftest: aim ray hit nothing; cannot place critter")
 			else:
 				var p: Vector3 = hit.position
-				_critter = world.spawn_creature(int(floor(p.x)), int(floor(p.z)))
-				if _critter != null:
-					_critter.global_position = p + Vector3(0, 0.05, 0)   # exactly under the crosshair
+				_critter = world.spawn_creature_at(p + Vector3(0, 0.05, 0))   # exactly under the crosshair
 				print("selftest: spawned critter: %s" % (_critter != null))
 		140:
 			print("selftest: crosshair sees critter: %s" % (player._aim_creature() != null))
@@ -76,3 +76,15 @@ func _physics_process(_delta: float) -> void:
 				player.global_position = d.global_position + Vector3(0, 0.2, 0)
 		200:
 			print("selftest: inventory after pickup: %s" % player.inventory.summary())
+		210:
+			print("selftest: health before fall: %d" % player.health)
+			player.died.connect(func(): _deaths += 1)
+			player.global_position.y += 8.0   # drop from 8 blocks up (lands after ~0.85 s)
+		280:
+			print("selftest: health after fall:  %d" % player.health)
+			var ate := player.eat()
+			print("selftest: ate meat: %s, health now %d, %s" % [ate, player.health, player.inventory.summary()])
+		290:
+			player.take_damage(100)
+			print("selftest: after lethal damage: deaths %d, health %d, at spawn: %s"
+				% [_deaths, player.health, player.global_position.distance_to(player.spawn_point) < 0.01])

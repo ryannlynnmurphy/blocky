@@ -43,6 +43,12 @@ static var INDEX_TABLE: PackedInt32Array = _make_index_table(24000)
 var world              # the VoxelWorld that owns us (untyped to avoid a script cycle)
 var cpos: Vector2i     # which chunk we are, in chunk units
 var dirty := true      # true = mesh needs (re)building
+var version := 0       # bumped on every edit, so stale thread results get dropped
+
+var last_shape_usec := 0   # perf: time the last collision shape took to build
+## Only chunks near the player get a collision shape (they're the
+## expensive part, and nothing can touch a chunk 100 blocks away).
+var collision_enabled := false
 
 var _mesh_instance := MeshInstance3D.new()
 var _collision := CollisionShape3D.new()
@@ -89,13 +95,14 @@ func setup(owner_world, chunk_pos: Vector2i) -> void:
 	add_child(_collision)
 
 
-## Rebuilds the mesh and the collision shape from the block data.
+## Rebuilds the mesh and the collision shape from the block data, right
+## now on the calling thread.
 func build_mesh() -> void:
 	dirty = false
 	var result := build_arrays(
 		world.chunk_data[cpos], world.chunk_max_y[cpos], world.chunk_tints[cpos],
 		_neighbour_snapshot())
-	apply_arrays(result)
+	apply_mesh(make_mesh(result))
 
 
 ## The four neighbouring chunks' block data, so edge faces cull correctly.
@@ -108,8 +115,9 @@ func _neighbour_snapshot() -> Dictionary:
 	return nb
 
 
-## Turns the arrays into a mesh + collision shape on this node.
-func apply_arrays(result: Dictionary) -> void:
+## Turns mesh arrays into an ArrayMesh. Safe to call from a worker
+## thread: Godot's renderer accepts mesh uploads from any thread.
+static func make_mesh(result: Dictionary) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var verts: PackedVector3Array = result["verts"]
 	if verts.size() > 0:
@@ -121,10 +129,36 @@ func apply_arrays(result: Dictionary) -> void:
 		arrays[Mesh.ARRAY_INDEX] = result["indices"]
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mesh.surface_set_material(0, MATERIAL)
+	return mesh
+
+
+## Puts a finished mesh on this node, and a collision shape if this
+## chunk is close enough to need one. Main thread only.
+func apply_mesh(mesh: ArrayMesh) -> void:
+	_mesh_instance.mesh = mesh
+	last_shape_usec = 0
+	if collision_enabled:
+		_rebuild_shape()
+
+
+func set_collision_enabled(on: bool) -> void:
+	if on == collision_enabled:
+		return
+	collision_enabled = on
+	if on:
+		_rebuild_shape()
+	else:
+		_collision.shape = null
+
+
+func _rebuild_shape() -> void:
+	var t0 := Time.get_ticks_usec()
+	var mesh := _mesh_instance.mesh
+	if mesh != null and mesh.get_surface_count() > 0:
 		_collision.shape = mesh.create_trimesh_shape()
 	else:
 		_collision.shape = null
-	_mesh_instance.mesh = mesh
+	last_shape_usec = Time.get_ticks_usec() - t0
 
 
 ## Pure function: block data in, mesh arrays out. Touches no nodes, so it

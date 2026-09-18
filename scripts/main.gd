@@ -24,6 +24,12 @@ func _ready() -> void:
 	for arg in args:
 		if arg.begins_with("--radius="):
 			world.view_radius = int(arg.get_slice("=", 1))
+	# Fog fades the world out just before the edge of the loaded chunks,
+	# so you never see terrain stop dead.
+	var view_dist := float(world.view_radius * VoxelWorld.SIZE)
+	var env: Environment = $WorldEnvironment.environment
+	env.fog_depth_begin = view_dist * 0.6
+	env.fog_depth_end = view_dist * 0.97
 
 	# Find dry land near the origin to spawn on.
 	var sx := 8

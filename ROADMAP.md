@@ -46,6 +46,12 @@ and verified before the next starts. No system gets built "all at once."
       Each level adds +2 max health and fully heals. Gold XP bar with
       "Lv N", "Level N!" banner.
 
+- [x] **M13 — Performance.** Measured first (meshing was 18.8 ms/chunk
+      on the main thread; worst frame 75 ms at radius 8). Mesher rewritten
+      (5.4 ms), then generation + meshing moved to worker threads, and
+      collision shapes limited to chunks near the player. Result: worst
+      frame 12 ms, view radius 4 → 8 (64 → 128 blocks). `--perf` prints
+      the numbers.
 - [x] **M12 — Saving.** One JSON save (`user://save.json`): seed + block
       edits (terrain regenerates, only the diff is stored), player
       position/look/health/level/XP/inventory, time of day. Autosave
@@ -60,7 +66,5 @@ how much they'd change the feel of the game:
       giving the day/night cycle teeth.
 - [ ] Tools & crafting: a workbench, wooden/stone pickaxe, faster mining.
 - [ ] Sound: footsteps, hits, ambient wind, a simple music loop.
-- [ ] Performance: greedy meshing, larger view distance, threaded
-      chunk generation.
 - [ ] Water you can swim in, caves, ores.
 - [ ] Title screen with New Game / Continue and a seed box.

@@ -56,6 +56,7 @@ godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minut
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
 godot --path . -- --fresh              ignore the save file, start a new game
+godot --path . -- --perf --radius=8    print chunk generation/meshing timings
 godot --path . -- --selftest --no-input --fresh
                                        auto-run break/place, punch/kill/pickup,
                                        fall/eat/die/respawn, XP/level-up and
@@ -93,6 +94,24 @@ scripts/hud.gd       crosshair, hotbar, clock, hints
 |-------|-----|-------|
 | 1 | terrain chunks | camera arm and block-aiming rays only look here |
 | 2 | creatures | player collides with 1+2, creatures with 1+2 |
+
+## How chunks stream in (performance)
+
+Chunks within `view_radius` (8 → 128 blocks) of the player are drawn;
+only those within `collision_radius` (3) get a physics shape, because
+that's the one expensive step that must run on the main thread. The
+pipeline for a new chunk:
+
+1. `update_chunks` creates an empty `Chunk` node and queues it (nearest first).
+2. A worker thread generates its block data (`GenJob`, look-ahead of 8).
+3. When it and its four neighbours have data, a worker thread meshes it
+   (`MeshJob`: `Chunk.build_arrays` → `Chunk.make_mesh`).
+4. The main thread puts the mesh on the node and, if it's near you,
+   builds the collision shape — at most 3 shapes per frame.
+
+Edits skip the threads and rebuild synchronously so they feel instant;
+a `version` counter drops any thread result that predates the edit.
+`-- --perf` prints timings every 60 frames.
 
 ## How the world is stored
 

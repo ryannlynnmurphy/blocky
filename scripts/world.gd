@@ -7,8 +7,54 @@ const SIZE := Chunk.SIZE
 const HEIGHT := Chunk.HEIGHT
 
 @export var world_seed := 1337
-@export var view_radius := 4        # chunks loaded in each direction
-@export var chunks_per_frame := 2   # how many meshes to build per frame
+@export var view_radius := 8        # chunks loaded (drawn) in each direction
+@export var collision_radius := 3   # chunks with collision in each direction
+## How many chunk meshes may be building on worker threads at once.
+var max_jobs := maxi(2, OS.get_processor_count() - 2)
+## Main-thread work per frame is capped so streaming never causes a hitch.
+var max_shapes_per_frame := 3      # collision shapes built (the expensive bit)
+var max_dispatches_per_frame := 3  # chunks handed to threads
+
+
+## One chunk's meshing work, handed to a worker thread. It owns
+## snapshots of everything it needs, so it never touches the world.
+class MeshJob extends RefCounted:
+	var cpos: Vector2i
+	var version: int
+	var generation: int
+	var data: PackedByteArray
+	var max_y: int
+	var tints: PackedColorArray
+	var nb: Dictionary
+	var mesh: ArrayMesh
+	var task_id := -1
+	var usec := 0
+
+	func run() -> void:
+		var t0 := Time.get_ticks_usec()
+		mesh = Chunk.make_mesh(Chunk.build_arrays(data, max_y, tints, nb))
+		usec = Time.get_ticks_usec() - t0
+
+
+## One chunk's terrain generation, handed to a worker thread.
+class GenJob extends RefCounted:
+	var cpos: Vector2i
+	var generation: int
+	var gen: WorldGen
+	var result: Array
+	var task_id := -1
+
+	func run() -> void:
+		result = gen.fill_chunk(cpos)
+
+
+const MAX_GEN_JOBS := 8
+const GEN_LOOKAHEAD := 8   # start generating data for this many queued chunks ahead
+
+var _jobs: Array[MeshJob] = []
+var _gen_jobs := {}    # Vector2i -> GenJob
+var _generation := 0   # bumped by reset_chunks() so in-flight jobs get dropped
+var _collision_queue: Array[Vector2i] = []   # chunks that need a shape, nearest first
 
 var gen: WorldGen
 var chunk_data := {}    # Vector2i -> PackedByteArray (kept forever, so edits survive)
@@ -27,9 +73,13 @@ var _last_player_chunk := Vector2i(1 << 20, 1 << 20)
 var perf_enabled := false
 var _gen_usec := 0
 var _gen_count := 0
-var _mesh_usec := 0
+var _mesh_usec := 0      # time spent in build_arrays (on worker threads)
 var _mesh_count := 0
+var _apply_usec := 0     # time spent putting meshes on nodes (main thread)
+var _shape_usec := 0     # ...of which building collision shapes
+var _apply_count := 0
 var _worst_frame_usec := 0
+var _worst_frame_note := ""
 var _perf_frames := 0
 
 # ---- creatures ----
@@ -56,6 +106,16 @@ func _ready() -> void:
 	add_child(_drops)
 
 
+## Worker tasks must never outlive the world: wait for them on the way out.
+func _exit_tree() -> void:
+	for job in _jobs:
+		WorkerThreadPool.wait_for_task_completion(job.task_id)
+	_jobs.clear()
+	for cpos in _gen_jobs.keys():
+		WorkerThreadPool.wait_for_task_completion(_gen_jobs[cpos].task_id)
+	_gen_jobs.clear()
+
+
 func _process(_delta: float) -> void:
 	if player == null:
 		return
@@ -64,35 +124,171 @@ func _process(_delta: float) -> void:
 	if pc != _last_player_chunk:
 		_last_player_chunk = pc
 		update_chunks(pc)
+	var t_update := Time.get_ticks_usec()
 
-	# Build a few queued meshes per frame so the game never freezes.
-	var budget := chunks_per_frame
-	while budget > 0 and mesh_queue.size() > 0:
-		var cpos: Vector2i = mesh_queue.pop_front()
-		if chunks.has(cpos) and chunks[cpos].dirty:
-			var t0 := Time.get_ticks_usec()
-			chunks[cpos].build_mesh()
-			_mesh_usec += Time.get_ticks_usec() - t0
-			_mesh_count += 1
-			budget -= 1
-			# Only now is there ground to stand on, so spawn animals here.
-			if not _populated.has(cpos):
-				_populated[cpos] = true
-				_populate_chunk(cpos)
+	_collect_gen_jobs()
+	var shapes := _collect_finished_jobs(pc)
+	var t_collect := Time.get_ticks_usec()
+	shapes += _process_collision_queue(max_shapes_per_frame - shapes)
+	var t_shapes := Time.get_ticks_usec()
+	var dispatched := _dispatch_jobs()
+	var t_dispatch := Time.get_ticks_usec()
 
 	if perf_enabled:
-		var frame_usec := Time.get_ticks_usec() - frame_start
-		_worst_frame_usec = maxi(_worst_frame_usec, frame_usec)
+		var frame_usec := t_dispatch - frame_start
+		if frame_usec > _worst_frame_usec:
+			_worst_frame_usec = frame_usec
+			_worst_frame_note = "update %.1f ms, applies %.1f ms, shapes(%d) %.1f ms, %d dispatches %.1f ms" % [
+				(t_update - frame_start) / 1000.0, (t_collect - t_update) / 1000.0,
+				shapes, (t_shapes - t_collect) / 1000.0,
+				dispatched, (t_dispatch - t_shapes) / 1000.0]
 		_perf_frames += 1
 		if _perf_frames % 60 == 0:
 			print_perf()
 
 
+## Pulls results back from worker threads and turns them into meshes.
+## Returns how many collision shapes were built (the capped cost).
+func _collect_finished_jobs(pc: Vector2i) -> int:
+	var shapes := 0
+	for job in _jobs.duplicate():
+		if not WorkerThreadPool.is_task_completed(job.task_id):
+			continue
+		var near := _is_near(job.cpos, pc, collision_radius)
+		if near and shapes >= max_shapes_per_frame:
+			continue   # leave it for next frame; the shape is the expensive part
+		WorkerThreadPool.wait_for_task_completion(job.task_id)
+		_jobs.erase(job)
+		_mesh_usec += job.usec
+		_mesh_count += 1
+		# Drop results that are out of date.
+		if job.generation != _generation or not chunks.has(job.cpos):
+			continue
+		var chunk: Chunk = chunks[job.cpos]
+		if chunk.version != job.version:
+			continue   # edited meanwhile; the edit already rebuilt it
+		var t0 := Time.get_ticks_usec()
+		chunk.collision_enabled = near
+		chunk.apply_mesh(job.mesh)
+		chunk.dirty = false
+		_apply_usec += Time.get_ticks_usec() - t0
+		_shape_usec += chunk.last_shape_usec
+		_apply_count += 1
+		if near:
+			shapes += 1
+			_populate_if_new(job.cpos)
+	return shapes
+
+
+## Adds collision to queued nearby chunks, a few per frame.
+func _process_collision_queue(budget: int) -> int:
+	var done := 0
+	while done < budget and _collision_queue.size() > 0:
+		var cpos: Vector2i = _collision_queue.pop_front()
+		if not chunks.has(cpos) or chunks[cpos].dirty:
+			continue   # no mesh yet; apply_mesh will add the shape when it lands
+		var chunk: Chunk = chunks[cpos]
+		chunk.set_collision_enabled(true)
+		_shape_usec += chunk.last_shape_usec
+		done += 1
+		_populate_if_new(cpos)
+	return done
+
+
+## Once a chunk has ground you can stand on, roll for animals (once).
+func _populate_if_new(cpos: Vector2i) -> void:
+	if not _populated.has(cpos):
+		_populated[cpos] = true
+		_populate_chunk(cpos)
+
+
+func _is_near(cpos: Vector2i, pc: Vector2i, radius: int) -> bool:
+	var d := (cpos - pc).abs()
+	return maxi(d.x, d.y) <= radius
+
+
+## Hands queued chunks to worker threads while there are free slots.
+## Returns how many were dispatched.
+func _dispatch_jobs() -> int:
+	# Look ahead: start generating block data for the next few chunks in
+	# line (and their neighbours) so it's ready when their turn comes.
+	for k in mini(GEN_LOOKAHEAD, mesh_queue.size()):
+		var c: Vector2i = mesh_queue[k]
+		_request_gen(c)
+		for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			_request_gen(c + n)
+
+	var dispatched := 0
+	while _jobs.size() < max_jobs and mesh_queue.size() > 0 and dispatched < max_dispatches_per_frame:
+		var cpos: Vector2i = mesh_queue[0]
+		if not chunks.has(cpos) or not chunks[cpos].dirty:
+			mesh_queue.pop_front()
+			continue
+		if not _data_ready(cpos):
+			break   # still generating on a thread; try again next frame
+		mesh_queue.pop_front()
+		dispatched += 1
+		var job := MeshJob.new()
+		job.cpos = cpos
+		job.version = chunks[cpos].version
+		job.generation = _generation
+		job.data = chunk_data[cpos]
+		job.max_y = chunk_max_y[cpos]
+		job.tints = chunk_tints[cpos]
+		job.nb = chunks[cpos]._neighbour_snapshot()
+		job.task_id = WorkerThreadPool.add_task(job.run)
+		_jobs.append(job)
+	return dispatched
+
+
+## Does this chunk and its four neighbours have block data yet?
+func _data_ready(cpos: Vector2i) -> bool:
+	if not chunk_data.has(cpos):
+		return false
+	for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if not chunk_data.has(cpos + n):
+			return false
+	return true
+
+
+## Starts generating a chunk's data on a worker thread, if needed.
+func _request_gen(cpos: Vector2i) -> void:
+	if chunk_data.has(cpos) or _gen_jobs.has(cpos) or _gen_jobs.size() >= MAX_GEN_JOBS:
+		return
+	var job := GenJob.new()
+	job.cpos = cpos
+	job.generation = _generation
+	job.gen = gen
+	job.task_id = WorkerThreadPool.add_task(job.run)
+	_gen_jobs[cpos] = job
+
+
+func _collect_gen_jobs() -> void:
+	for cpos in _gen_jobs.keys():
+		var job: GenJob = _gen_jobs[cpos]
+		if not WorkerThreadPool.is_task_completed(job.task_id):
+			continue
+		WorkerThreadPool.wait_for_task_completion(job.task_id)
+		_gen_jobs.erase(cpos)
+		if job.generation != _generation:
+			continue
+		_store_generated(cpos, job.result)
+		_gen_count += 1
+
+
 func print_perf() -> void:
 	var gen_avg := (_gen_usec / 1000.0 / _gen_count) if _gen_count > 0 else 0.0
 	var mesh_avg := (_mesh_usec / 1000.0 / _mesh_count) if _mesh_count > 0 else 0.0
-	print("perf: radius %d | generated %d chunks, avg %.1f ms | meshed %d chunks, avg %.1f ms | worst world frame %.1f ms | queue %d | loaded %d"
-		% [view_radius, _gen_count, gen_avg, _mesh_count, mesh_avg, _worst_frame_usec / 1000.0, mesh_queue.size(), chunks.size()])
+	var apply_avg := (_apply_usec / 1000.0 / _apply_count) if _apply_count > 0 else 0.0
+	var shape_avg := (_shape_usec / 1000.0 / _apply_count) if _apply_count > 0 else 0.0
+	var with_collision := 0
+	for c in chunks.values():
+		if c.collision_enabled:
+			with_collision += 1
+	print("perf: radius %d | generated %d chunks (sync avg %.1f ms) | meshed %d on threads, avg %.1f ms | applied %d, avg %.1f ms (shape %.1f) | worst world frame %.1f ms (%s) | queue %d | in flight %d mesh / %d gen | loaded %d, %d with collision"
+		% [view_radius, _gen_count, gen_avg, _mesh_count, mesh_avg, _apply_count, apply_avg, shape_avg,
+			_worst_frame_usec / 1000.0, _worst_frame_note, mesh_queue.size(), _jobs.size(), _gen_jobs.size(),
+			chunks.size(), with_collision])
 
 
 # ---------------------------------------------------------------- lookups
@@ -161,6 +357,13 @@ func ensure_data(cpos: Vector2i) -> void:
 	var result := gen.fill_chunk(cpos)
 	_gen_usec += Time.get_ticks_usec() - t0
 	_gen_count += 1
+	_store_generated(cpos, result)
+
+
+## Keeps freshly generated chunk data, re-applying any saved edits.
+func _store_generated(cpos: Vector2i, result: Array) -> void:
+	if chunk_data.has(cpos):
+		return   # generated twice (thread + sync path); first one wins
 	var d: PackedByteArray = result[0]
 	var max_y: int = result[1]
 	# Re-apply anything the player changed here in an earlier session.
@@ -185,11 +388,31 @@ func update_chunks(pc: Vector2i) -> void:
 			chunks.erase(cpos)
 			_populated.erase(cpos)   # animals may return when you come back
 
-	# Animals that wandered (or were left) too far away are removed.
+	# Collision follows the player: nearby chunks get shapes (queued,
+	# nearest first), far ones drop theirs.
+	_collision_queue.clear()
+	for cpos in chunks.keys():
+		var chunk: Chunk = chunks[cpos]
+		var near := _is_near(cpos, pc, collision_radius)
+		if near and not chunk.collision_enabled:
+			_collision_queue.append(cpos)
+		elif not near and chunk.collision_enabled:
+			chunk.set_collision_enabled(false)
+	_collision_queue.sort_custom(func(a, b): return (a - pc).length_squared() < (b - pc).length_squared())
+
+	# Animals outside the collision area would fall through the world,
+	# so they freeze in place until you come back. Far ones are removed.
+	var freeze_dist := float(collision_radius * SIZE)
 	var despawn_dist := float((view_radius + 2) * SIZE)
-	for c in _creatures.get_children() + _drops.get_children():
-		if c.global_position.distance_to(player.global_position) > despawn_dist:
+	for c in _creatures.get_children():
+		var dist: float = c.global_position.distance_to(player.global_position)
+		if dist > despawn_dist:
 			c.queue_free()
+		else:
+			c.set_physics_process(dist <= freeze_dist)
+	for d in _drops.get_children():
+		if d.global_position.distance_to(player.global_position) > despawn_dist:
+			d.queue_free()
 
 	var wanted: Array[Vector2i] = []
 	for dz in range(-view_radius, view_radius + 1):
@@ -201,10 +424,8 @@ func update_chunks(pc: Vector2i) -> void:
 	for cpos in wanted:
 		if chunks.has(cpos):
 			continue
-		# Neighbour data must exist so edge faces cull correctly.
-		ensure_data(cpos)
-		for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			ensure_data(cpos + n)
+		# Block data is generated later, just before the chunk is meshed,
+		# so a big move doesn't generate hundreds of chunks in one frame.
 		var chunk := Chunk.new()
 		chunk.setup(self, cpos)
 		add_child(chunk)
@@ -212,10 +433,24 @@ func update_chunks(pc: Vector2i) -> void:
 		mesh_queue.append(cpos)
 
 
-## Build one chunk's mesh right now instead of waiting for the queue.
+## Neighbour data must exist so edge faces cull correctly.
+func _ensure_data_with_neighbours(cpos: Vector2i) -> void:
+	ensure_data(cpos)
+	for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		ensure_data(cpos + n)
+
+
+## Build one chunk's mesh right now (on this thread) instead of waiting
+## for the worker threads. Used for edits, where a delay would feel laggy.
 func _rebuild_now(cpos: Vector2i) -> void:
 	if chunks.has(cpos):
-		chunks[cpos].build_mesh()
+		_ensure_data_with_neighbours(cpos)
+		var chunk: Chunk = chunks[cpos]
+		chunk.version += 1
+		# Anything you can edit is next to you, so it needs collision.
+		chunk.collision_enabled = true
+		chunk.build_mesh()
+		_populate_if_new(cpos)
 
 
 func build_chunk_now(cpos: Vector2i) -> void:
@@ -306,6 +541,7 @@ func load_save_data(d: Dictionary) -> void:
 
 ## Forgets all generated chunks and meshes; they regenerate on demand.
 func reset_chunks() -> void:
+	_generation += 1   # any mesh job still running belongs to the old world
 	for c in chunks.values():
 		c.queue_free()
 	chunks.clear()
@@ -313,5 +549,6 @@ func reset_chunks() -> void:
 	chunk_max_y.clear()
 	chunk_tints.clear()
 	mesh_queue.clear()
+	_collision_queue.clear()
 	_populated.clear()
 	_last_player_chunk = Vector2i(1 << 20, 1 << 20)

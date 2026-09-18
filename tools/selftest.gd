@@ -9,6 +9,7 @@ extends Node
 ##   frames 330..360   save, wreck the state, load it back (saving)
 ##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
 ##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
+##   frames 490..640   midnight: a Shade hunts and bites; noon: it burns (hostiles)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -20,6 +21,8 @@ var _critter: Creature
 var _deaths := 0
 var _hole := Vector3i.ZERO
 var _move_start := Vector3.ZERO
+var _shade: Hostile
+var _health_before_shade := 0
 
 
 func _physics_process(_delta: float) -> void:
@@ -192,3 +195,28 @@ func _physics_process(_delta: float) -> void:
 			main.set_inventory_open(true)   # show the screen for the recording
 		480:
 			main.set_inventory_open(false)
+		490:
+			var dn: DayNight = main.day_night
+			dn.time_of_day = 0.0   # midnight
+			dn._apply()
+			player.set_look(0.0, -0.2)
+			_health_before_shade = player.health
+			var p := player.global_position
+			_shade = world.spawn_hostile_at(p + Vector3(0, 0.5, -6))
+			print("selftest: midnight, shade spawned %.1f blocks away, is_night %s" % [
+				_shade.global_position.distance_to(p), dn.is_night()])
+		550:
+			print("selftest: 1 s later shade is %.1f blocks away (chasing at %.0f b/s)" % [
+				_shade.global_position.distance_to(player.global_position), Hostile.CHASE_SPEED])
+		610:
+			print("selftest: after 2 s near it: health %d -> %d (bitten: %s), shade alive %s" % [
+				_health_before_shade, player.health, player.health < _health_before_shade,
+				is_instance_valid(_shade)])
+			main.day_night.time_of_day = 0.5   # noon
+			main.day_night._apply()
+		700:
+			# 1.5 s of daylight at 1 health per 0.5 s: 5 -> 2.
+			print("selftest: 1.5 s of daylight: shade health %d (expect 2)" % (_shade.health if is_instance_valid(_shade) else -1))
+		790:
+			print("selftest: 3 s of daylight: shade alive %s (expect false), hostiles %d" % [
+				is_instance_valid(_shade), world.hostile_count()])

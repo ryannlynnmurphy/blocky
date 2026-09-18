@@ -80,6 +80,8 @@ var test_move := Vector2.ZERO
 var test_run := false
 var test_hold_break := false
 
+var _knock := Vector3.ZERO   # shove from being hit; fades out
+
 # ---- breaking blocks takes time ----
 const NO_TARGET := Vector3i(1 << 20, 0, 0)
 var _break_target := NO_TARGET
@@ -191,8 +193,9 @@ func _physics_process(delta: float) -> void:
 	var moving := dir.length() > 0.1
 	var running := run_held and moving
 	var speed := RUN_SPEED if running else WALK_SPEED
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
+	velocity.x = dir.x * speed + _knock.x
+	velocity.z = dir.z * speed + _knock.z
+	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
 
 	move_and_slide()
 	_check_fall_damage()
@@ -250,6 +253,13 @@ func _check_fall_damage() -> void:
 		if fall > SAFE_FALL:
 			take_damage(int(fall - SAFE_FALL))
 	_was_on_floor = on_floor
+
+
+## A shove: sideways part fades over a few frames, upward part is a hop.
+func apply_knockback(push: Vector3) -> void:
+	_knock = Vector3(push.x, 0.0, push.z)
+	if push.y > 0.0:
+		velocity.y = push.y
 
 
 func take_damage(amount: int) -> void:

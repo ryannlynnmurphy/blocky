@@ -43,6 +43,15 @@ Killing creatures quietly makes you tougher: every 10×N kills-worth of
 XP adds 2 max health (the health row grows). There is no level display
 by design.
 
+## Night
+
+After dark, **Shades** appear out of sight (14–26 blocks away, up to 6).
+Tall, black, glowing red eyes. Within 18 blocks one walks straight at
+you at walking pace — sprint and you'll outrun it, but sprinting burns
+food. A bite does 2 damage and knocks you back. They don't flee when
+hit (5 health, no drop) and burn away within seconds of sunrise.
+Dig in or build walls until "Dawn." appears.
+
 ## Crafting and tools
 
 Press Tab. Recipes are a list, not a grid:
@@ -105,6 +114,8 @@ scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only
 scripts/world.gd     owns all chunks, streams them around the player, get/set block,
                      spawns/despawns creatures
 scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs + water
+scripts/hostile.gd   the Shade: night hunter (extends creature.gd), bites, burns at dawn
+scenes/hostile.tscn  the Shade's body: tall, dark, glowing eyes
 scripts/drop.gd      a dropped item on the ground; walk into it to pick it up
 scripts/player.gd    movement, camera, aiming, break/place, punch, health, respawn, XP/levels
 scripts/inventory.gd what you're carrying: a count per block/item ID

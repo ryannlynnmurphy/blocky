@@ -62,13 +62,18 @@ and verified before the next starts. No system gets built "all at once."
       a workbench. Owning the best tool speeds up its block class; stone
       only drops with a pickaxe. No durability yet.
 
+- [x] **M15 — The Shade.** A tall dark night creature with glowing eyes
+      spawns out of sight after dark (max 6), hunts you within 18 blocks
+      at walking pace, bites for 2 with knockback, ignores pain, and
+      burns away in daylight. "Night falls" / "Dawn" banners.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
 how much they'd change the feel of the game:
 
-- [ ] Hostile creature at night: something that hunts you after dark,
-      giving the day/night cycle teeth.
+- [ ] Shelter matters: Shades can't path through walls but will wait;
+      beds to skip the night; torches that keep them away.
 - [ ] Tool durability and a held-item model in the hand.
 - [ ] Sound: footsteps, hits, ambient wind, a simple music loop.
 - [ ] Water you can swim in, caves, ores.

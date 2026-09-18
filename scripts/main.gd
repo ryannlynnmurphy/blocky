@@ -12,12 +12,14 @@ const AUTOSAVE_SECONDS := 30.0
 @onready var hud := $HUD
 
 var _autosave_timer := 0.0
+var _was_night := false
 
 
 func _ready() -> void:
 	print("Voxel RPG booted. Godot %s" % Engine.get_version_info()["string"])
 	var args := OS.get_cmdline_user_args()
 	world.player = player
+	world.day_night = day_night
 	player.world = world
 	# Testing aids: `-- --perf` prints chunk timings; `-- --radius=8` sets view distance.
 	world.perf_enabled = "--perf" in args
@@ -58,6 +60,7 @@ func _ready() -> void:
 
 	# We save on close, so ask Godot not to quit on its own.
 	get_tree().set_auto_accept_quit(false)
+	_was_night = day_night.is_night()   # no banner at startup
 
 	# Testing aid: `-- --look=3.14,-0.3` points the camera (yaw, pitch in radians).
 	for arg in args:
@@ -85,6 +88,12 @@ func _process(delta: float) -> void:
 	if _autosave_timer >= AUTOSAVE_SECONDS:
 		_autosave_timer = 0.0
 		save_game()
+
+	# Announce dusk and dawn.
+	var night := day_night.is_night()
+	if night != _was_night:
+		_was_night = night
+		hud.show_message("Night falls. Something stirs." if night else "Dawn.")
 
 
 func _unhandled_input(event: InputEvent) -> void:

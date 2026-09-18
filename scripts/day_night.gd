@@ -60,6 +60,10 @@ func sun_elevation() -> float:
 	return sin((time_of_day - 0.25) * TAU)
 
 
+func is_night() -> bool:
+	return sun_elevation() < -0.1
+
+
 ## "Day 3  14:07" for the HUD.
 func clock_text() -> String:
 	var minutes := int(time_of_day * 24.0 * 60.0)

@@ -97,6 +97,14 @@ var _creatures := Node3D.new()
 var _drops := Node3D.new()
 var _populated := {}   # Vector2i -> true once a chunk has rolled for animals
 
+# ---- hostiles (night only) ----
+const MAX_HOSTILES := 6
+const HOSTILE_SCENE := preload("res://scenes/hostile.tscn")
+const HOSTILE_SPAWN_SECONDS := 4.0
+var day_night: DayNight   # set by main; hostiles need to know if it's night
+var _hostiles := Node3D.new()
+var _hostile_timer := 0.0
+
 
 func _ready() -> void:
 	gen = WorldGen.new(world_seed)
@@ -104,6 +112,8 @@ func _ready() -> void:
 	add_child(_creatures)
 	_drops.name = "Drops"
 	add_child(_drops)
+	_hostiles.name = "Hostiles"
+	add_child(_hostiles)
 
 
 ## Worker tasks must never outlive the world: wait for them on the way out.
@@ -133,6 +143,8 @@ func _process(_delta: float) -> void:
 	var t_shapes := Time.get_ticks_usec()
 	var dispatched := _dispatch_jobs()
 	var t_dispatch := Time.get_ticks_usec()
+
+	_tick_hostile_spawns(_delta)
 
 	if perf_enabled:
 		var frame_usec := t_dispatch - frame_start
@@ -404,7 +416,7 @@ func update_chunks(pc: Vector2i) -> void:
 	# so they freeze in place until you come back. Far ones are removed.
 	var freeze_dist := float(collision_radius * SIZE)
 	var despawn_dist := float((view_radius + 2) * SIZE)
-	for c in _creatures.get_children():
+	for c in _creatures.get_children() + _hostiles.get_children():
 		var dist: float = c.global_position.distance_to(player.global_position)
 		if dist > despawn_dist:
 			c.queue_free()
@@ -495,6 +507,40 @@ func spawn_creature_at(pos: Vector3) -> Creature:
 
 func creature_count() -> int:
 	return _creatures.get_child_count()
+
+
+## At night, every few seconds, a Shade appears somewhere out of sight.
+func _tick_hostile_spawns(delta: float) -> void:
+	if day_night == null or day_night.sun_elevation() > -0.1:
+		return
+	_hostile_timer += delta
+	if _hostile_timer < HOSTILE_SPAWN_SECONDS:
+		return
+	_hostile_timer = 0.0
+	if _hostiles.get_child_count() >= MAX_HOSTILES:
+		return
+	var angle := randf() * TAU
+	var dist := randf_range(14.0, 26.0)
+	var wx := int(floor(player.global_position.x + cos(angle) * dist))
+	var wz := int(floor(player.global_position.z + sin(angle) * dist))
+	var h := gen.height_at(wx, wz)
+	if h <= WorldGen.SEA_LEVEL + 1:
+		return
+	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
+		return
+	spawn_hostile_at(Vector3(wx + 0.5, h + 1.5, wz + 0.5))
+
+
+func spawn_hostile_at(pos: Vector3) -> Hostile:
+	var s: Hostile = HOSTILE_SCENE.instantiate()
+	s.world = self
+	_hostiles.add_child(s)
+	s.global_position = pos
+	return s
+
+
+func hostile_count() -> int:
+	return _hostiles.get_child_count()
 
 
 ## Leaves an item on the ground at a world position.

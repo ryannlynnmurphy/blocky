@@ -14,6 +14,7 @@ extends Node
 const RATE := 22050          # samples per second; low-fi suits the look
 const POOL_3D := 10
 const POOL_2D := 4
+const SFX_DB := -9.0         # overall loudness of effects (ambience is separate)
 
 static var instance: Sfx
 
@@ -35,13 +36,21 @@ func _ready() -> void:
 	_build_sounds()
 	print("sfx: synthesized %d sounds in %d ms" % [_sounds.size(), Time.get_ticks_msec() - t0])
 
+	# All effects go through their own bus so one number sets their loudness.
+	var bus := AudioServer.bus_count
+	AudioServer.add_bus(bus)
+	AudioServer.set_bus_name(bus, "SFX")
+	AudioServer.set_bus_volume_db(bus, SFX_DB)
+
 	for i in POOL_3D:
 		var p := AudioStreamPlayer3D.new()
 		p.max_distance = 40.0
+		p.bus = "SFX"
 		add_child(p)
 		_pool_3d.append(p)
 	for i in POOL_2D:
 		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
 		add_child(p)
 		_pool_2d.append(p)
 

@@ -1,0 +1,54 @@
+# Voxel RPG
+
+An original voxel RPG built in **Godot 4** (GDScript). Inspired by the
+exploration, chunky aesthetic, and sense of adventure of Cube World and
+Minecraft — but its own game.
+
+## Running it
+
+1. Install Godot 4.7+ (standard build, not .NET): `winget install GodotEngine.GodotEngine`
+2. Open Godot, click **Import**, pick this folder's `project.godot`.
+3. Press **F5** (Run Project).
+
+From a terminal, without the editor:
+
+```
+godot --path . 
+```
+
+## Controls
+
+| Input | Action |
+|-------|--------|
+| W A S D | Move (relative to the camera) |
+| Mouse | Look |
+| Space | Jump |
+| Shift | Run |
+| Left click | Break the highlighted block |
+| Right click | Place the selected block |
+| 1–7 | Pick which block to place |
+| Esc | Free / re-capture the mouse |
+
+## Where things live
+
+```
+project.godot        engine settings (window size, main scene, crisp-pixel rendering)
+scenes/main.tscn     the level: sky, sun, world, water, player, HUD
+scenes/player.tscn   the character's body, collision capsule and camera rig
+scripts/main.gd      wires everything together, picks a spawn point
+scripts/blocks.gd    block registry: IDs, names, colors
+scripts/world_gen.gd noise terrain + trees -> fills a chunk with block IDs
+scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
+scripts/world.gd     owns all chunks, streams them around the player, get/set block
+scripts/player.gd    movement, camera, aiming, break/place
+scripts/hud.gd       crosshair, hotbar, hints
+```
+
+## How the world is stored
+
+The world is a grid of **chunks**, each 16 wide x 64 tall x 16 deep. A chunk
+is just a `PackedByteArray` of 16,384 numbers — each number is a block ID
+from `blocks.gd` (0 = air). To draw a chunk we don't draw 16,384 cubes; we
+only emit the cube faces that touch air, and glue them into one mesh.
+
+See `ROADMAP.md` for what is done and what comes next.

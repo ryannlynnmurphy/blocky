@@ -60,6 +60,7 @@ var gen: WorldGen
 var chunk_data := {}    # Vector2i -> PackedByteArray (kept forever, so edits survive)
 var chunk_max_y := {}   # Vector2i -> int
 var chunk_tints := {}   # Vector2i -> PackedColorArray (grass color per column)
+var chunk_props := {}   # Vector2i -> Array of {type, lx, lz, y, rot} (see WorldGen.fill_chunk)
 ## Every block the player changed: Vector2i chunk -> {block index: id}.
 ## Terrain is regenerated from the seed on load; only this diff is saved.
 var edits := {}
@@ -81,6 +82,23 @@ var _apply_count := 0
 var _worst_frame_usec := 0
 var _worst_frame_note := ""
 var _perf_frames := 0
+
+# ---- environment props ----
+## GLB decoration named in WorldGen.PROPS/REEDS_* by these same keys.
+const PROP_SCENES := {
+	"rock_small": preload("res://blocky/models/rock_small.glb"),
+	"boulder": preload("res://blocky/models/boulder.glb"),
+	"grass_tuft": preload("res://blocky/models/grass_tuft.glb"),
+	"flower_patch": preload("res://blocky/models/flower_patch.glb"),
+	"mushroom_cluster": preload("res://blocky/models/mushroom_cluster.glb"),
+	"reeds": preload("res://blocky/models/reeds.glb"),
+}
+var _props_placed := {}   # Vector2i -> true once a chunk's props are queued/instantiated
+## Chunks whose props still need instantiating, budgeted a few per frame
+## (see _process_prop_queue) so a burst of finished chunks at load time
+## can't spike a frame the way an unthrottled loop over all of them would.
+var _prop_queue: Array[Vector2i] = []
+var max_props_per_frame := 4   # chunks' worth of props instantiated per frame
 
 # ---- creatures ----
 const MAX_CREATURES := 40
@@ -169,6 +187,8 @@ func _process(_delta: float) -> void:
 	var t_collect := Time.get_ticks_usec()
 	shapes += _process_collision_queue(max_shapes_per_frame - shapes)
 	var t_shapes := Time.get_ticks_usec()
+	_process_prop_queue(max_props_per_frame)
+	var t_props := Time.get_ticks_usec()
 	var dispatched := _dispatch_jobs()
 	var t_dispatch := Time.get_ticks_usec()
 
@@ -178,10 +198,11 @@ func _process(_delta: float) -> void:
 		var frame_usec := t_dispatch - frame_start
 		if frame_usec > _worst_frame_usec:
 			_worst_frame_usec = frame_usec
-			_worst_frame_note = "update %.1f ms, applies %.1f ms, shapes(%d) %.1f ms, %d dispatches %.1f ms" % [
+			_worst_frame_note = "update %.1f ms, applies %.1f ms, shapes(%d) %.1f ms, props %.1f ms, %d dispatches %.1f ms" % [
 				(t_update - frame_start) / 1000.0, (t_collect - t_update) / 1000.0,
 				shapes, (t_shapes - t_collect) / 1000.0,
-				dispatched, (t_dispatch - t_shapes) / 1000.0]
+				(t_props - t_shapes) / 1000.0,
+				dispatched, (t_dispatch - t_props) / 1000.0]
 		_perf_frames += 1
 		if _perf_frames % 60 == 0:
 			print_perf()
@@ -214,6 +235,12 @@ func _collect_finished_jobs(pc: Vector2i) -> int:
 		_apply_usec += Time.get_ticks_usec() - t0
 		_shape_usec += chunk.last_shape_usec
 		_apply_count += 1
+		# Props are pure decoration (no collision needed), so — unlike
+		# animals — they don't wait on the near-only collision queue. They
+		# still go through their own budgeted queue (_process_prop_queue),
+		# since a burst of chunks finishing in the same frame could
+		# otherwise spike it with GLB instantiation.
+		_queue_props_if_new(job.cpos)
 		if near:
 			shapes += 1
 			_populate_if_new(job.cpos)
@@ -240,6 +267,48 @@ func _populate_if_new(cpos: Vector2i) -> void:
 	if not _populated.has(cpos):
 		_populated[cpos] = true
 		_populate_chunk(cpos)
+
+
+## Once a chunk's mesh exists, instantiate its rocks/grass/flowers/
+## mushrooms/reeds right away (once) — WorldGen.fill_chunk already
+## decided where. Used for single-chunk edits, where there's no burst
+## of chunks to throttle against.
+func _place_props_if_new(cpos: Vector2i) -> void:
+	if _props_placed.has(cpos) or not chunks.has(cpos) or not chunk_props.has(cpos):
+		return
+	_props_placed[cpos] = true
+	_instantiate_props(chunks[cpos], chunk_props[cpos])
+
+
+## Same as _place_props_if_new, but queues the chunk instead of
+## instantiating immediately — for the bulk-load path, where many
+## chunks can finish meshing in the same frame.
+func _queue_props_if_new(cpos: Vector2i) -> void:
+	if _props_placed.has(cpos) or not chunk_props.has(cpos):
+		return
+	_props_placed[cpos] = true
+	_prop_queue.append(cpos)
+
+
+## Instantiates a few queued chunks' worth of props per frame.
+func _process_prop_queue(budget: int) -> void:
+	var done := 0
+	while done < budget and _prop_queue.size() > 0:
+		var cpos: Vector2i = _prop_queue.pop_front()
+		if chunks.has(cpos) and chunk_props.has(cpos):
+			_instantiate_props(chunks[cpos], chunk_props[cpos])
+		done += 1
+
+
+func _instantiate_props(chunk: Chunk, props: Array) -> void:
+	for p in props:
+		var scene: PackedScene = PROP_SCENES.get(p["type"])
+		if scene == null:
+			continue
+		var inst: Node3D = scene.instantiate()
+		chunk.add_child(inst)
+		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
+		inst.rotation.y = p["rot"]
 
 
 func _is_near(cpos: Vector2i, pc: Vector2i, radius: int) -> bool:
@@ -417,6 +486,7 @@ func _store_generated(cpos: Vector2i, result: Array) -> void:
 	chunk_data[cpos] = d
 	chunk_max_y[cpos] = max_y
 	chunk_tints[cpos] = result[2]
+	chunk_props[cpos] = result[3]
 
 
 ## Load chunks near the player, unload far ones.
@@ -427,6 +497,7 @@ func update_chunks(pc: Vector2i) -> void:
 			chunks[cpos].queue_free()
 			chunks.erase(cpos)
 			_populated.erase(cpos)   # animals may return when you come back
+			_props_placed.erase(cpos)   # re-instantiated (same layout) when you come back
 
 	# Collision follows the player: nearby chunks get shapes (queued,
 	# nearest first), far ones drop theirs.
@@ -490,6 +561,7 @@ func _rebuild_now(cpos: Vector2i) -> void:
 		# Anything you can edit is next to you, so it needs collision.
 		chunk.collision_enabled = true
 		chunk.build_mesh()
+		_place_props_if_new(cpos)
 		_populate_if_new(cpos)
 
 
@@ -632,7 +704,9 @@ func reset_chunks() -> void:
 	chunk_data.clear()
 	chunk_max_y.clear()
 	chunk_tints.clear()
+	chunk_props.clear()
 	mesh_queue.clear()
 	_collision_queue.clear()
 	_populated.clear()
+	_props_placed.clear()
 	_last_player_chunk = Vector2i(1 << 20, 1 << 20)

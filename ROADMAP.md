@@ -156,6 +156,35 @@ and verified before the next starts. No system gets built "all at once."
       line up with our dynamically-sized slot layout (2x2 vs 3x3
       crafting, 27+9 inventory slots). Ryann confirmed: skip all four
       rather than force a mismatched fit.
+- [x] **M25 — Environment props.** Rocks, grass tufts, flower patches,
+      mushroom clusters and reeds now grow as `blocky/models/*.glb`
+      decoration, deterministic per world column exactly like trees
+      (`WorldGen.PROPS`/`REEDS_*`, tried in `fill_chunk()`, one prop
+      per column max, skipping any column a tree already claimed).
+      Ryann chose to keep trees as voxel Log/Leaves blocks — fully
+      minable, since Log feeds the whole crafting chain — rather than
+      switch to the nicer-silhouette GLB pine/broadleaf/crooked-tree
+      props, which would've meant designing a new way to gather wood.
+      PLAN.md's own Forest/Swamp/Water-edge prop split doesn't match
+      this project's actual Plains/Forest/Desert/Tundra biomes (no
+      Swamp exists), so it's adapted: grass tufts/flowers lean Plains,
+      mushrooms join the mix in Forest, Desert/Tundra get sparse rock
+      only, and reeds grow right at the waterline on the two temperate
+      biomes. `world.gd` instantiates the GLBs as children of each
+      `Chunk` node once its mesh lands (no collision — pure decoration,
+      like PLAN.md's "environment = GLB props" cheap-and-controllable
+      split says), so they stream in/out and get freed for free with
+      the chunk. Caught a real perf regression with the project's own
+      `--perf` instrumentation (not the movie-encoder's noisier
+      numbers): placing props inline, unlike collision shapes, wasn't
+      budgeted, so a burst of chunks finishing in the same frame at
+      world-load could spike it — fixed by queuing newly-meshed chunks
+      and instantiating only `max_props_per_frame` (4) chunks' worth
+      per frame, mirroring the existing collision-shape queue's
+      pattern exactly. Gave the queue its own measured slot in
+      `print_perf()`'s breakdown (it had been silently folding into
+      the "shapes" bucket) — now shows ~1-2 ms worst-case, confirming
+      props aren't the dominant load-time cost.
 
 ## Next — pick a direction
 
@@ -166,9 +195,8 @@ how much they'd change the feel of the game:
       generated — the current button/sound-slider/message-text/
       inventory-panel assets bake in example content that doesn't fit
       (see M24).
-- [ ] Environment props as GLBs (trees/rocks/flowers/reeds) — first
-      needs a decision: keep voxel trees (minable, consistent) or
-      switch to the nicer-silhouette GLB trees, or both by biome.
+- [ ] GLB pine/broadleaf/crooked trees, if wood-gathering ever gets a
+      non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-biome wildlife weighting (right now every spawn picks evenly
       among all 5 species everywhere) and flight behavior for Bird
       (it currently just walks/hops like everything else).

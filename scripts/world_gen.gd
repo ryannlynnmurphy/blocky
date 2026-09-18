@@ -28,6 +28,37 @@ const BIOMES := [
 	{"name": "Tundra", "surface": Blocks.SNOW,  "under": Blocks.DIRT, "tree_chance": 500},
 ]
 
+## Environment decoration (blocky/models/*.glb, not voxel blocks — see
+## world.gd's PROP_SCENES). Each biome lists candidate props as
+## {type, chance, salt}: chance is "one per N columns" like tree_chance,
+## salt just keeps different types from rolling on the same columns.
+## Tried in order; the first hit on a column wins, so at most one prop
+## grows per column, and only one of them (whichever comes first) shows.
+const PROPS := [
+	# Plains: open grassland — tufts and flowers common, rocks rare.
+	[{"type": "grass_tuft", "chance": 14, "salt": 101},
+	 {"type": "flower_patch", "chance": 40, "salt": 103},
+	 {"type": "rock_small", "chance": 120, "salt": 107},
+	 {"type": "boulder", "chance": 500, "salt": 109}],
+	# Forest: shadier floor — mushrooms join the mix, still grassy underfoot.
+	[{"type": "grass_tuft", "chance": 20, "salt": 101},
+	 {"type": "mushroom_cluster", "chance": 45, "salt": 113},
+	 {"type": "flower_patch", "chance": 60, "salt": 103},
+	 {"type": "rock_small", "chance": 90, "salt": 107},
+	 {"type": "boulder", "chance": 400, "salt": 109}],
+	# Desert: just rock — nothing here needs soil.
+	[{"type": "rock_small", "chance": 60, "salt": 107},
+	 {"type": "boulder", "chance": 300, "salt": 109}],
+	# Tundra: bare and cold — sparse rock only.
+	[{"type": "rock_small", "chance": 150, "salt": 107},
+	 {"type": "boulder", "chance": 600, "salt": 109}],
+]
+## Reeds grow right at the waterline instead of by biome, and only on
+## the two temperate biomes (not desert sand or tundra snow).
+const REEDS_CHANCE := 6
+const REEDS_SALT := 211
+const REEDS_BIOMES := [PLAINS, FOREST]
+
 ## Grass colors at the four corners of the temperature/moisture square.
 const GRASS_COLD_DRY := Color(0.58, 0.72, 0.52)   # pale
 const GRASS_HOT_DRY := Color(0.72, 0.72, 0.30)    # yellow, scrubby
@@ -133,9 +164,11 @@ func tint_at(x: int, z: int) -> Color:
 	return dry.lerp(moist, wet)
 
 
-## Returns [PackedByteArray data, int max_y, PackedColorArray tints].
+## Returns [PackedByteArray data, int max_y, PackedColorArray tints, Array props].
 ## max_y is the highest non-air block, so meshing can skip the empty sky.
-## tints is one grass color per column (16x16).
+## tints is one grass color per column (16x16). props is a list of
+## {type, lx, lz, y, rot} dicts (see PROPS below) for world.gd to
+## instantiate as GLB decoration once the chunk's mesh lands.
 func fill_chunk(cpos: Vector2i) -> Array:
 	var data := PackedByteArray()
 	data.resize(SIZE * SIZE * HEIGHT)   # new bytes are 0 = AIR
@@ -202,7 +235,10 @@ func fill_chunk(cpos: Vector2i) -> Array:
 				data[lx + SIZE * (lz + SIZE * y)] = id
 
 	# Trees: decided per world column, so the same tree is placed
-	# identically by every chunk it touches.
+	# identically by every chunk it touches. Columns actually rooted in
+	# this chunk (not just leaning in from the margin) are remembered so
+	# the props pass below doesn't plant a rock in a trunk.
+	var tree_columns := {}   # (lx, lz) -> true
 	for bz in w:
 		for bx in w:
 			var bi := bx + w * bz
@@ -215,12 +251,43 @@ func fill_chunk(cpos: Vector2i) -> Array:
 			# hash() gives a fixed pseudo-random number for this column.
 			if hash(Vector2i(wx, wz)) % chance != 0:
 				continue
+			var lx := bx - TREE_MARGIN
+			var lz := bz - TREE_MARGIN
+			if lx >= 0 and lx < SIZE and lz >= 0 and lz < SIZE:
+				tree_columns[Vector2i(lx, lz)] = true
 			var trunk_h := 4 + hash(Vector2i(wz, wx)) % 2
-			var top := _place_tree(data, bx - TREE_MARGIN, h, bz - TREE_MARGIN, trunk_h)
+			var top := _place_tree(data, lx, h, lz, trunk_h)
 			if top > max_y:
 				max_y = top
 
-	return [data, max_y, tints]
+	# Environment props (rocks/grass tufts/flowers/mushrooms/reeds): GLB
+	# decoration, not voxel blocks — world.gd instantiates these once the
+	# chunk's mesh lands. Same per-column determinism as trees.
+	var props := []
+	for lz in SIZE:
+		for lx in SIZE:
+			if tree_columns.has(Vector2i(lx, lz)):
+				continue
+			var bi := (lx + TREE_MARGIN) + w * (lz + TREE_MARGIN)
+			var h := heights[bi]
+			if h <= 0 or h >= SNOW_LINE:
+				continue
+			var wx := cpos.x * SIZE + lx
+			var wz := cpos.y * SIZE + lz
+			var biome_i := biomes[bi]
+			var rot := (hash(Vector2i(wx, wz) + Vector2i(777, 777)) % 360) * TAU / 360.0
+			if h <= SEA_LEVEL + 1:
+				# Only reeds grow in the shallows, only on temperate ground.
+				if biome_i in REEDS_BIOMES and h == SEA_LEVEL + 1 \
+						and hash(Vector2i(wx + REEDS_SALT, wz)) % REEDS_CHANCE == 0:
+					props.append({"type": "reeds", "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
+				continue
+			for rule in PROPS[biome_i]:
+				if hash(Vector2i(wx + int(rule["salt"]), wz)) % int(rule["chance"]) == 0:
+					props.append({"type": rule["type"], "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
+					break
+
+	return [data, max_y, tints, props]
 
 
 ## Writes a block if (x, y, z) is inside this chunk; ignores it otherwise.

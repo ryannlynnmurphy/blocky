@@ -49,12 +49,26 @@ matches these new species).
   the generated `day.png`/`sunset.png`/`night.png` strip textures,
   `sun.png`, `moon.png`, `cloud.png` are unused. There's moonlight but
   no visible sun/moon disc or clouds.
-- Trees are voxel logs+leaves (world_gen.gd), not the GLB
-  pine/broadleaf/crooked trees — an explicit fork in the road (see
-  Milestone F in PLAN.md): keep minable voxel trees, switch to
-  GLB props for silhouette, or split by biome.
-- Rocks, grass tufts, flower patches, mushroom clusters, reeds:
-  GLBs exist (`blocky/models/`), nothing spawns them yet.
+- Trees are voxel logs+leaves (`world_gen.gd`), not the GLB
+  pine/broadleaf/crooked trees. This was an explicit fork in the road
+  (see Milestone F in PLAN.md) — Ryann chose to keep voxel trees
+  (minable, feeds the Log → Planks → Sticks → tools chain) over the
+  GLB trees' nicer silhouette, since switching would mean designing a
+  new way to gather wood. Revisit only if that redesign happens.
+- ✅ **Rocks, grass tufts, flower patches, mushroom clusters, reeds**:
+  spawning as GLB decoration, deterministic per column like trees
+  (`WorldGen.PROPS`/`REEDS_*` in `fill_chunk()`, `world.gd` instantiates
+  them as chunk children once the mesh lands). PLAN.md's own
+  Forest/Swamp/Water-edge split assumes a Swamp biome that doesn't
+  exist in this project (Plains/Forest/Desert/Tundra), so it's
+  adapted: grass/flowers favor Plains, mushrooms join the mix in
+  Forest, Desert/Tundra get sparse rock only, reeds grow at the
+  waterline on the two temperate biomes. No collision (pure
+  decoration) — cheap, and matches PLAN.md's own "terrain = voxel
+  grid, environment = GLB props" split. Density is deliberately
+  conservative (roughly tree-like rarity, not lawn-dense); a `--perf`
+  check confirmed instantiating them (queued/budgeted like collision
+  shapes) costs ~1-2 ms worst-case, not the dominant load-time cost.
 - Cave interiors: no art needed yet, darkness/torch light is future.
 
 ## 5. Effects — sprites exist, not wired in
@@ -122,8 +136,8 @@ the hotbar's frame, it's the inventory grid's.
    goblin/wisp/witch) — wildlife no longer spawns the old box
    placeholder at all; the box "Shade" is now just one of four hostile
    skins, the other three (goblin/wisp/witch) textured
-6. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
-   voxel-vs-GLB for trees first
+6. ~~Environment props~~ ✅ done (rocks/grass tufts/flower patches/
+   mushroom clusters/reeds) — trees stay voxel/minable, see §4
 7. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
    sprites
 8. Generic-label button/slider/message/panel art, if that ever gets

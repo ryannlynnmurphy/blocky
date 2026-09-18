@@ -12,7 +12,7 @@ const HEIGHT := Chunk.HEIGHT
 ## How many chunk meshes may be building on worker threads at once.
 var max_jobs := maxi(2, OS.get_processor_count() - 2)
 ## Main-thread work per frame is capped so streaming never causes a hitch.
-var max_shapes_per_frame := 3      # collision shapes built (the expensive bit)
+var max_shapes_per_frame := 2      # collision shapes built (the expensive bit)
 var max_dispatches_per_frame := 3  # chunks handed to threads
 
 

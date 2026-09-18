@@ -11,6 +11,8 @@ const LIST := [
 	{"in": {Blocks.PLANKS: 3, Blocks.STICK: 2}, "out": {Blocks.WOOD_AXE: 1}, "bench": true},
 	{"in": {Blocks.STONE: 3, Blocks.STICK: 2}, "out": {Blocks.STONE_PICKAXE: 1}, "bench": true},
 	{"in": {Blocks.STONE: 3, Blocks.STICK: 2}, "out": {Blocks.STONE_AXE: 1}, "bench": true},
+	{"in": {Blocks.IRON: 3, Blocks.STICK: 2}, "out": {Blocks.IRON_PICKAXE: 1}, "bench": true},
+	{"in": {Blocks.IRON: 3, Blocks.STICK: 2}, "out": {Blocks.IRON_AXE: 1}, "bench": true},
 ]
 
 

@@ -10,6 +10,7 @@ extends Node
 ##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
 ##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
 ##   frames 490..640   midnight: a Shade hunts and bites; noon: it burns (hostiles)
+##   frame  800        generate a chunk and count caves + ores; tool tier rules (underground)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -232,3 +233,29 @@ func _physics_process(_delta: float) -> void:
 			for k in keys:
 				parts.append("%s x%d" % [k, counts[k]])
 			print("selftest: sounds played: %s" % ", ".join(parts))
+		800:
+			# Survey a few chunks for caves and ores.
+			var air_below := 0
+			var coal_n := 0
+			var iron_n := 0
+			for cx in range(-2, 3):
+				var result: Array = world.gen.fill_chunk(Vector2i(cx, 5))
+				var data: PackedByteArray = result[0]
+				for lz in 16:
+					for lx in 16:
+						var h := world.gen.height_at(cx * 16 + lx, 5 * 16 + lz)
+						for y in range(1, h - 3):
+							var id := data[lx + 16 * (lz + 16 * y)]
+							if id == Blocks.AIR:
+								air_below += 1
+							elif id == Blocks.COAL_ORE:
+								coal_n += 1
+							elif id == Blocks.IRON_ORE:
+								iron_n += 1
+			print("selftest: underground in 5 chunks: cave air %d, coal ore %d, iron ore %d (expect all > 0)" % [air_below, coal_n, iron_n])
+			print("selftest: coal ore drops %s, iron ore drops %s" % [Blocks.NAMES[Blocks.drop_for(Blocks.COAL_ORE)], Blocks.NAMES[Blocks.drop_for(Blocks.IRON_ORE)]])
+			print("selftest: with wooden pickaxe: iron ore drops %s (expect false); coal ore drops %s (expect true)"
+				% [player.drops_when_broken(Blocks.IRON_ORE), player.drops_when_broken(Blocks.COAL_ORE)])
+			player.inventory.add(Blocks.STONE_PICKAXE, 1)
+			print("selftest: with stone pickaxe: iron ore drops %s (expect true), stone speed x%.1f (expect 4.0)"
+				% [player.drops_when_broken(Blocks.IRON_ORE), player.tool_multiplier(Blocks.STONE)])

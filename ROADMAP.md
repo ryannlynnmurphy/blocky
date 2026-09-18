@@ -71,6 +71,11 @@ and verified before the next starts. No system gets built "all at once."
       (`sfx.gd`): footsteps by surface, dig/place/hit/hurt/bite/groan,
       pickup, eat, die, day birds / night wind ambience.
 
+- [x] **M17 — Caves & ores.** 3D-noise tunnels (mouths only in "cave
+      country"), coal ore anywhere in stone, iron ore below y 22. Ores
+      drop Coal / Iron; tool tiers (iron ore needs a stone pickaxe);
+      iron pickaxe/axe recipes.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
@@ -80,5 +85,6 @@ how much they'd change the feel of the game:
       beds to skip the night; torches that keep them away.
 - [ ] Tool durability and a held-item model in the hand.
 - [ ] A simple generated music loop.
-- [ ] Water you can swim in, caves, ores.
+- [ ] Furnace: smelt iron ore properly; torches from coal + sticks.
+- [ ] Water you can swim in.
 - [ ] Title screen with New Game / Continue and a seed box.

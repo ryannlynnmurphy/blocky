@@ -459,7 +459,8 @@ func _update_breaking(delta: float, holding: bool) -> void:
 		world.set_block(block.x, block.y, block.z, Blocks.AIR)
 		Sfx.play("crack", centre, 0.15)
 		if drops_when_broken(id):
-			world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), id)   # pops out as an item
+			# Pops out as an item (ores turn into coal / iron).
+			world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), Blocks.drop_for(id))
 		_reset_breaking()
 		return
 	break_progress_changed.emit(_break_progress)
@@ -467,27 +468,30 @@ func _update_breaking(delta: float, holding: bool) -> void:
 
 # ---------------------------------------------------------------- tools
 
-## Speed factor from the best tool you own for this block (1.0 = hands).
+## The best tool you own of a class: [speed multiplier, tier]. Hands = [1, 0].
 ## Tools aren't equipped; owning one is enough.
-func tool_multiplier(id: int) -> float:
-	var cls := Blocks.tool_class(id)
+func best_tool(cls: String) -> Array:
+	var best := [1.0, 0]
 	if cls == "":
-		return 1.0
-	var best := 1.0
+		return best
 	for tool in Blocks.TOOLS[cls]:
-		if inventory.count(tool[0]) > 0:
-			best = maxf(best, tool[1])
+		if inventory.count(tool[0]) > 0 and tool[2] > best[1]:
+			best = [tool[1], tool[2]]
 	return best
 
 
-## Some blocks (stone) only drop when you have the right kind of tool.
+## Speed factor from the best tool you own for this block (1.0 = hands).
+func tool_multiplier(id: int) -> float:
+	return best_tool(Blocks.tool_class(id))[0]
+
+
+## Some blocks only drop when you have a good enough tool: stone and
+## coal need any pickaxe, iron ore needs a stone pickaxe or better.
 func drops_when_broken(id: int) -> bool:
 	if not Blocks.NEEDS_TOOL.has(id):
 		return true
-	for tool in Blocks.TOOLS[Blocks.NEEDS_TOOL[id]]:
-		if inventory.count(tool[0]) > 0:
-			return true
-	return false
+	var need: Array = Blocks.NEEDS_TOOL[id]
+	return best_tool(need[0])[1] >= need[1]
 
 
 ## Is there a Workbench block within 3 blocks?

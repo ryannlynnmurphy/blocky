@@ -64,10 +64,22 @@ Press Tab. Recipes are a list, not a grid:
 | 4 Planks | 1 Workbench (hotbar slot 9, place it) | anywhere |
 | 3 Planks + 2 Sticks | Wooden Pickaxe / Wooden Axe | within 3 blocks of a Workbench |
 | 3 Stone + 2 Sticks | Stone Pickaxe / Stone Axe | within 3 blocks of a Workbench |
+| 3 Iron + 2 Sticks | Iron Pickaxe / Iron Axe | within 3 blocks of a Workbench |
 
 Tools aren't equipped — owning one is enough. A pickaxe speeds up stone
-(wood ×2.5, stone ×4); an axe speeds up logs, planks and workbenches.
-Stone takes 3 s by hand and **drops nothing without a pickaxe**.
+and ores (wood ×2.5, stone ×4, iron ×6); an axe speeds up logs, planks
+and workbenches. Stone takes 3 s by hand and **drops nothing without a
+pickaxe**; iron ore needs at least a **stone** pickaxe.
+
+## Underground
+
+Tunnels wind through the ground (carved by 3D noise), opening to the
+surface only in some regions — look for dark holes in hillsides, or dig.
+**Coal ore** (dark flecked stone) appears throughout the stone and drops
+Coal; **iron ore** (rusty) only below y 22 and drops Iron. Iron works
+raw for now — a furnace is on the roadmap.
+`godot --headless --path . --script tools/find_cave.gd` lists nearby
+cave mouths.
 Recipes live in `scripts/recipes.gd`; hardness and tool classes in
 `scripts/blocks.gd`.
 

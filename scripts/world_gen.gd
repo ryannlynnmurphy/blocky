@@ -41,6 +41,19 @@ var continent := FastNoiseLite.new()   # big slow hills
 var hills := FastNoiseLite.new()       # small bumps on top
 var temperature := FastNoiseLite.new()
 var moisture := FastNoiseLite.new()
+# Underground: 3D noises. Caves are carved where `caves` is close to zero
+# (a thin sheet through 3D space = winding tunnels), but only where
+# `cave_gate` is positive, so tunnels come in regions rather than everywhere.
+var caves := FastNoiseLite.new()
+var cave_gate := FastNoiseLite.new()
+var coal := FastNoiseLite.new()
+var iron := FastNoiseLite.new()
+
+const CAVE_WIDTH := 0.07       # bigger = fatter tunnels
+const CAVE_FLOOR := 4          # never carve below this y (world floor)
+const COAL_THRESHOLD := 0.60   # noise above this in stone = coal ore
+const IRON_THRESHOLD := 0.71
+const IRON_MAX_Y := 22         # iron only this deep or lower
 
 
 func _init(seed_value: int) -> void:
@@ -63,6 +76,26 @@ func _init(seed_value: int) -> void:
 	moisture.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	moisture.frequency = 0.005
 	moisture.fractal_octaves = 2
+
+	caves.seed = seed_value + 4
+	caves.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	caves.frequency = 0.045
+	caves.fractal_octaves = 1
+
+	cave_gate.seed = seed_value + 5
+	cave_gate.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	cave_gate.frequency = 0.012
+	cave_gate.fractal_octaves = 1
+
+	coal.seed = seed_value + 6
+	coal.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	coal.frequency = 0.11
+	coal.fractal_octaves = 1
+
+	iron.seed = seed_value + 7
+	iron.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	iron.frequency = 0.12
+	iron.fractal_octaves = 1
 
 
 ## Ground height (the y of the top block) at world column (x, z).
@@ -145,12 +178,27 @@ func fill_chunk(cpos: Vector2i) -> Array:
 				surface = Blocks.SNOW
 				under = Blocks.DIRT
 
+			# Caves are allowed where the gate noise is positive; they may
+			# only break the surface (a cave mouth) where it's strongly so.
+			var gate := cave_gate.get_noise_2d(wx, wz)
+			var gated := gate > 0.0
+			var mouths := gate > 0.45
 			for y in range(0, h + 1):
 				var id := Blocks.STONE
 				if y == h:
 					id = surface
 				elif y > h - 3:
 					id = under
+				elif y > 0:
+					# Ore veins inside stone.
+					if y <= IRON_MAX_Y and iron.get_noise_3d(wx, y, wz) > IRON_THRESHOLD:
+						id = Blocks.IRON_ORE
+					elif coal.get_noise_3d(wx, y, wz) > COAL_THRESHOLD:
+						id = Blocks.COAL_ORE
+				# Carve caves through anything above the world floor.
+				if gated and y >= CAVE_FLOOR and (y < h - 2 or mouths) \
+						and absf(caves.get_noise_3d(wx, y, wz)) < CAVE_WIDTH:
+					id = Blocks.AIR
 				data[lx + SIZE * (lz + SIZE * y)] = id
 
 	# Trees: decided per world column, so the same tree is placed

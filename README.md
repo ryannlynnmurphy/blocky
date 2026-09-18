@@ -27,7 +27,11 @@ godot --path .
 | Left click | Break the highlighted block |
 | Right click | Place the selected block |
 | 1–7 | Pick which block to place |
+| T (hold) | Fast-forward time (watch the sun set) |
 | Esc | Free / re-capture the mouse |
+
+A full day lasts 10 real minutes. For testing, `godot --path . -- --day-length=5`
+makes a day last 5 seconds.
 
 ## Where things live
 
@@ -41,7 +45,8 @@ scripts/world_gen.gd noise terrain + trees -> fills a chunk with block IDs
 scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
 scripts/world.gd     owns all chunks, streams them around the player, get/set block
 scripts/player.gd    movement, camera, aiming, break/place
-scripts/hud.gd       crosshair, hotbar, hints
+scripts/day_night.gd sun/moon orbit, sky + light color over the day
+scripts/hud.gd       crosshair, hotbar, clock, hints
 ```
 
 ## How the world is stored

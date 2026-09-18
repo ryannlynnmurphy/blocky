@@ -12,6 +12,7 @@ func _ready() -> void:
 	world.player = player
 	player.world = world
 	hud.bind_player(player)
+	hud.bind_day_night($DayNight)
 
 	# Find dry land near the origin to spawn on.
 	var sx := 8

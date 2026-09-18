@@ -2,6 +2,8 @@ extends CanvasLayer
 ## On-screen overlay: crosshair, hotbar, and control hints.
 
 var _hotbar_label: Label
+var _clock_label: Label
+var _day_night: DayNight
 
 
 ## A Control that just draws a crosshair in its centre.
@@ -22,9 +24,18 @@ func _ready() -> void:
 	add_child(cross)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB break   RMB place   1-7 pick block   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB break   RMB place   1-7 pick block   T fast-forward time   Esc free mouse"
 	hint.position = Vector2(12, 8)
 	add_child(hint)
+
+	_clock_label = _make_label()
+	_clock_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_clock_label.offset_left = -220
+	_clock_label.offset_right = -12
+	_clock_label.offset_top = 8
+	_clock_label.offset_bottom = 34
+	_clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	add_child(_clock_label)
 
 	_hotbar_label = _make_label()
 	_hotbar_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -38,6 +49,15 @@ func _ready() -> void:
 func bind_player(player: Player) -> void:
 	player.hotbar_changed.connect(_refresh_hotbar)
 	_refresh_hotbar(player.selected)
+
+
+func bind_day_night(day_night: DayNight) -> void:
+	_day_night = day_night
+
+
+func _process(_delta: float) -> void:
+	if _day_night != null:
+		_clock_label.text = _day_night.clock_text()
 
 
 func _refresh_hotbar(selected: int) -> void:

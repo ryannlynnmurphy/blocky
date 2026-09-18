@@ -43,7 +43,7 @@ var _regen_timer := 0.0
 var _starve_timer := 0.0
 
 var world: VoxelWorld
-var selected := 0    # index into Blocks.HOTBAR
+var selected := 0    # selected hotbar slot (inventory slots 0-8)
 var inventory := Inventory.new()
 var level := 1
 var xp := 0
@@ -159,7 +159,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key := event as InputEventKey
 		var n := int(key.keycode) - int(KEY_1)
-		if n >= 0 and n < Blocks.HOTBAR.size():
+		if n >= 0 and n < Inventory.HOTBAR:
 			select_slot(n)
 		elif key.keycode == KEY_E:
 			eat()
@@ -167,8 +167,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Picks a hotbar slot; wraps around at both ends (for the scroll wheel).
 func select_slot(index: int) -> void:
-	selected = posmod(index, Blocks.HOTBAR.size())
+	selected = posmod(index, Inventory.HOTBAR)
 	hotbar_changed.emit(selected)
+
+
+## What's in the selected hotbar slot (AIR if nothing).
+func held_id() -> int:
+	return inventory.id_at(selected)
 
 
 func _physics_process(delta: float) -> void:
@@ -344,7 +349,7 @@ func _die() -> void:
 
 ## Back to square one for a New Game.
 func reset_for_new_game() -> void:
-	inventory.from_dict({})
+	inventory.clear()
 	level = 1
 	xp = 0
 	max_health = BASE_HEALTH
@@ -477,16 +482,16 @@ func _update_breaking(delta: float, holding: bool) -> void:
 
 # ---------------------------------------------------------------- tools
 
-## The best tool you own of a class: [speed multiplier, tier]. Hands = [1, 0].
-## Tools aren't equipped; owning one is enough.
+## The tool in your hand, if it's the right class: [speed multiplier, tier].
+## Hands (or the wrong tool) = [1, 0]. You have to be HOLDING it.
 func best_tool(cls: String) -> Array:
-	var best := [1.0, 0]
 	if cls == "":
-		return best
+		return [1.0, 0]
+	var held := held_id()
 	for tool in Blocks.TOOLS[cls]:
-		if inventory.count(tool[0]) > 0 and tool[2] > best[1]:
-			best = [tool[1], tool[2]]
-	return best
+		if tool[0] == held:
+			return [tool[1], tool[2]]
+	return [1.0, 0]
 
 
 ## Speed factor from the best tool you own for this block (1.0 = hands).
@@ -585,9 +590,10 @@ func _place_block() -> void:
 	var block := Vector3i((hit.position + hit.normal * 0.5).floor())
 	if _overlaps_player(block):
 		return
-	var id: int = Blocks.HOTBAR[selected]
-	if not inventory.take(id):
-		return   # you don't have one to place
+	var id := held_id()
+	if not Blocks.is_block(id):
+		return   # holding nothing, or a tool / item
+	inventory.take_from_slot(selected, 1)
 	world.set_block(block.x, block.y, block.z, id)
 	Sfx.play("place", Vector3(block) + Vector3(0.5, 0.5, 0.5), 0.15)
 

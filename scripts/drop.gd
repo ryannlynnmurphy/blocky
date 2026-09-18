@@ -60,6 +60,7 @@ func _on_body_entered(body: Node3D) -> void:
 
 
 func _collect(who: Node3D) -> void:
-	if not is_queued_for_deletion():
-		who.inventory.add(item_id)
+	if is_queued_for_deletion():
+		return
+	if who.inventory.add(item_id) == 0:   # 0 = it fit; otherwise the bag is full
 		queue_free()

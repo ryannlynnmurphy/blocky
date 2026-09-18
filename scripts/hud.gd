@@ -71,63 +71,48 @@ class SquareBar extends Control:
 			draw_rect(r, Color(0, 0, 0, 0.5), false, 2.0)
 
 
-## The hotbar: one square per placeable block in its own colour, with the
-## count in the corner; the selected slot is outlined. Items you can carry
-## but not place (meat) get their own slots to the right.
+## The hotbar: the first 9 inventory slots, whatever is in them, with the
+## selected slot outlined. Blocks, tools and food all live here.
 class HotbarView extends Control:
 	const SLOT := 44.0
 	const GAP := 6.0
+	var ids: Array[int] = []
 	var counts: Array[int] = []
-	var item_counts := {}
 	var selected := 0
 
 	func _ready() -> void:
 		resized.connect(queue_redraw)
 
 	func refresh(player: Player) -> void:
+		ids.clear()
 		counts.clear()
-		for id in Blocks.HOTBAR:
-			counts.append(player.inventory.count(id))
-		item_counts.clear()
-		for id in Blocks.ITEMS:
-			item_counts[id] = player.inventory.count(id)
+		for i in Inventory.HOTBAR:
+			ids.append(player.inventory.id_at(i))
+			counts.append(player.inventory.count_at(i))
 		selected = player.selected
 		queue_redraw()
 
 	func _draw() -> void:
 		var font := ThemeDB.fallback_font
-		var n := Blocks.HOTBAR.size()
+		var n := Inventory.HOTBAR
 		var total := n * SLOT + (n - 1) * GAP
 		var x0 := (size.x - total) / 2.0
 		for i in n:
-			var id: int = Blocks.HOTBAR[i]
+			var r := Rect2(x0 + i * (SLOT + GAP), 0, SLOT, SLOT)
+			draw_rect(r, Color(0.08, 0.08, 0.1, 0.75))
+			var id: int = ids[i] if i < ids.size() else Blocks.AIR
+			if id != Blocks.AIR:
+				draw_rect(r.grow(-8), Blocks.face_color(id, 2))
+			if i == selected:
+				draw_rect(r, Color.WHITE, false, 3.0)
+			else:
+				draw_rect(r, Color(0, 0, 0, 0.6), false, 2.0)
+			draw_string(font, r.position + Vector2(4, 12), str(i + 1),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.85, 0.85))
 			var count: int = counts[i] if i < counts.size() else 0
-			_draw_slot(font, Rect2(x0 + i * (SLOT + GAP), 0, SLOT, SLOT),
-				Blocks.face_color(id, 2), count, str(i + 1), i == selected)
-		# Items, after a gap.
-		var x := x0 + total + 18.0
-		for id in Blocks.ITEMS:
-			var count: int = item_counts.get(id, 0)
-			if count > 0:
-				_draw_slot(font, Rect2(x, 0, SLOT, SLOT), Blocks.face_color(id, 1), count,
-					"E" if id == Blocks.MEAT else "", false)
-				x += SLOT + GAP
-
-	func _draw_slot(font: Font, r: Rect2, color: Color, count: int, label: String,
-			is_selected: bool) -> void:
-		draw_rect(r, Color(0.08, 0.08, 0.1, 0.75))
-		if count == 0:
-			color.a = 0.3   # dimmed: you don't have any
-		draw_rect(r.grow(-8), color)
-		if is_selected:
-			draw_rect(r, Color.WHITE, false, 3.0)
-		else:
-			draw_rect(r, Color(0, 0, 0, 0.6), false, 2.0)
-		draw_string(font, r.position + Vector2(4, 12), label,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.85, 0.85))
-		if count > 0:
-			draw_string(font, r.position + Vector2(0, SLOT - 5), str(count),
-				HORIZONTAL_ALIGNMENT_RIGHT, SLOT - 4, 14, Color.WHITE)
+			if count > 1:
+				draw_string(font, r.position + Vector2(0, SLOT - 5), str(count),
+					HORIZONTAL_ALIGNMENT_RIGHT, SLOT - 4, 14, Color.WHITE)
 
 
 func _ready() -> void:
@@ -177,7 +162,7 @@ func _ready() -> void:
 	add_child(_inventory_ui)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place   1-9 / wheel pick block   E eat   Tab inventory   Esc pause   F5 save   T fast-forward"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place held block   1-9 / wheel pick slot   E eat   Tab inventory   Esc pause   F5 save   T fast-forward"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.position = Vector2(12, 10)
 	add_child(hint)
@@ -224,6 +209,10 @@ func set_inventory_open(open: bool, at_bench: bool = false) -> void:
 		_inventory_ui.open(at_bench)
 	else:
 		_inventory_ui.close()
+
+
+func inventory_ui() -> InventoryUI:
+	return _inventory_ui
 
 
 func _show_pickup(id: int, amount: int) -> void:

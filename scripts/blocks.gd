@@ -68,8 +68,6 @@ static func drop_for(id: int) -> int:
 static func is_block(id: int) -> bool:
 	return id in BLOCKS
 
-## Blocks you can pick with keys 1-9 and place.
-const HOTBAR := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, PLANKS, SNOW, WORKBENCH]
 
 ## Colors per block: [top face, side faces, bottom face].
 const COLORS := {

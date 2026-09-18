@@ -36,7 +36,7 @@ whether the world is frozen, and whether the mouse is captured.
 | Left click | Punch a creature under the crosshair (within 3 blocks) |
 | Left click (hold) | Break the highlighted block — leaves take 0.25 s, dirt 0.5 s, stone 1.5 s. It pops out as an item that flies to you when you're close |
 | Right click | Place the selected block — or open a Workbench you're pointing at |
-| 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
+| 1–9 / mouse wheel | Select a hotbar slot (what you hold: a block to place, or a tool) |
 | E | Eat one Meat (+4 hunger) |
 | Tab | Inventory and crafting screen (Esc or Tab closes) |
 | Esc | Pause: Resume, Save, sound volume, Quit to Title |
@@ -65,23 +65,29 @@ Dig in or build walls until "Dawn." appears.
 
 ## Crafting and tools
 
-Tab opens your pockets: simple recipes only. Place a Workbench (hotbar
-slot 9) and **right-click it** to open the Workbench screen, where the
-tool recipes live.
+It works like Minecraft. Your inventory is 36 slots; the first 9 are the
+hotbar (keys 1–9 / mouse wheel select a slot, and right-click places the
+block in that slot). Tab opens your pockets with a **2×2** crafting grid;
+right-click a placed Workbench for a **3×3**. Drag ingredients into a
+pattern and the result appears in the result slot: left-click picks
+up / drops a stack, right-click splits or places one, **shift-click the
+result** to craft straight into your bag. Patterns match anywhere in the
+grid (`P` planks, `S` stick, `.` empty):
 
-| Ingredients | Result | Where |
+| Pattern | Result | Grid |
 |---|---|---|
-| 1 Log | 4 Planks | pockets (Tab) |
-| 2 Planks | 4 Sticks | pockets (Tab) |
-| 4 Planks | 1 Workbench | pockets (Tab) |
-| 3 Planks + 2 Sticks | Wooden Pickaxe / Wooden Axe | Workbench |
-| 3 Stone + 2 Sticks | Stone Pickaxe / Stone Axe | Workbench |
-| 3 Iron + 2 Sticks | Iron Pickaxe / Iron Axe | Workbench |
+| Log (anywhere) | 4 Planks | 2×2 |
+| `P` over `P` | 4 Sticks | 2×2 |
+| `P P` / `P P` | Workbench | 2×2 |
+| `P P P` / `. S .` / `. S .` | Wooden Pickaxe | 3×3 |
+| `P P` / `P S` / `. S` | Wooden Axe | 3×3 |
+| same shapes with Stone or Iron | Stone / Iron tools | 3×3 |
 
-Tools aren't equipped — owning one is enough. A pickaxe speeds up stone
-and ores (wood ×2.5, stone ×4, iron ×6); an axe speeds up logs, planks
-and workbenches. Stone takes 3 s by hand and **drops nothing without a
-pickaxe**; iron ore needs at least a **stone** pickaxe.
+**Tools must be held** — put the pickaxe in a hotbar slot and select it.
+A pickaxe speeds up stone and ores (wood ×2.5, stone ×4, iron ×6); an axe
+speeds up logs, planks and workbenches. Stone takes 3 s by hand and
+**drops nothing without a pickaxe**; iron ore needs at least a **stone**
+pickaxe. Recipes live in `scripts/recipes.gd` as shapes.
 
 ## Underground
 

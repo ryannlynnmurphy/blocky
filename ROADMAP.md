@@ -82,6 +82,11 @@ and verified before the next starts. No system gets built "all at once."
       icon-based recipes. One state machine in `main.gd` owns screens,
       pausing and the mouse. Tests use their own save file.
 
+- [x] **M19 — Minecraft-style inventory.** 36 slots with stacks, the
+      hotbar is the first row, tools must be held. 2×2 / 3×3 crafting
+      grids with shaped and shapeless recipes, a result slot, drag/drop,
+      split and shift-craft. Right-click a Workbench to open the 3×3.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of

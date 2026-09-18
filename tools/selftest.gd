@@ -43,12 +43,8 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: inventory after hold-break + pickup: %s, drops left %d"
 				% [player.inventory.summary(), world.drop_count()])
 		110:
-			# Select whatever we picked up, then put it back down.
-			for i in Blocks.HOTBAR.size():
-				if player.inventory.count(Blocks.HOTBAR[i]) > 0:
-					player.selected = i
-					player.hotbar_changed.emit(i)
-					break
+			# Select the slot holding what we picked up, then put it back down.
+			player.select_slot(player.inventory.find_slot(Blocks.GRASS))
 			player._place_block()
 			print("selftest: inventory after place:  %s" % player.inventory.summary())
 		120:
@@ -177,24 +173,31 @@ func _physics_process(_delta: float) -> void:
 			player.test_move = Vector2.ZERO
 			player.test_run = false
 		440:
+			# Crafting through the real grid UI, Minecraft-style.
 			var inv := player.inventory
-			inv.from_dict({})
-			inv.add(Blocks.LOG, 1)
-			var r_planks: Dictionary = Recipes.LIST[0]
-			var r_sticks: Dictionary = Recipes.LIST[1]
-			var r_bench: Dictionary = Recipes.LIST[2]
-			var r_pick: Dictionary = Recipes.LIST[3]
-			Recipes.craft(inv, r_planks)
-			Recipes.craft(inv, r_sticks)
-			print("selftest: crafted from 1 log: %s" % inv.summary())
-			print("selftest: can craft workbench with 2 planks: %s (expect false)"
-				% Recipes.can_craft(inv, r_bench, false))
-			inv.add(Blocks.PLANKS, 5)
-			Recipes.craft(inv, r_bench)
+			inv.clear()
+			main.set_inventory_open(true)   # pockets: 2x2 grid
+			var ui: InventoryUI = main.hud.inventory_ui()
+			ui.grid.set_slot(0, Blocks.LOG, 1)
+			print("selftest: log in 2x2 grid -> result: %s" % ui._recipe_label.text)
+			ui.take_result(true)   # shift-click: straight into the bag
+			print("selftest: after taking result: %s (expect Planks x4)" % inv.summary())
+			# Sticks: planks stacked vertically (2x2 slots 0 and 2).
+			inv.take(Blocks.PLANKS, 2)
+			ui.grid.set_slot(0, Blocks.PLANKS, 1)
+			ui.grid.set_slot(2, Blocks.PLANKS, 1)
+			print("selftest: planks over planks -> %s" % ui._recipe_label.text)
+			ui.take_result(true)
+			# Planks side by side should NOT be sticks.
+			ui.grid.set_slot(0, Blocks.PLANKS, 1)
+			ui.grid.set_slot(1, Blocks.PLANKS, 1)
+			print("selftest: planks side by side -> '%s' (expect nothing)" % ui._recipe_label.text)
+			ui.grid.clear()
+			print("selftest: bag now: %s (expect Planks x2, Stick x4)" % inv.summary())
+			# A pickaxe needs 3 wide: impossible in 2x2.
+			main.set_inventory_open(false)
 			print("selftest: stone by hand: x%.1f, drops: %s (expect 1.0, false)"
 				% [player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
-			print("selftest: pickaxe craftable from pockets: %s (expect false)"
-				% Recipes.can_craft(inv, r_pick, false))
 			# Put a Workbench block where the crosshair points, then right-click it.
 			player.set_look(0.0, -0.6)
 			var hit := player._aim_ray()
@@ -203,10 +206,24 @@ func _physics_process(_delta: float) -> void:
 			player._place_block()   # right-click on the bench: should open it, not build
 			print("selftest: right-clicked workbench: screen is workbench: %s, block still there: %s"
 				% [main.state == main.State.WORKBENCH, world.get_block(spot.x, spot.y, spot.z) == Blocks.WORKBENCH])
-			if Recipes.can_craft(inv, r_pick, main.state == main.State.WORKBENCH):
-				Recipes.craft(inv, r_pick)
-			print("selftest: after pickaxe: %s | stone x%.1f, drops: %s (expect 2.5, true)"
+			# Lay out a pickaxe in the 3x3: planks across the top, sticks down the middle.
+			inv.add(Blocks.PLANKS, 1)   # need 3
+			ui = main.hud.inventory_ui()
+			for i in [0, 1, 2]:
+				ui.grid.set_slot(i, Blocks.PLANKS, 1)
+			ui.grid.set_slot(4, Blocks.STICK, 1)
+			ui.grid.set_slot(7, Blocks.STICK, 1)
+			inv.take(Blocks.PLANKS, 3)
+			inv.take(Blocks.STICK, 2)
+			print("selftest: pickaxe pattern -> %s" % ui._recipe_label.text)
+			ui.take_result(true)
+			player.select_slot(inv.find_slot(Blocks.WOOD_PICKAXE))   # hold it
+			print("selftest: holding pickaxe: %s | stone x%.1f, drops: %s (expect 2.5, true)"
 				% [inv.summary(), player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
+			player.select_slot(inv.find_slot(Blocks.STICK))   # put it away
+			print("selftest: holding sticks instead: stone x%.1f (expect 1.0 — tools must be held)"
+				% player.tool_multiplier(Blocks.STONE))
+			player.select_slot(inv.find_slot(Blocks.WOOD_PICKAXE))
 		480:
 			main.set_inventory_open(false)
 		490:
@@ -275,8 +292,9 @@ func _physics_process(_delta: float) -> void:
 								iron_n += 1
 			print("selftest: underground in 5 chunks: cave air %d, coal ore %d, iron ore %d (expect all > 0)" % [air_below, coal_n, iron_n])
 			print("selftest: coal ore drops %s, iron ore drops %s" % [Blocks.NAMES[Blocks.drop_for(Blocks.COAL_ORE)], Blocks.NAMES[Blocks.drop_for(Blocks.IRON_ORE)]])
-			print("selftest: with wooden pickaxe: iron ore drops %s (expect false); coal ore drops %s (expect true)"
+			print("selftest: holding wooden pickaxe: iron ore drops %s (expect false); coal ore drops %s (expect true)"
 				% [player.drops_when_broken(Blocks.IRON_ORE), player.drops_when_broken(Blocks.COAL_ORE)])
 			player.inventory.add(Blocks.STONE_PICKAXE, 1)
-			print("selftest: with stone pickaxe: iron ore drops %s (expect true), stone speed x%.1f (expect 4.0)"
+			player.select_slot(player.inventory.find_slot(Blocks.STONE_PICKAXE))
+			print("selftest: holding stone pickaxe: iron ore drops %s (expect true), stone speed x%.1f (expect 4.0)"
 				% [player.drops_when_broken(Blocks.IRON_ORE), player.tool_multiplier(Blocks.STONE)])

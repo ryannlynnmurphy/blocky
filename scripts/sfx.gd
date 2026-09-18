@@ -87,8 +87,9 @@ func _process(_delta: float) -> void:
 	var e := day_night.sun_elevation()
 	var day := smoothstep(-0.1, 0.2, e)
 	var night := 1.0 - smoothstep(-0.2, 0.05, e)
-	_amb_day.volume_db = linear_to_db(maxf(day, 0.001)) - 12.0
-	_amb_night.volume_db = linear_to_db(maxf(night, 0.001)) - 10.0
+	# Ambience sits far in the background — barely there.
+	_amb_day.volume_db = linear_to_db(maxf(day, 0.001)) - 30.0
+	_amb_night.volume_db = linear_to_db(maxf(night, 0.001)) - 28.0
 
 
 ## Plays a named sound. With a position it comes from that spot in the

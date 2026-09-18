@@ -52,6 +52,7 @@ func build_mesh() -> void:
 	dirty = false
 	var data: PackedByteArray = world.chunk_data[cpos]
 	var max_y: int = world.chunk_max_y[cpos]
+	var tints: PackedColorArray = world.chunk_tints[cpos]
 
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
@@ -70,7 +71,14 @@ func build_mesh() -> void:
 					var n: Vector3 = FACES[f][0]
 					if _is_covered(data, x + int(n.x), y + int(n.y), z + int(n.z)):
 						continue
-					var col := Blocks.face_color(id, f)
+					# Grass tops and leaves take the biome tint of their column.
+					var col: Color
+					if id == Blocks.GRASS and f == 2:
+						col = tints[x + SIZE * z]
+					elif id == Blocks.LEAVES:
+						col = tints[x + SIZE * z].darkened(0.25)
+					else:
+						col = Blocks.face_color(id, f)
 					var corners: Array = FACES[f][1]
 					for c in 4:
 						verts.append(origin + corners[c])

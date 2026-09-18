@@ -30,8 +30,15 @@ godot --path .
 | T (hold) | Fast-forward time (watch the sun set) |
 | Esc | Free / re-capture the mouse |
 
-A full day lasts 10 real minutes. For testing, `godot --path . -- --day-length=5`
-makes a day last 5 seconds.
+## Dev switches
+
+Anything after `--` on the command line is for our scripts, not Godot:
+
+```
+godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
+godot --path . -- --spawn=-300,-20     spawn at that x,z column
+godot --headless --path . --script tools/biome_survey.gd   print a biome map
+```
 
 ## Where things live
 
@@ -41,7 +48,8 @@ scenes/main.tscn     the level: sky, sun, world, water, player, HUD
 scenes/player.tscn   the character's body, collision capsule and camera rig
 scripts/main.gd      wires everything together, picks a spawn point
 scripts/blocks.gd    block registry: IDs, names, colors
-scripts/world_gen.gd noise terrain + trees -> fills a chunk with block IDs
+scripts/world_gen.gd noise terrain, biomes, grass tint, trees -> fills a chunk
+tools/               headless dev scripts (not part of the game)
 scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
 scripts/world.gd     owns all chunks, streams them around the player, get/set block
 scripts/player.gd    movement, camera, aiming, break/place

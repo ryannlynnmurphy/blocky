@@ -20,10 +20,13 @@ and verified before the next starts. No system gets built "all at once."
       fog, sunlight and ambient blend through day / sunset / night
       palettes. Clock on the HUD, hold T to fast-forward (`day_night.gd`).
 
+- [x] **M6 — Biomes.** Temperature + moisture noise pick Plains / Forest /
+      Desert / Tundra per column (ground blocks, tree density) and tint
+      grass and leaves smoothly across the map. HUD shows the biome.
+      Trees are decided per world column so they cross chunk edges.
+
 ## Next (in order)
 
-- [ ] M6 — Biomes: temperature/moisture noise picks grass color, tree
-      density, and block palette per region.
 - [ ] M7 — First creature: a wandering animal you can bump into.
 - [ ] M8 — Inventory: breaking a block gives you that block; placing
       spends it.

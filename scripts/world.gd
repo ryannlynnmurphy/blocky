@@ -13,6 +13,7 @@ const HEIGHT := Chunk.HEIGHT
 var gen: WorldGen
 var chunk_data := {}    # Vector2i -> PackedByteArray (kept forever, so edits survive)
 var chunk_max_y := {}   # Vector2i -> int
+var chunk_tints := {}   # Vector2i -> PackedColorArray (grass color per column)
 var chunks := {}        # Vector2i -> Chunk node (only the ones near the player)
 var mesh_queue: Array[Vector2i] = []
 var player: Node3D
@@ -50,6 +51,10 @@ func chunk_coord_of(world_pos: Vector3) -> Vector2i:
 
 func height_at(x: int, z: int) -> int:
 	return gen.height_at(x, z)
+
+
+func biome_name_at(x: int, z: int) -> String:
+	return gen.biome_name_at(x, z)
 
 
 func get_block(wx: int, wy: int, wz: int) -> int:
@@ -98,6 +103,7 @@ func ensure_data(cpos: Vector2i) -> void:
 	var result := gen.fill_chunk(cpos)
 	chunk_data[cpos] = result[0]
 	chunk_max_y[cpos] = result[1]
+	chunk_tints[cpos] = result[2]
 
 
 ## Load chunks near the player, unload far ones.

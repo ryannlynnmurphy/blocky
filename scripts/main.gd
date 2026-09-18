@@ -13,12 +13,20 @@ func _ready() -> void:
 	player.world = world
 	hud.bind_player(player)
 	hud.bind_day_night($DayNight)
+	hud.bind_world(world, player)
 
 	# Find dry land near the origin to spawn on.
 	var sx := 8
-	while world.height_at(sx, 8) <= WorldGen.SEA_LEVEL + 2 and sx < 400:
+	var sz := 8
+	# Testing aid: `godot --path . -- --spawn=-300,-20` spawns at that column.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--spawn="):
+			var xy := arg.get_slice("=", 1).split(",")
+			sx = int(xy[0])
+			sz = int(xy[1])
+	while world.height_at(sx, sz) <= WorldGen.SEA_LEVEL + 2 and sx < 400:
 		sx += 4
-	var spawn := Vector3(sx + 0.5, world.height_at(sx, 8) + 2.0, 8.5)
+	var spawn := Vector3(sx + 0.5, world.height_at(sx, sz) + 2.0, sz + 0.5)
 	player.global_position = spawn
 
 	# Build the ground under the player immediately so they don't fall

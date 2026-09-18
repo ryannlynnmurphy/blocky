@@ -4,6 +4,8 @@ extends CanvasLayer
 var _hotbar_label: Label
 var _clock_label: Label
 var _day_night: DayNight
+var _world: VoxelWorld
+var _player: Player
 
 
 ## A Control that just draws a crosshair in its centre.
@@ -30,7 +32,7 @@ func _ready() -> void:
 
 	_clock_label = _make_label()
 	_clock_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	_clock_label.offset_left = -220
+	_clock_label.offset_left = -400
 	_clock_label.offset_right = -12
 	_clock_label.offset_top = 8
 	_clock_label.offset_bottom = 34
@@ -55,9 +57,19 @@ func bind_day_night(day_night: DayNight) -> void:
 	_day_night = day_night
 
 
+func bind_world(world: VoxelWorld, player: Player) -> void:
+	_world = world
+	_player = player
+
+
 func _process(_delta: float) -> void:
+	var parts: PackedStringArray = []
+	if _world != null and _player != null:
+		var p := _player.global_position
+		parts.append(_world.biome_name_at(int(floor(p.x)), int(floor(p.z))))
 	if _day_night != null:
-		_clock_label.text = _day_night.clock_text()
+		parts.append(_day_night.clock_text())
+	_clock_label.text = "   ".join(parts)
 
 
 func _refresh_hotbar(selected: int) -> void:

@@ -20,13 +20,13 @@ territory, deliberately deferred).
 | Grass, Dirt, Stone, Sand, Log, Leaves, Snow, Planks, Workbench, Coal Ore, Iron Ore | ✅ |
 | Water surface | ✅ (flat plane, textured) |
 
-## 2. Items — 10 — ⬜ not textured yet
+## 2. Items — 10 ✅ textured
 
 Meat, Stick, Coal, Iron, Wooden/Stone/Iron Pickaxe, Wooden/Stone/Iron
-Axe. Textures exist (`blocky/textures/items/`, 16×16 + an atlas) but
-`hud.gd`/`inventory_ui.gd` still draw a flat color square per slot —
-swapping that for the real icon is small, mechanical, low-risk. Next
-natural pass.
+Axe. `Blocks.icon(id)` (in `blocks.gd`) is the single lookup used by
+the hotbar, inventory grid, cursor stack and dropped-item cubes — for
+blocks it reuses the same world texture already on the block; for
+items it's the item's own 16×16 icon file. No new art was needed.
 
 ## 3. Characters — 3, mixed
 
@@ -85,7 +85,7 @@ logic changes) — a good candidate for the next art-focused session.
 ## Suggested order by impact, updated
 
 1. ~~Block textures~~ ✅ done
-2. Item icons (small, mechanical)
+2. ~~Item icons~~ ✅ done
 3. UI chrome (hotbar/inventory frames, hearts, hunger, crosshair,
    break bar, buttons, logo) — biggest visible jump left
 4. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)

@@ -10,10 +10,15 @@ done — the plan itself is unedited.**
 > import, textured blocks, player.glb model + rig, sword attached to
 > a hand socket). Step 8's sword has no swing/attack animation and
 > isn't wielded in combat — attach only, per the plan's own Task 1
-> scope. Everything from "Add environment spawner" onward (step 9+)
-> is not started. See ROADMAP.md for the project's own milestone log,
-> which is the source of truth for what's actually done; this file is
-> the longer-range map.
+> scope. **Also done, past what Phase 1 asked for:** every item icon
+> (hotbar, inventory grid, cursor stack, dropped-item cubes) now uses
+> a real texture via `Blocks.icon()`, closing the "icon textures open"
+> line that recurs through §20's gap table. Everything from
+> "Add environment spawner" onward (step 9+) is not started. See
+> ROADMAP.md for the project's own milestone log, which is the source
+> of truth for what's actually done; this file is the longer-range
+> map, and its inline "Icon textures open" notes further down are now
+> stale — ROADMAP.md/ART.md win on conflict.
 
 ## 0. Current State
 

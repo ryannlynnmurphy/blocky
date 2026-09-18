@@ -98,14 +98,20 @@ and verified before the next starts. No system gets built "all at once."
       right hand (cosmetic only, no swing/combat yet). See `PLAN.md`
       for the full multi-phase asset-integration plan this milestone
       started, and `ART.md` for the asset-by-asset checklist.
+- [x] **M21 — Item icons.** `Blocks.icon(id)` reuses each block's own
+      world texture (or the item's own icon file) for the hotbar,
+      inventory grid, cursor stack and dropped-item cubes — no new
+      art, full coverage. `Blocks.COLORS`/`face_color()` (now fully
+      unused) removed rather than left as dead code.
 
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
 how much they'd change the feel of the game:
 
-- [ ] Icon textures: swap the flat-color hotbar/inventory/item squares
-      for the generated icon PNGs (small, mechanical, low risk).
+- [ ] UI chrome: real hotbar/inventory panel frames, hearts, hunger
+      drumsticks, crosshair, break bar, buttons, logo — the biggest
+      remaining visible jump (see ART.md §6).
 - [ ] Environment props as GLBs (trees/rocks/flowers/reeds) — first
       needs a decision: keep voxel trees (minable, consistent) or
       switch to the nicer-silhouette GLB trees, or both by biome.

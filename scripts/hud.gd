@@ -8,6 +8,7 @@ var _message_label: Label
 var _pickup_label: Label
 var _pickup_timer := 0.0
 var _crosshair: Crosshair
+var _inventory_ui: InventoryUI
 var _health_bar: SquareBar
 var _hunger_bar: SquareBar
 var _hotbar: HotbarView
@@ -109,7 +110,7 @@ class HotbarView extends Control:
 			var count: int = item_counts.get(id, 0)
 			if count > 0:
 				_draw_slot(font, Rect2(x, 0, SLOT, SLOT), Blocks.face_color(id, 1), count,
-					"E", false)
+					"E" if id == Blocks.MEAT else "", false)
 				x += SLOT + GAP
 
 	func _draw_slot(font: Font, r: Rect2, color: Color, count: int, label: String,
@@ -172,8 +173,11 @@ func _ready() -> void:
 	_message_label.visible = false
 	add_child(_message_label)
 
+	_inventory_ui = InventoryUI.new()
+	add_child(_inventory_ui)
+
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 / wheel pick block   E eat   F5 save   T fast-forward   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place   1-9 / wheel pick block   E eat   Tab inventory + crafting   F5 save   T fast-forward"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.position = Vector2(12, 10)
 	add_child(hint)
@@ -209,6 +213,18 @@ func bind_player(player: Player) -> void:
 	_health_bar.set_value(player.health, player.max_health)
 	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
 	_hotbar.refresh(player)
+	_inventory_ui.bind_player(player)
+
+
+func is_inventory_open() -> bool:
+	return _inventory_ui.visible
+
+
+func set_inventory_open(open: bool) -> void:
+	if open:
+		_inventory_ui.open()
+	else:
+		_inventory_ui.close()
 
 
 func _show_pickup(id: int, amount: int) -> void:

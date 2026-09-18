@@ -57,6 +57,11 @@ and verified before the next starts. No system gets built "all at once."
       position/look/health/level/XP/inventory, time of day. Autosave
       every 30 s, on window close, and F5. Loads on start; `--fresh` skips.
 
+- [x] **M14 — Tools & crafting.** Tab opens inventory + recipe list.
+      Log → planks → sticks → workbench; wooden/stone pickaxe and axe at
+      a workbench. Owning the best tool speeds up its block class; stone
+      only drops with a pickaxe. No durability yet.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
@@ -64,7 +69,7 @@ how much they'd change the feel of the game:
 
 - [ ] Hostile creature at night: something that hunts you after dark,
       giving the day/night cycle teeth.
-- [ ] Tools & crafting: a workbench, wooden/stone pickaxe, faster mining.
+- [ ] Tool durability and a held-item model in the hand.
 - [ ] Sound: footsteps, hits, ambient wind, a simple music loop.
 - [ ] Water you can swim in, caves, ores.
 - [ ] Title screen with New Game / Continue and a seed box.

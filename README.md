@@ -29,6 +29,7 @@ godot --path .
 | Right click | Place the selected block |
 | 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
 | E | Eat one Meat (+4 hunger) |
+| Tab | Inventory and crafting screen (Esc or Tab closes) |
 | F5 | Save now (it also autosaves every 30 s and when you close the window) |
 | T (hold) | Fast-forward time (watch the sun set) |
 
@@ -41,6 +42,24 @@ respawn where you started, keeping your inventory.
 Killing creatures quietly makes you tougher: every 10×N kills-worth of
 XP adds 2 max health (the health row grows). There is no level display
 by design.
+
+## Crafting and tools
+
+Press Tab. Recipes are a list, not a grid:
+
+| Ingredients | Result | Where |
+|---|---|---|
+| 1 Log | 4 Planks | anywhere |
+| 2 Planks | 4 Sticks | anywhere |
+| 4 Planks | 1 Workbench (hotbar slot 9, place it) | anywhere |
+| 3 Planks + 2 Sticks | Wooden Pickaxe / Wooden Axe | within 3 blocks of a Workbench |
+| 3 Stone + 2 Sticks | Stone Pickaxe / Stone Axe | within 3 blocks of a Workbench |
+
+Tools aren't equipped — owning one is enough. A pickaxe speeds up stone
+(wood ×2.5, stone ×4); an axe speeds up logs, planks and workbenches.
+Stone takes 3 s by hand and **drops nothing without a pickaxe**.
+Recipes live in `scripts/recipes.gd`; hardness and tool classes in
+`scripts/blocks.gd`.
 
 ## Saving
 
@@ -88,7 +107,9 @@ scripts/world.gd     owns all chunks, streams them around the player, get/set bl
 scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs + water
 scripts/drop.gd      a dropped item on the ground; walk into it to pick it up
 scripts/player.gd    movement, camera, aiming, break/place, punch, health, respawn, XP/levels
-scripts/inventory.gd what you're carrying: a count per block ID
+scripts/inventory.gd what you're carrying: a count per block/item ID
+scripts/recipes.gd   crafting recipes (ingredients -> result, workbench or not)
+scripts/inventory_ui.gd  the Tab screen: inventory list + Craft buttons
 scripts/day_night.gd sun/moon orbit, sky + light color over the day
 scripts/hud.gd       crosshair, hotbar, clock, hints
 ```

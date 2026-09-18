@@ -8,6 +8,7 @@ extends Node
 ##   frames 300..320   kill two critters, reach level 2 (progression)
 ##   frames 330..360   save, wreck the state, load it back (saving)
 ##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
+##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -161,3 +162,33 @@ func _physics_process(_delta: float) -> void:
 				% [d, Player.RUN_SPEED * 0.5, player._camera.fov, player._model.rotation.x])
 			player.test_move = Vector2.ZERO
 			player.test_run = false
+		440:
+			var inv := player.inventory
+			inv.from_dict({})
+			inv.add(Blocks.LOG, 1)
+			var r_planks: Dictionary = Recipes.LIST[0]
+			var r_sticks: Dictionary = Recipes.LIST[1]
+			var r_bench: Dictionary = Recipes.LIST[2]
+			var r_pick: Dictionary = Recipes.LIST[3]
+			Recipes.craft(inv, r_planks)
+			Recipes.craft(inv, r_sticks)
+			print("selftest: crafted from 1 log: %s" % inv.summary())
+			print("selftest: can craft workbench with 2 planks: %s (expect false)"
+				% Recipes.can_craft(inv, r_bench, false))
+			inv.add(Blocks.PLANKS, 5)
+			Recipes.craft(inv, r_bench)
+			print("selftest: stone by hand: x%.1f, drops: %s (expect 1.0, false)"
+				% [player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
+			print("selftest: pickaxe craftable far from a bench: %s (expect false)"
+				% Recipes.can_craft(inv, r_pick, player.near_workbench()))
+			# Put a workbench block down next to the player and try again.
+			var c := Vector3i(player.global_position.floor())
+			world.set_block(c.x + 2, c.y, c.z, Blocks.WORKBENCH)
+			print("selftest: near workbench now: %s" % player.near_workbench())
+			if Recipes.can_craft(inv, r_pick, player.near_workbench()):
+				Recipes.craft(inv, r_pick)
+			print("selftest: after pickaxe: %s | stone x%.1f, drops: %s (expect 2.5, true)"
+				% [inv.summary(), player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
+			main.set_inventory_open(true)   # show the screen for the recording
+		480:
+			main.set_inventory_open(false)

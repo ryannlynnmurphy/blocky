@@ -89,9 +89,22 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if (event as InputEventKey).keycode == KEY_F5:
+		var key := (event as InputEventKey).keycode
+		if key == KEY_F5:
 			save_game()
 			hud.show_message("Saved")
+		elif key == KEY_TAB:
+			set_inventory_open(not hud.is_inventory_open())
+		elif key == KEY_ESCAPE and hud.is_inventory_open():
+			set_inventory_open(false)
+
+
+## Opens/closes the inventory screen; the player stops taking input and
+## the mouse is freed while it's open.
+func set_inventory_open(open: bool) -> void:
+	hud.set_inventory_open(open)
+	player.ui_open = open
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if open else Input.MOUSE_MODE_CAPTURED
 
 
 func _notification(what: int) -> void:

@@ -56,6 +56,7 @@ var _peak_y := 0.0   # highest point of the current fall
 var _yaw := 0.0
 var _pitch := -0.3
 var _no_input := false   # dev: ignore mouse/keys so recordings are repeatable
+var ui_open := false     # a screen (inventory) is open: ignore game input
 
 @onready var _pivot: Node3D = $CameraPivot
 @onready var _arm: SpringArm3D = $CameraPivot/SpringArm3D
@@ -126,7 +127,7 @@ func _add_key(action: String, key: Key) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _no_input:
+	if _no_input or ui_open:
 		return
 	if event.is_action_pressed("ui_cancel"):   # Esc
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -181,7 +182,7 @@ func _physics_process(delta: float) -> void:
 	# Movement is relative to where the camera is looking.
 	var input := test_move
 	var run_held := test_run
-	if not _no_input:
+	if not _no_input and not ui_open:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		run_held = Input.is_action_pressed("run")
 	var dir := (_pivot.global_basis * Vector3(input.x, 0, input.y))
@@ -205,7 +206,7 @@ func _physics_process(delta: float) -> void:
 
 	var holding := test_hold_break
 	if not _no_input:
-		holding = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		holding = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_open
 	_update_breaking(delta, holding)
 	_animate_limbs(delta, moving and is_on_floor(), speed, running)
 	_tick_hunger(delta, running)
@@ -411,13 +412,50 @@ func _update_breaking(delta: float, holding: bool) -> void:
 		_break_target = block
 		_break_progress = 0.0
 	_mining = true
-	_break_progress += delta / Blocks.hardness(id)
+	_break_progress += delta * tool_multiplier(id) / Blocks.hardness(id)
 	if _break_progress >= 1.0:
 		world.set_block(block.x, block.y, block.z, Blocks.AIR)
-		world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), id)   # pops out as an item
+		if drops_when_broken(id):
+			world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), id)   # pops out as an item
 		_reset_breaking()
 		return
 	break_progress_changed.emit(_break_progress)
+
+
+# ---------------------------------------------------------------- tools
+
+## Speed factor from the best tool you own for this block (1.0 = hands).
+## Tools aren't equipped; owning one is enough.
+func tool_multiplier(id: int) -> float:
+	var cls := Blocks.tool_class(id)
+	if cls == "":
+		return 1.0
+	var best := 1.0
+	for tool in Blocks.TOOLS[cls]:
+		if inventory.count(tool[0]) > 0:
+			best = maxf(best, tool[1])
+	return best
+
+
+## Some blocks (stone) only drop when you have the right kind of tool.
+func drops_when_broken(id: int) -> bool:
+	if not Blocks.NEEDS_TOOL.has(id):
+		return true
+	for tool in Blocks.TOOLS[Blocks.NEEDS_TOOL[id]]:
+		if inventory.count(tool[0]) > 0:
+			return true
+	return false
+
+
+## Is there a Workbench block within 3 blocks?
+func near_workbench() -> bool:
+	var c := Vector3i(global_position.floor())
+	for dy in range(-2, 3):
+		for dz in range(-3, 4):
+			for dx in range(-3, 4):
+				if world.get_block(c.x + dx, c.y + dy, c.z + dz) == Blocks.WORKBENCH:
+					return true
+	return false
 
 
 func _reset_breaking() -> void:

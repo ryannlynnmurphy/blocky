@@ -38,6 +38,11 @@ func _ready() -> void:
 	# Testing aid: `-- --critter` puts one animal right in front of you.
 	if "--critter" in OS.get_cmdline_user_args():
 		world.spawn_creature(sx, sz - 3)
+	# Testing aid: `-- --selftest` breaks and places a block automatically.
+	if "--selftest" in OS.get_cmdline_user_args():
+		var test: Node = load("res://tools/selftest.gd").new()
+		test.player = player
+		add_child(test)
 
 
 func _process(_delta: float) -> void:

@@ -13,9 +13,11 @@ const REACH := 6.0   # how far you can break/place, in blocks
 
 var world: VoxelWorld
 var selected := 0    # index into Blocks.HOTBAR
+var inventory := Inventory.new()
 
 var _yaw := 0.0
 var _pitch := -0.3
+var _no_input := false   # dev: ignore mouse/keys so recordings are repeatable
 
 @onready var _pivot: Node3D = $CameraPivot
 @onready var _arm: SpringArm3D = $CameraPivot/SpringArm3D
@@ -29,7 +31,18 @@ func _ready() -> void:
 	_arm.add_excluded_object(get_rid())   # camera arm ignores our own body
 	_pivot.rotation.y = _yaw
 	_arm.rotation.x = _pitch
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Testing aid: `-- --no-input` locks the camera and ignores clicks/keys.
+	_no_input = "--no-input" in OS.get_cmdline_user_args()
+	if not _no_input:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Points the camera. Used by tests; the mouse handler does the same thing.
+func set_look(yaw: float, pitch: float) -> void:
+	_yaw = yaw
+	_pitch = clampf(pitch, -1.3, 0.8)
+	_pivot.rotation.y = _yaw
+	_arm.rotation.x = _pitch
 
 
 ## Registers keyboard actions in code. (The usual Godot way is
@@ -53,6 +66,8 @@ func _add_key(action: String, key: Key) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _no_input:
+		return
 	if event.is_action_pressed("ui_cancel"):   # Esc
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -88,11 +103,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
-	elif Input.is_action_just_pressed("jump"):
+	elif not _no_input and Input.is_action_just_pressed("jump"):
 		velocity.y = JUMP_SPEED
 
 	# Movement is relative to where the camera is looking.
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var input := Vector2.ZERO
+	if not _no_input:
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var dir := (_pivot.global_basis * Vector3(input.x, 0, input.y))
 	dir.y = 0
 	dir = dir.normalized()
@@ -139,7 +156,11 @@ func _break_block() -> void:
 		return
 	# Step half a block INTO the face we hit to land inside that block.
 	var block := Vector3i((hit.position - hit.normal * 0.5).floor())
+	var id := world.get_block(block.x, block.y, block.z)
+	if id == Blocks.AIR:
+		return
 	world.set_block(block.x, block.y, block.z, Blocks.AIR)
+	inventory.add(id)   # the block goes in your pocket
 
 
 func _place_block() -> void:
@@ -150,7 +171,10 @@ func _place_block() -> void:
 	var block := Vector3i((hit.position + hit.normal * 0.5).floor())
 	if _overlaps_player(block):
 		return
-	world.set_block(block.x, block.y, block.z, Blocks.HOTBAR[selected])
+	var id: int = Blocks.HOTBAR[selected]
+	if not inventory.take(id):
+		return   # you don't have one to place
+	world.set_block(block.x, block.y, block.z, id)
 
 
 ## True if placing a block here would trap us inside it.

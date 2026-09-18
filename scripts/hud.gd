@@ -26,7 +26,7 @@ func _ready() -> void:
 	add_child(cross)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB break   RMB place   1-7 pick block   T fast-forward time   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB break   RMB place   1-8 pick block   T fast-forward time   Esc free mouse"
 	hint.position = Vector2(12, 8)
 	add_child(hint)
 
@@ -49,7 +49,9 @@ func _ready() -> void:
 
 
 func bind_player(player: Player) -> void:
+	_player = player
 	player.hotbar_changed.connect(_refresh_hotbar)
+	player.inventory.changed.connect(func(): _refresh_hotbar(player.selected))
 	_refresh_hotbar(player.selected)
 
 
@@ -75,12 +77,14 @@ func _process(_delta: float) -> void:
 func _refresh_hotbar(selected: int) -> void:
 	var parts: PackedStringArray = []
 	for i in Blocks.HOTBAR.size():
-		var name: String = Blocks.NAMES[Blocks.HOTBAR[i]]
+		var id: int = Blocks.HOTBAR[i]
+		var entry := "%d %s" % [i + 1, Blocks.NAMES[id]]
+		if _player != null:
+			entry += " ×%d" % _player.inventory.count(id)
 		if i == selected:
-			parts.append("[ %d %s ]" % [i + 1, name])
-		else:
-			parts.append("%d %s" % [i + 1, name])
-	_hotbar_label.text = "     ".join(parts)
+			entry = "[ %s ]" % entry
+		parts.append(entry)
+	_hotbar_label.text = "    ".join(parts)
 
 
 func _make_label() -> Label:

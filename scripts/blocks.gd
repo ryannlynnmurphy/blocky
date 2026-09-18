@@ -11,8 +11,8 @@ enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS }
 
 const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks"]
 
-## Blocks you can pick with keys 1-7 and place.
-const HOTBAR := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, PLANKS]
+## Blocks you can pick with keys 1-8 and place.
+const HOTBAR := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, PLANKS, SNOW]
 
 ## Colors per block: [top face, side faces, bottom face].
 const COLORS := {

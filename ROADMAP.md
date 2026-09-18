@@ -30,11 +30,18 @@ and verified before the next starts. No system gets built "all at once."
       small groups per chunk with a biome-colored coat; despawns when far
       (`creature.gd`, spawner in `world.gd`).
 
+- [x] **M8 — Inventory.** Breaking a block puts it in your inventory;
+      placing spends one. Hotbar shows counts (`inventory.gd`).
+
 ## Next (in order)
 
-- [ ] M8 — Inventory: breaking a block gives you that block; placing
-      spends it.
+- [ ] M9 — Combat: a punch that hurts creatures; creatures have health,
+      flinch, and can die (and drop something).
+- [ ] M10 — Player stats: health bar, taking damage, respawn.
+- [ ] M11 — RPG progression: XP from creatures, levels raise health.
+- [ ] M12 — Saving: world edits, inventory and position survive a restart.
 
 ## Later (not yet)
 
-Combat, RPG progression, saving, sound, greedy meshing / performance work.
+Hostile creatures, tools/crafting, sound, greedy meshing / performance
+work, larger view distance.

@@ -26,7 +26,7 @@ godot --path .
 | Shift | Run |
 | Left click | Break the highlighted block |
 | Right click | Place the selected block |
-| 1–7 | Pick which block to place |
+| 1–8 | Pick which block to place (you must have one — break blocks to collect them) |
 | T (hold) | Fast-forward time (watch the sun set) |
 | Esc | Free / re-capture the mouse |
 
@@ -38,6 +38,8 @@ Anything after `--` on the command line is for our scripts, not Godot:
 godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
+godot --path . -- --selftest --no-input   auto break + place a block, print inventory;
+                                          --no-input keeps your mouse out of recordings
 godot --headless --path . --script tools/biome_survey.gd   print a biome map
 ```
 
@@ -57,6 +59,7 @@ scripts/world.gd     owns all chunks, streams them around the player, get/set bl
                      spawns/despawns creatures
 scripts/creature.gd  critter brain: idle / wander, hop steps, avoid cliffs + water
 scripts/player.gd    movement, camera, aiming, break/place
+scripts/inventory.gd what you're carrying: a count per block ID
 scripts/day_night.gd sun/moon orbit, sky + light color over the day
 scripts/hud.gd       crosshair, hotbar, clock, hints
 ```

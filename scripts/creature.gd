@@ -32,11 +32,76 @@ var _mat := StandardMaterial3D.new()
 
 func _ready() -> void:
 	_rng.randomize()
+	_build_model()
+	_go_idle()
+
+
+## Sets up how this creature looks. The box-placeholder critter (and
+## Hostile, which reuses this scene shape) just tints two shared meshes;
+## Rabbit overrides this to rig in a textured GLB instead.
+func _build_model() -> void:
 	_mat.albedo_color = body_color
 	_mat.roughness = 1.0
 	$Model/Body.material_override = _mat
 	$Model/Head.material_override = _mat
-	_go_idle()
+
+
+## Shows (or clears, by passing `body_color` back) the hit/burn flash.
+## Overridden by species with a real GLB model to use an overlay material
+## instead of recoloring the shared placeholder mesh (see _flash_glb below).
+func _set_flash_color(color: Color) -> void:
+	_mat.albedo_color = color
+
+
+# ------------------------------------------------------ GLB-model support
+# Plain helper methods (not overridable hooks) that any species script can
+# call from its own _build_model()/_set_flash_color() override, whether it
+# extends Creature directly (Rabbit, Deer, ...) or Hostile (Goblin, Wisp,
+# Witch, ...) — GDScript has no multiple inheritance, so this lives here
+# instead of in a shared GLB-creature subclass.
+
+var _glb_mesh_parts: Array[MeshInstance3D] = []
+var _glb_flash_mat: StandardMaterial3D = null
+
+
+## Instantiates `rig_scene` under $Model. If `target_height` is > 0, the
+## whole rig is uniformly rescaled so its tallest point (measured live off
+## the instanced meshes, not copied numbers) lands there; 0 leaves the
+## asset's own authored scale alone. Collects every MeshInstance3D in the
+## rig so _flash_glb() can overlay them later.
+func _instantiate_glb_rig(rig_scene: PackedScene, target_height: float = 0.0) -> void:
+	_glb_flash_mat = StandardMaterial3D.new()
+	_glb_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_glb_flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_glb_flash_mat.albedo_color = Color(1.0, 0.15, 0.1, 0.0)
+
+	var rig: Node3D = rig_scene.instantiate()
+	_model.add_child(rig)
+	_collect_mesh_parts(rig)
+
+	if target_height > 0.0:
+		var raw_top := 0.0
+		for part in _glb_mesh_parts:
+			var aabb := part.get_aabb()
+			raw_top = maxf(raw_top, part.global_position.y + aabb.position.y + aabb.size.y)
+		var scale_factor := target_height / raw_top
+		_model.scale = Vector3(scale_factor, scale_factor, scale_factor)
+
+
+func _collect_mesh_parts(node: Node) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			_glb_mesh_parts.append(child)
+		_collect_mesh_parts(child)
+
+
+## Draws a red overlay on top of the real texture instead of replacing it,
+## so a hit/flee/burn flash doesn't blank out a GLB model's own colors.
+func _flash_glb(color: Color) -> void:
+	var flashing := color != body_color
+	_glb_flash_mat.albedo_color = Color(1.0, 0.15, 0.1, 0.6 if flashing else 0.0)
+	for part in _glb_mesh_parts:
+		part.material_overlay = _glb_flash_mat if flashing else null
 
 
 func _physics_process(delta: float) -> void:
@@ -48,7 +113,7 @@ func _physics_process(delta: float) -> void:
 	if _flash_timer > 0.0:
 		_flash_timer -= delta
 		if _flash_timer <= 0.0:
-			_mat.albedo_color = body_color
+			_set_flash_color(body_color)
 
 	if _timer <= 0.0:
 		if _wandering:
@@ -91,7 +156,7 @@ func take_hit(damage: int, from: Vector3, attacker: Node = null) -> void:
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
 	_knock = away * 6.0
 	velocity.y = 4.0            # a little hop
-	_mat.albedo_color = body_color.lerp(Color.RED, 0.7)
+	_set_flash_color(body_color.lerp(Color.RED, 0.7))
 	_flash_timer = 0.15
 	Sfx.play("thud", global_position, 0.15)
 	# Run away from the attacker.

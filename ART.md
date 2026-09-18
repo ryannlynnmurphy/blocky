@@ -68,30 +68,41 @@ taking damage flat-red-overlays the screen (not `hurt_vignette.png`),
 picking things up shows a magnet + text popup (not `pickup_spark.png`).
 Swapping in the real sprites is cosmetic, not new mechanics.
 
-## 6. UI — shapes exist, drawn not textured
+## 6. UI — hearts/hunger/hotbar ✅ textured, rest still shapes
 
-Hotbar, inventory/workbench panel, health row, hunger row, crosshair,
-break-progress bar, title/pause/death screens and buttons, a sound
-slider, message text — all already functional, all drawn with plain
-`_draw()` calls (rectangles, lines, `Label`s) rather than the
-generated `hotbar_slot.png` / `slot_frame.png` / `slot_selected.png` /
-`inventory_panel.png` / `heart_*` / `drumstick_*` / `crosshair.png` /
-`break_bar.png` / `button*.png` / `sound_slider.png` / `message_text.png`
-/ `logo.png`. This is the single biggest remaining "make it look like
-Blocky instead of a wireframe prototype" pass, and it's low-risk
-(swap what a `draw_rect`/`draw_texture` call points at, no gameplay
-logic changes) — a good candidate for the next art-focused session.
+Health row (`heart_full/half/empty.png`) and hunger row
+(`drumstick_full/half/empty.png`) are `hud.gd`'s `IconBar` class, 2
+points per icon with a real half state. The hotbar draws
+`hotbar_slot.png` per slot (its border is baked into the texture's own
+edge shading) and `slot_selected.png` — a hollow-centre frame, drawn
+a bit oversized — over whichever slot is selected. `slot_frame.png`
+turned out to be fully opaque with no transparent hole at all (not a
+border despite the name), so it's unused for now; it likely belongs on
+the inventory/workbench grid instead, whenever that gets its pass.
+
+Still plain `_draw()` calls (rectangles, lines, `Label`s): the
+inventory/workbench panel, crosshair, break-progress bar, title/pause/
+death screens and buttons, the sound slider, and message text — vs the
+generated `inventory_panel.png` / `crosshair.png` / `break_bar.png` /
+`button*.png` / `sound_slider.png` / `message_text.png` / `logo.png`.
+Same deal as the hotbar was: low-risk, swap what a
+`draw_rect`/`draw_texture` call points at, no gameplay logic changes.
 
 ## Suggested order by impact, updated
 
 1. ~~Block textures~~ ✅ done
 2. ~~Item icons~~ ✅ done
-3. UI chrome (hotbar/inventory frames, hearts, hunger, crosshair,
-   break bar, buttons, logo) — biggest visible jump left
-4. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
-5. Critter and Shade skins (needs custom per-part UV work — see §3)
-6. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
+3. ~~UI chrome, part 1 (hearts, hunger, hotbar frames)~~ ✅ done
+4. Rest of UI chrome (inventory/workbench panel, crosshair, break bar,
+   buttons, logo, sound slider, message text) — biggest visible jump
+   left
+5. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
+6. ~~Named wildlife/hostile GLBs~~ ✅ done (rabbit/deer/fox/boar/bird,
+   goblin/wisp/witch) — wildlife no longer spawns the old box
+   placeholder at all; the box "Shade" is now just one of four hostile
+   skins, the other three (goblin/wisp/witch) textured
+7. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
    voxel-vs-GLB for trees first
-7. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
-   sprites, named wildlife GLBs (rabbit/deer/fox/boar/bird/goblin/wisp/witch)
+8. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
+   sprites
 </content>

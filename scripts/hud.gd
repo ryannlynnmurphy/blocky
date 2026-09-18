@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## On-screen overlay: crosshair, hotbar, health/hunger/XP bars, messages.
-## Everything is drawn with _draw() calls — no image files — to keep the
-## same chunky look as the world.
+## Drawn with _draw() calls, texturing itself from the vendored UI art
+## (res://blocky/textures/ui/) where that exists; everything else (labels,
+## the crosshair, the break bar) is still plain shapes/text.
 
 var _clock_label: Label
 var _message_label: Label
@@ -9,8 +10,8 @@ var _pickup_label: Label
 var _pickup_timer := 0.0
 var _crosshair: Crosshair
 var _inventory_ui: InventoryUI
-var _health_bar: SquareBar
-var _hunger_bar: SquareBar
+var _health_bar: IconBar
+var _hunger_bar: IconBar
 var _hotbar: HotbarView
 var _damage_flash: ColorRect
 var _day_night: DayNight
@@ -41,14 +42,17 @@ class Crosshair extends Control:
 			draw_rect(Rect2(bar.position, Vector2(60 * progress, 6)), Color.WHITE)
 
 
-## A row of chunky squares: filled = what you have, dark = what you lost.
+## A row of heart/drumstick-style icons, full/half/empty per icon, 2 points
+## of `value` each (matches the vendored art, which has a half state).
 ## Grows leftward from centre (side = -1) or rightward (side = +1).
-class SquareBar extends Control:
-	const CELL := 18.0
-	const GAP := 4.0
+class IconBar extends Control:
+	const CELL := 20.0
+	const GAP := 3.0
 	var value := 10
 	var max_value := 10
-	var color := Color(0.9, 0.2, 0.25)
+	var full_tex: Texture2D
+	var half_tex: Texture2D
+	var empty_tex: Texture2D
 	var side := -1
 
 	func _ready() -> void:
@@ -60,15 +64,13 @@ class SquareBar extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		var total := max_value * CELL + (max_value - 1) * GAP
+		var n := int(ceil(max_value / 2.0))
+		var total := n * CELL + (n - 1) * GAP
 		var x0 := size.x / 2.0 - 10.0 - total if side < 0 else size.x / 2.0 + 10.0
-		for i in max_value:
-			# Right-growing bars fill from the left; left-growing from the right.
-			var slot := i if side > 0 else max_value - 1 - i
-			var r := Rect2(x0 + slot * (CELL + GAP), 0, CELL, CELL)
-			var col := color if i < value else Color(0.1, 0.1, 0.12, 0.6)
-			draw_rect(r, col)
-			draw_rect(r, Color(0, 0, 0, 0.5), false, 2.0)
+		for i in n:
+			var remaining := value - i * 2
+			var tex := full_tex if remaining >= 2 else (half_tex if remaining == 1 else empty_tex)
+			draw_texture_rect(tex, Rect2(x0 + i * (CELL + GAP), 0, CELL, CELL), false)
 
 
 ## The hotbar: the first 9 inventory slots, whatever is in them, with the
@@ -76,6 +78,8 @@ class SquareBar extends Control:
 class HotbarView extends Control:
 	const SLOT := 44.0
 	const GAP := 6.0
+	const SLOT_TEX := preload("res://blocky/textures/ui/hotbar_slot.png")
+	const SELECTED_TEX := preload("res://blocky/textures/ui/slot_selected.png")
 	var ids: Array[int] = []
 	var counts: Array[int] = []
 	var selected := 0
@@ -99,14 +103,16 @@ class HotbarView extends Control:
 		var x0 := (size.x - total) / 2.0
 		for i in n:
 			var r := Rect2(x0 + i * (SLOT + GAP), 0, SLOT, SLOT)
-			draw_rect(r, Color(0.08, 0.08, 0.1, 0.75))
+			draw_texture_rect(SLOT_TEX, r, false)
 			var id: int = ids[i] if i < ids.size() else Blocks.AIR
 			if id != Blocks.AIR:
 				draw_texture_rect(Blocks.icon(id), r.grow(-8), false)
+			# hotbar_slot.png already bakes in its own border via edge
+			# shading; slot_selected.png is a separate hollow-centre frame
+			# (transparent middle, opaque gold ring) drawn a bit larger so
+			# the highlight reads as an outward "pop" around the icon.
 			if i == selected:
-				draw_rect(r, Color.WHITE, false, 3.0)
-			else:
-				draw_rect(r, Color(0, 0, 0, 0.6), false, 2.0)
+				draw_texture_rect(SELECTED_TEX, r.grow(4), false)
 			draw_string(font, r.position + Vector2(4, 12), str(i + 1),
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.85, 0.85))
 			var count: int = counts[i] if i < counts.size() else 0
@@ -141,14 +147,19 @@ func _ready() -> void:
 	_hotbar = HotbarView.new()
 	_add_bottom_wide(_hotbar, -58, -14)
 
-	_health_bar = SquareBar.new()
+	_health_bar = IconBar.new()
 	_health_bar.side = -1
-	_add_bottom_wide(_health_bar, -84, -66)
+	_health_bar.full_tex = preload("res://blocky/textures/ui/heart_full.png")
+	_health_bar.half_tex = preload("res://blocky/textures/ui/heart_half.png")
+	_health_bar.empty_tex = preload("res://blocky/textures/ui/heart_empty.png")
+	_add_bottom_wide(_health_bar, -86, -66)
 
-	_hunger_bar = SquareBar.new()
+	_hunger_bar = IconBar.new()
 	_hunger_bar.side = 1
-	_hunger_bar.color = Color(0.95, 0.6, 0.2)
-	_add_bottom_wide(_hunger_bar, -84, -66)
+	_hunger_bar.full_tex = preload("res://blocky/textures/ui/drumstick_full.png")
+	_hunger_bar.half_tex = preload("res://blocky/textures/ui/drumstick_half.png")
+	_hunger_bar.empty_tex = preload("res://blocky/textures/ui/drumstick_empty.png")
+	_add_bottom_wide(_hunger_bar, -86, -66)
 
 	_message_label = _make_label()
 	_message_label.add_theme_font_size_override("font_size", 48)

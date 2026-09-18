@@ -84,26 +84,41 @@ var _perf_frames := 0
 
 # ---- creatures ----
 const MAX_CREATURES := 40
-const CREATURE_SCENE := preload("res://scenes/creature.tscn")
+## Wildlife species that can be picked for a given spawn. Every entry gets
+## an equal shot for now; no per-biome species weighting yet.
+const WILDLIFE_SCENES := [
+	preload("res://scenes/rabbit.tscn"),
+	preload("res://scenes/deer.tscn"),
+	preload("res://scenes/fox.tscn"),
+	preload("res://scenes/boar.tscn"),
+	preload("res://scenes/bird.tscn"),
+]
 ## Chance that a freshly built chunk gets a group of animals, per biome.
 const SPAWN_CHANCE := [0.16, 0.12, 0.04, 0.1]   # Plains, Forest, Desert, Tundra
-const COAT_COLORS := [
-	Color(0.85, 0.70, 0.50),   # Plains: tan
-	Color(0.55, 0.38, 0.25),   # Forest: brown
-	Color(0.90, 0.80, 0.55),   # Desert: sandy
-	Color(0.92, 0.92, 0.95),   # Tundra: white
-]
+## Set by the `--species=name` testing aid (matched against each scene's
+## file name) to force every wildlife spawn to one species; null = full pool.
+var _forced_species: PackedScene = null
 var _creatures := Node3D.new()
 var _drops := Node3D.new()
 var _populated := {}   # Vector2i -> true once a chunk has rolled for animals
 
 # ---- hostiles (night only) ----
 const MAX_HOSTILES := 6
-const HOSTILE_SCENE := preload("res://scenes/hostile.tscn")
+## Night-hunter kinds that can be picked for a given spawn. Every entry
+## gets an equal shot for now; the original box "Shade" is still in here.
+const HOSTILE_SCENES := [
+	preload("res://scenes/hostile.tscn"),
+	preload("res://scenes/goblin.tscn"),
+	preload("res://scenes/wisp.tscn"),
+	preload("res://scenes/witch.tscn"),
+]
 const HOSTILE_SPAWN_SECONDS := 4.0
 var day_night: DayNight   # set by main; hostiles need to know if it's night
 var _hostiles := Node3D.new()
 var _hostile_timer := 0.0
+## Set by the `--hostile=name` testing aid (matched against each scene's
+## file name) to force every hostile spawn to one kind; null = full pool.
+var _forced_hostile: PackedScene = null
 
 
 func _ready() -> void:
@@ -114,6 +129,19 @@ func _ready() -> void:
 	add_child(_drops)
 	_hostiles.name = "Hostiles"
 	add_child(_hostiles)
+	# Testing aid: `-- --species=deer` forces every wildlife spawn to one kind.
+	# `-- --hostile=goblin` does the same for night hunters.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--species="):
+			var species_name := arg.get_slice("=", 1)
+			for scene in WILDLIFE_SCENES:
+				if scene.resource_path.get_file().get_basename() == species_name:
+					_forced_species = scene
+		elif arg.begins_with("--hostile="):
+			var hostile_name := arg.get_slice("=", 1)
+			for scene in HOSTILE_SCENES:
+				if scene.resource_path.get_file().get_basename() == hostile_name:
+					_forced_hostile = scene
 
 
 ## Worker tasks must never outlive the world: wait for them on the way out.
@@ -497,9 +525,9 @@ func spawn_creature(wx: int, wz: int) -> Creature:
 
 ## Puts one animal at an exact position, no questions asked (tests use this).
 func spawn_creature_at(pos: Vector3) -> Creature:
-	var c: Creature = CREATURE_SCENE.instantiate()
+	var scene: PackedScene = _forced_species if _forced_species != null else WILDLIFE_SCENES[randi() % WILDLIFE_SCENES.size()]
+	var c: Creature = scene.instantiate()
 	c.world = self
-	c.body_color = COAT_COLORS[gen.biome_at(int(floor(pos.x)), int(floor(pos.z)))]
 	_creatures.add_child(c)
 	c.global_position = pos
 	return c
@@ -532,7 +560,8 @@ func _tick_hostile_spawns(delta: float) -> void:
 
 
 func spawn_hostile_at(pos: Vector3) -> Hostile:
-	var s: Hostile = HOSTILE_SCENE.instantiate()
+	var scene: PackedScene = _forced_hostile if _forced_hostile != null else HOSTILE_SCENES[randi() % HOSTILE_SCENES.size()]
+	var s: Hostile = scene.instantiate()
 	s.world = self
 	_hostiles.add_child(s)
 	s.global_position = pos

@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/boar.gd" id="1_boar"]
+
+[sub_resource type="BoxShape3D" id="shape"]
+size = Vector3(0.42, 0.7, 1.0)
+
+[node name="Boar" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_boar")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+shape = SubResource("shape")
+
+[node name="Model" type="Node3D" parent="."]

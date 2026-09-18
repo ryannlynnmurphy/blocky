@@ -103,20 +103,50 @@ and verified before the next starts. No system gets built "all at once."
       inventory grid, cursor stack and dropped-item cubes — no new
       art, full coverage. `Blocks.COLORS`/`face_color()` (now fully
       unused) removed rather than left as dead code.
+- [x] **M22 — Named mobs.** Every mob GLB now spawns as its own kind
+      instead of the tinted-box placeholder: wildlife (rabbit, deer,
+      fox, boar, bird — `Creature` subclasses, random pick per spawn
+      in `world.WILDLIFE_SCENES`) and night hunters (goblin, wisp,
+      witch, alongside the original box Shade — `Hostile` subclasses,
+      random pick in `world.HOSTILE_SCENES`). All behavior/stats are
+      still whatever the base class already had (wander/flee/die for
+      wildlife; chase/bite/burn-at-dawn for hostiles) — only the look
+      changed. The shared rig-instantiate/rescale/red-flash-overlay
+      logic lives as plain helper methods on `Creature`
+      (`_instantiate_glb_rig`, `_flash_glb`) rather than a subclass, so
+      it works whether a mob extends `Creature` or `Hostile` directly
+      (GDScript has no multiple inheritance). `-- --species=deer` /
+      `-- --hostile=goblin` force one kind for testing.
+- [x] **M23 — HUD chrome, part 1: hearts, hunger, hotbar frames.**
+      `hud.gd`'s health/hunger rows now draw `heart_*`/`drumstick_*`
+      textures (`IconBar`, replacing the old flat-colored `SquareBar`)
+      instead of plain squares — 2 points per icon, with a half state,
+      since damage/regen/hunger-drain all move in odd amounts. The
+      hotbar draws `hotbar_slot.png` per slot (it already bakes in its
+      own border via edge shading) plus `slot_selected.png` — a real
+      hollow-centre frame texture — over the selected one. Caught and
+      fixed a real bug before it shipped: `slot_frame.png` looked like
+      a border by name but is actually fully opaque edge-to-edge (no
+      transparent hole), so layering it over every unselected slot as
+      first written would have blanked out any item icon there — it's
+      not used for the hotbar. Crosshair/break-bar/buttons/logo/
+      inventory-panel/message-text/sound-slider still plain-drawn.
 
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
 how much they'd change the feel of the game:
 
-- [ ] UI chrome: real hotbar/inventory panel frames, hearts, hunger
-      drumsticks, crosshair, break bar, buttons, logo — the biggest
-      remaining visible jump (see ART.md §6).
+- [ ] Rest of the UI chrome: crosshair, break bar, buttons, logo,
+      inventory/workbench panel frame, message text, sound slider
+      (see ART.md §6) — `slot_frame.png` most likely belongs on the
+      inventory grid, not the hotbar.
 - [ ] Environment props as GLBs (trees/rocks/flowers/reeds) — first
       needs a decision: keep voxel trees (minable, consistent) or
       switch to the nicer-silhouette GLB trees, or both by biome.
-- [ ] Named wildlife (rabbit/deer/fox/boar/bird) with their own GLBs
-      and behaviors, built on the existing `creature.gd` base.
+- [ ] Per-biome wildlife weighting (right now every spawn picks evenly
+      among all 5 species everywhere) and flight behavior for Bird
+      (it currently just walks/hops like everything else).
 - [ ] Shelter matters: Shades can't path through walls but will wait;
       beds to skip the night; torches that keep them away.
 - [ ] Tool durability; give the sword an actual swing/hitbox.

@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/deer.gd" id="1_deer"]
+
+[sub_resource type="BoxShape3D" id="shape"]
+size = Vector3(0.45, 1.35, 1.25)
+
+[node name="Deer" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_deer")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.675, 0)
+shape = SubResource("shape")
+
+[node name="Model" type="Node3D" parent="."]

@@ -1,0 +1,36 @@
+GIMP Palette
+Name: Blocky 32
+Columns: 4
+#
+ 20  18  28	ink.0
+ 38  34  50	ink.1
+ 58  53  72	ink.2
+ 82  76  99	ink.3
+ 58  42  32	bark.0
+ 90  64  48	bark.1
+125  90  60	bark.2
+163 128  90	bark.3
+ 44  90  48	grass.0
+ 67 132  58	grass.1
+100 171  71	grass.2
+147 207  92	grass.3
+ 31  74  52	leaf.0
+ 49 107  65	leaf.1
+ 74 144  80	leaf.2
+123 185 103	leaf.3
+ 46  59  70	stone.0
+ 73  89 106	stone.1
+114 132 154	stone.2
+179 191 204	stone.3
+ 34  48  31	murk.0
+ 59  74  38	murk.1
+ 92 107  46	murk.2
+154 166  58	murk.3
+122  59  36	warm.0
+194  98  46	warm.1
+232 160  74	warm.2
+246 224 176	warm.3
+ 58  42  92	magic.0
+107  75 176	magic.1
+169 124 232	magic.2
+143 242 228	magic.3

@@ -7,6 +7,13 @@ extends StaticBody3D
 ## faces that touch air. A face buried between two solid blocks can never
 ## be seen, so we skip it. The result is one mesh per chunk.
 ##
+## Each block face gets a texture from the atlas at res://blocky (see
+## BlockAtlas) instead of a flat color. Vertex color is still used, but
+## only as a *tint*: white (no change) everywhere except grass tops and
+## leaves, which multiply a neutral texture by the biome color computed
+## in world_gen.gd. That's why the material has vertex_color_use_as_albedo
+## on (see PixelMaterial.make_atlas_material).
+##
 ## Performance notes (this is the hottest code in the game):
 ## - Blocks live in a flat PackedByteArray. A neighbour is just the same
 ##   index plus a fixed stride, so checking "is the block above me air?"
@@ -33,10 +40,15 @@ const FACES := [
 	[Vector3(0, 0, -1), [Vector3(0, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0), Vector3(1, 0, 0)]],   # 5 -Z
 ]
 
-## One material shared by every chunk. Colors come from the vertices.
+## UV corner matching FACES' corner order (corner 0 is always the "low"
+## corner of a CCW-from-outside quad, so this same 4-tuple works for
+## every face): bottom-left, top-left, top-right, bottom-right.
+const CORNER_UV := [Vector2(0, 1), Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)]
+
+## One material shared by every chunk: the block texture atlas.
 static var MATERIAL: StandardMaterial3D = _make_material()
-## FACE_COLORS[block id][face] -> Color, built once.
-static var FACE_COLORS: Array = _make_face_colors()
+## FACE_UV[block id] -> [top rect, side rect, bottom rect] into the atlas.
+static var FACE_UV: Array = _make_face_uv()
 ## Index pattern for N quads, built once and sliced per chunk.
 static var INDEX_TABLE: PackedInt32Array = _make_index_table(24000)
 
@@ -55,19 +67,18 @@ var _collision := CollisionShape3D.new()
 
 
 static func _make_material() -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.roughness = 1.0
-	return m
+	return PixelMaterial.make_atlas_material(preload("res://blocky/textures/blocks/blocks_atlas.png"))
 
 
-static func _make_face_colors() -> Array:
+static func _make_face_uv() -> Array:
 	var table := []
+	var fallback := BlockAtlas.uv("stone")   # only hit if a block is missing an atlas entry
 	for id in Blocks.NAMES.size():
-		var row := []
-		for f in 6:
-			row.append(Blocks.face_color(id, f) if Blocks.COLORS.has(id) else Color.MAGENTA)
-		table.append(row)
+		var faces: Array = Blocks.atlas_faces(id)
+		if faces.is_empty():
+			table.append([fallback, fallback, fallback])
+		else:
+			table.append([BlockAtlas.uv(faces[0]), BlockAtlas.uv(faces[1]), BlockAtlas.uv(faces[2])])
 	return table
 
 
@@ -126,6 +137,7 @@ static func make_mesh(result: Dictionary) -> ArrayMesh:
 		arrays[Mesh.ARRAY_VERTEX] = verts
 		arrays[Mesh.ARRAY_NORMAL] = result["normals"]
 		arrays[Mesh.ARRAY_COLOR] = result["colors"]
+		arrays[Mesh.ARRAY_TEX_UV] = result["uvs"]
 		arrays[Mesh.ARRAY_INDEX] = result["indices"]
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mesh.surface_set_material(0, MATERIAL)
@@ -169,6 +181,7 @@ static func build_arrays(data: PackedByteArray, max_y: int, tints: PackedColorAr
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
 	var quads := 0
 
 	var leaf_tints := PackedColorArray()
@@ -222,37 +235,32 @@ static func build_arrays(data: PackedByteArray, max_y: int, tints: PackedColorAr
 					continue   # fully buried
 
 				var origin := Vector3(x, y, z)
-				var row: Array = FACE_COLORS[id]
+				var rects: Array = FACE_UV[id]   # [top, side, bottom]
 				var col_idx := x + SIZE * z
+				var is_leaves := id == Blocks.LEAVES
+				var side_tint := leaf_tints[col_idx] if is_leaves else Color.WHITE
 				if open_px:
-					_emit(verts, normals, colors, origin, 0,
-						leaf_tints[col_idx] if id == Blocks.LEAVES else row[0])
+					_emit(verts, normals, colors, uvs, origin, 0, side_tint, rects[1])
 					quads += 1
 				if open_nx:
-					_emit(verts, normals, colors, origin, 1,
-						leaf_tints[col_idx] if id == Blocks.LEAVES else row[1])
+					_emit(verts, normals, colors, uvs, origin, 1, side_tint, rects[1])
 					quads += 1
 				if open_py:
-					var top_col: Color
+					var top_tint := Color.WHITE
 					if id == Blocks.GRASS:
-						top_col = tints[col_idx]
-					elif id == Blocks.LEAVES:
-						top_col = leaf_tints[col_idx]
-					else:
-						top_col = row[2]
-					_emit(verts, normals, colors, origin, 2, top_col)
+						top_tint = tints[col_idx]
+					elif is_leaves:
+						top_tint = leaf_tints[col_idx]
+					_emit(verts, normals, colors, uvs, origin, 2, top_tint, rects[0])
 					quads += 1
 				if open_ny:
-					_emit(verts, normals, colors, origin, 3,
-						leaf_tints[col_idx] if id == Blocks.LEAVES else row[3])
+					_emit(verts, normals, colors, uvs, origin, 3, side_tint, rects[2])
 					quads += 1
 				if open_pz:
-					_emit(verts, normals, colors, origin, 4,
-						leaf_tints[col_idx] if id == Blocks.LEAVES else row[4])
+					_emit(verts, normals, colors, uvs, origin, 4, side_tint, rects[1])
 					quads += 1
 				if open_nz:
-					_emit(verts, normals, colors, origin, 5,
-						leaf_tints[col_idx] if id == Blocks.LEAVES else row[5])
+					_emit(verts, normals, colors, uvs, origin, 5, side_tint, rects[1])
 					quads += 1
 
 	var indices: PackedInt32Array
@@ -260,23 +268,19 @@ static func build_arrays(data: PackedByteArray, max_y: int, tints: PackedColorAr
 		indices = INDEX_TABLE.slice(0, quads * 6)
 	else:
 		indices = _make_index_table(quads)   # absurdly detailed chunk; build ad hoc
-	return {"verts": verts, "normals": normals, "colors": colors, "indices": indices}
+	return {"verts": verts, "normals": normals, "colors": colors, "uvs": uvs, "indices": indices}
 
 
-## Appends one quad (4 vertices) for face f of the block at origin.
+## Appends one quad (4 vertices) for face f of the block at origin,
+## textured from `rect` (an atlas UV rect) and tinted by `col`.
 static func _emit(verts: PackedVector3Array, normals: PackedVector3Array,
-		colors: PackedColorArray, origin: Vector3, f: int, col: Color) -> void:
+		colors: PackedColorArray, uvs: PackedVector2Array,
+		origin: Vector3, f: int, col: Color, rect: Rect2) -> void:
 	var n: Vector3 = FACES[f][0]
 	var corners: Array = FACES[f][1]
-	verts.append(origin + corners[0])
-	verts.append(origin + corners[1])
-	verts.append(origin + corners[2])
-	verts.append(origin + corners[3])
-	normals.append(n)
-	normals.append(n)
-	normals.append(n)
-	normals.append(n)
-	colors.append(col)
-	colors.append(col)
-	colors.append(col)
-	colors.append(col)
+	for k in 4:
+		verts.append(origin + corners[k])
+		normals.append(n)
+		colors.append(col)
+		var c: Vector2 = CORNER_UV[k]
+		uvs.append(rect.position + Vector2(c.x * rect.size.x, c.y * rect.size.y))

@@ -4,8 +4,9 @@ extends RefCounted
 ##
 ## A block in the world is just a number (its ID). This file is the lookup
 ## table that says what each number means: its name and its colors.
-## No textures yet — every block is a flat colored cube, which is the
-## chunky low-poly look we want.
+## Blocks are drawn with the pixel-art texture atlas in res://blocky
+## (see BlockAtlas); COLORS below now only feeds icons and dropped-item
+## cubes, which still use flat vertex color.
 
 ## Blocks (things that exist in the world) and items (things you can only
 ## carry) share one ID space, because they share the inventory. New IDs
@@ -52,6 +53,15 @@ const NEEDS_TOOL := {
 ## What a block turns into when you break it (default: itself).
 const DROP_OF := {COAL_ORE: COAL, IRON_ORE: IRON}
 
+## Which BlockAtlas.FACES family (see blocky/scripts/block_atlas.gd) a
+## world block's texture comes from. Blocks with no entry aren't drawn
+## with the atlas (nothing here is meant to be one right now).
+const ATLAS_FAMILY := {
+	GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand",
+	LOG: "log", LEAVES: "leaves", SNOW: "snow", PLANKS: "planks",
+	WORKBENCH: "workbench", COAL_ORE: "coal_ore", IRON_ORE: "iron_ore",
+}
+
 
 static func hardness(id: int) -> float:
 	return HARDNESS.get(id, 1.0)
@@ -67,6 +77,13 @@ static func drop_for(id: int) -> int:
 
 static func is_block(id: int) -> bool:
 	return id in BLOCKS
+
+
+## [top, side, bottom] face names into BlockAtlas.uv(), or [] if this
+## block has no atlas texture.
+static func atlas_faces(id: int) -> Array:
+	var family: String = ATLAS_FAMILY.get(id, "")
+	return BlockAtlas.FACES[family] if family != "" else []
 
 
 ## Colors per block: [top face, side faces, bottom face].

@@ -6,6 +6,8 @@ signal hotbar_changed(index: int)
 signal health_changed(health: int, max_health: int)
 signal damaged(amount: int)
 signal died
+signal xp_changed(xp: int, xp_needed: int, level: int)
+signal leveled_up(level: int)
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -19,14 +21,18 @@ const PUNCH_COOLDOWN := 0.35
 
 var _punch_cooldown := 0.0
 
-const MAX_HEALTH := 10
+const BASE_HEALTH := 10
+const HEALTH_PER_LEVEL := 2
 const SAFE_FALL := 3.0    # blocks you can drop without getting hurt
 const MEAT_HEAL := 4
 
 var world: VoxelWorld
 var selected := 0    # index into Blocks.HOTBAR
 var inventory := Inventory.new()
-var health := MAX_HEALTH
+var level := 1
+var xp := 0
+var max_health := BASE_HEALTH
+var health := BASE_HEALTH
 var spawn_point := Vector3.ZERO   # where you come back to life
 
 var _was_on_floor := true
@@ -170,19 +176,19 @@ func take_damage(amount: int) -> void:
 		return
 	health = maxi(health - amount, 0)
 	damaged.emit(amount)
-	health_changed.emit(health, MAX_HEALTH)
+	health_changed.emit(health, max_health)
 	if health == 0:
 		_die()
 
 
 func heal(amount: int) -> void:
-	health = mini(health + amount, MAX_HEALTH)
-	health_changed.emit(health, MAX_HEALTH)
+	health = mini(health + amount, max_health)
+	health_changed.emit(health, max_health)
 
 
 ## Eats one Meat for MEAT_HEAL health. Returns false if you can't.
 func eat() -> bool:
-	if health >= MAX_HEALTH or not inventory.take(Blocks.MEAT):
+	if health >= max_health or not inventory.take(Blocks.MEAT):
 		return false
 	heal(MEAT_HEAL)
 	return true
@@ -198,8 +204,27 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	_peak_y = spawn_point.y
 	_was_on_floor = false
-	health = MAX_HEALTH
-	health_changed.emit(health, MAX_HEALTH)
+	health = max_health
+	health_changed.emit(health, max_health)
+
+
+# ---------------------------------------------------------------- progression
+
+## XP needed to finish the current level.
+func xp_needed() -> int:
+	return 10 * level
+
+
+func gain_xp(amount: int) -> void:
+	xp += amount
+	while xp >= xp_needed():
+		xp -= xp_needed()
+		level += 1
+		max_health = BASE_HEALTH + HEALTH_PER_LEVEL * (level - 1)
+		health = max_health   # levelling up is a full heal
+		health_changed.emit(health, max_health)
+		leveled_up.emit(level)
+	xp_changed.emit(xp, xp_needed(), level)
 
 
 # ---------------------------------------------------------------- combat
@@ -212,7 +237,7 @@ func _attack_or_break() -> void:
 		if _punch_cooldown > 0.0:
 			return
 		_punch_cooldown = PUNCH_COOLDOWN
-		target.take_hit(PUNCH_DAMAGE, global_position)
+		target.take_hit(PUNCH_DAMAGE, global_position, self)
 		return
 	_break_block()
 

@@ -11,10 +11,12 @@ const WALK_SPEED := 2.0
 const FLEE_SPEED := 4.5
 const JUMP_SPEED := 6.5
 const MAX_HEALTH := 3
+const XP_VALUE := 5   # what killing one is worth
 
 var world: VoxelWorld
 var body_color := Color(0.85, 0.70, 0.50)
 var health := MAX_HEALTH
+var _last_attacker: Node = null
 
 var _wandering := false
 var _timer := 0.0
@@ -78,9 +80,12 @@ func _physics_process(delta: float) -> void:
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 8.0 * delta)
 
 
-## Called by whatever hits us. `from` is where the hit came from.
-func take_hit(damage: int, from: Vector3) -> void:
+## Called by whatever hits us. `from` is where the hit came from;
+## `attacker` (optional) gets the XP if this kills us.
+func take_hit(damage: int, from: Vector3, attacker: Node = null) -> void:
 	health -= damage
+	if attacker != null:
+		_last_attacker = attacker
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
@@ -100,6 +105,8 @@ func take_hit(damage: int, from: Vector3) -> void:
 func _die() -> void:
 	if world != null:
 		world.spawn_drop(global_position, Blocks.MEAT)
+	if _last_attacker is Player:
+		_last_attacker.gain_xp(XP_VALUE)
 	queue_free()
 
 

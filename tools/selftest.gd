@@ -5,6 +5,7 @@ extends Node
 ##   frames  40 / 80   break a block, place it back  (inventory)
 ##   frames 120..200   spawn a critter, punch it dead, pick up its drop (combat)
 ##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
+##   frames 300..320   kill two critters, reach level 2 (progression)
 
 var player: Player
 var world: VoxelWorld
@@ -88,3 +89,13 @@ func _physics_process(_delta: float) -> void:
 			player.take_damage(100)
 			print("selftest: after lethal damage: deaths %d, health %d, at spawn: %s"
 				% [_deaths, player.health, player.global_position.distance_to(player.spawn_point) < 0.01])
+		300:
+			print("selftest: level %d, xp %d/%d, max health %d"
+				% [player.level, player.xp, player.xp_needed(), player.max_health])
+			player.take_damage(3)   # so the level-up heal is visible
+			for i in 2:
+				var c := world.spawn_creature_at(player.global_position + Vector3(2 + i, 0.5, 0))
+				for hit in 3:
+					c.take_hit(1, player.global_position, player)
+			print("selftest: after 2 kills: level %d, xp %d/%d, max health %d, health %d"
+				% [player.level, player.xp, player.xp_needed(), player.max_health, player.health])

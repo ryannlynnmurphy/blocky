@@ -42,9 +42,12 @@ and verified before the next starts. No system gets built "all at once."
       hurt flash, "You died" + respawn at spawn with full health, E eats
       Meat to heal 4. Chunky health bar above the hotbar.
 
+- [x] **M11 — Progression.** Kills give 5 XP; level N needs 10×N XP.
+      Each level adds +2 max health and fully heals. Gold XP bar with
+      "Lv N", "Level N!" banner.
+
 ## Next (in order)
 
-- [ ] M11 — RPG progression: XP from creatures, levels raise health.
 - [ ] M12 — Saving: world edits, inventory and position survive a restart.
 
 ## Later (not yet)

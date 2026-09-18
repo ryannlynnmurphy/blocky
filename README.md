@@ -32,6 +32,9 @@ godot --path .
 
 You have 10 health (the red squares). Falling more than 3 blocks hurts;
 at 0 you respawn where you started, keeping your inventory.
+
+Killing a creature gives 5 XP (the gold bar). Level N needs 10×N XP;
+each level adds 2 max health and heals you fully.
 | Esc | Free / re-capture the mouse |
 
 ## Dev switches
@@ -42,9 +45,10 @@ Anything after `--` on the command line is for our scripts, not Godot:
 godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
-godot --path . -- --selftest --no-input   auto-run break/place, punch/kill/pickup and
-                                          fall/eat/die/respawn, printing results;
-                                          --no-input keeps your mouse out of recordings
+godot --path . -- --selftest --no-input   auto-run break/place, punch/kill/pickup,
+                                          fall/eat/die/respawn and XP/level-up, printing
+                                          results; --no-input keeps your mouse out of
+                                          recordings
 godot --headless --path . --script tools/biome_survey.gd   print a biome map
 ```
 
@@ -64,7 +68,7 @@ scripts/world.gd     owns all chunks, streams them around the player, get/set bl
                      spawns/despawns creatures
 scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs + water
 scripts/drop.gd      a dropped item on the ground; walk into it to pick it up
-scripts/player.gd    movement, camera, aiming, break/place, punch, health, respawn
+scripts/player.gd    movement, camera, aiming, break/place, punch, health, respawn, XP/levels
 scripts/inventory.gd what you're carrying: a count per block ID
 scripts/day_night.gd sun/moon orbit, sky + light color over the day
 scripts/hud.gd       crosshair, hotbar, clock, hints

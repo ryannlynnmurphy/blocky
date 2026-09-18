@@ -21,6 +21,13 @@ func _ready() -> void:
 	world.player = player
 	world.day_night = day_night
 	player.world = world
+
+	# All sound is synthesized here at startup.
+	var sfx := Sfx.new()
+	sfx.name = "Sfx"
+	sfx.day_night = day_night
+	add_child(sfx)
+	player.inventory.added.connect(func(_id: int, _n: int): Sfx.play("pickup", null, 0.05, -6.0))
 	# Testing aids: `-- --perf` prints chunk timings; `-- --radius=8` sets view distance.
 	world.perf_enabled = "--perf" in args
 	for arg in args:

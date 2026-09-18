@@ -70,6 +70,8 @@ var ui_open := false     # a screen (inventory) is open: ignore game input
 
 var _walk_cycle := 0.0    # advances while walking; drives the limb swing
 var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
+var _step_sign := 1.0     # which leg is forward; a footstep sounds when it flips
+var _tick_timer := 0.0    # spacing between digging tick sounds
 
 const BASE_FOV := 70.0
 const RUN_FOV := 80.0     # the camera widens a little while sprinting
@@ -216,12 +218,30 @@ func _physics_process(delta: float) -> void:
 	_update_highlight()
 
 
+## The block under your feet decides what a step sounds like.
+func _footstep(running: bool) -> void:
+	var p := global_position
+	var id := world.get_block(int(floor(p.x)), int(floor(p.y - 0.1)), int(floor(p.z)))
+	var name := "step_grass"
+	match id:
+		Blocks.SAND: name = "step_sand"
+		Blocks.STONE: name = "step_stone"
+		Blocks.SNOW: name = "step_snow"
+		Blocks.LOG, Blocks.PLANKS, Blocks.WORKBENCH: name = "step_wood"
+	Sfx.play(name, null, 0.15, -3.0 if running else -8.0)
+
+
 ## Swings arms and legs while walking; throws the right arm on a punch.
 ## Limb pivots sit at the shoulder/hip, and a positive X rotation moves
 ## the hand or foot forward (toward the model's -Z).
 func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) -> void:
 	if walking:
 		_walk_cycle += delta * speed * 2.2
+		# Each time the legs cross, a foot lands.
+		var s := signf(sin(_walk_cycle))
+		if s != 0.0 and s != _step_sign:
+			_step_sign = s
+			_footstep(running)
 	var amplitude := 1.1 if running else 0.7
 	var swing := sin(_walk_cycle) * amplitude if walking else 0.0
 	var k := 12.0 * delta
@@ -250,6 +270,8 @@ func _check_fall_damage() -> void:
 		_peak_y = maxf(_peak_y, global_position.y)
 	elif not _was_on_floor:
 		var fall := _peak_y - global_position.y
+		if fall > 1.2:
+			Sfx.play("land", null, 0.1, clampf(-16.0 + fall * 2.0, -16.0, -2.0))
 		# Rounded, not truncated: a 3.5-block drop already costs 1.
 		var damage := roundi(fall - SAFE_FALL)
 		if damage > 0:
@@ -270,6 +292,7 @@ func take_damage(amount: int) -> void:
 	health = maxi(health - amount, 0)
 	damaged.emit(amount)
 	health_changed.emit(health, max_health)
+	Sfx.play("hurt", null, 0.15)
 	if health == 0:
 		_die()
 
@@ -286,6 +309,7 @@ func eat() -> bool:
 		return false
 	hunger = mini(hunger + MEAT_FOOD, MAX_HUNGER)
 	hunger_changed.emit(hunger, MAX_HUNGER)
+	Sfx.play("eat")
 	return true
 
 
@@ -318,6 +342,7 @@ func _tick_hunger(delta: float, running: bool) -> void:
 
 func _die() -> void:
 	died.emit()
+	Sfx.play("died")
 	respawn()
 
 
@@ -425,8 +450,14 @@ func _update_breaking(delta: float, holding: bool) -> void:
 		_break_progress = 0.0
 	_mining = true
 	_break_progress += delta * tool_multiplier(id) / Blocks.hardness(id)
+	var centre := Vector3(block) + Vector3(0.5, 0.5, 0.5)
+	_tick_timer -= delta
+	if _tick_timer <= 0.0:
+		_tick_timer = 0.22
+		Sfx.play("tick", centre, 0.2, -4.0)
 	if _break_progress >= 1.0:
 		world.set_block(block.x, block.y, block.z, Blocks.AIR)
+		Sfx.play("crack", centre, 0.15)
 		if drops_when_broken(id):
 			world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), id)   # pops out as an item
 		_reset_breaking()
@@ -476,6 +507,7 @@ func _reset_breaking() -> void:
 	_break_target = NO_TARGET
 	_break_progress = 0.0
 	_mining = false
+	_tick_timer = 0.0
 
 
 ## The creature under the crosshair within punching range, or null.
@@ -548,6 +580,7 @@ func _place_block() -> void:
 	if not inventory.take(id):
 		return   # you don't have one to place
 	world.set_block(block.x, block.y, block.z, id)
+	Sfx.play("place", Vector3(block) + Vector3(0.5, 0.5, 0.5), 0.15)
 
 
 ## True if placing a block here would trap us inside it.

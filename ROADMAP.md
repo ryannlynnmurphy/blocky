@@ -67,6 +67,10 @@ and verified before the next starts. No system gets built "all at once."
       at walking pace, bites for 2 with knockback, ignores pain, and
       burns away in daylight. "Night falls" / "Dawn" banners.
 
+- [x] **M16 — Sound.** Everything synthesized in code at startup
+      (`sfx.gd`): footsteps by surface, dig/place/hit/hurt/bite/groan,
+      pickup, eat, die, day birds / night wind ambience.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
@@ -75,6 +79,6 @@ how much they'd change the feel of the game:
 - [ ] Shelter matters: Shades can't path through walls but will wait;
       beds to skip the night; torches that keep them away.
 - [ ] Tool durability and a held-item model in the hand.
-- [ ] Sound: footsteps, hits, ambient wind, a simple music loop.
+- [ ] A simple generated music loop.
 - [ ] Water you can swim in, caves, ores.
 - [ ] Title screen with New Game / Continue and a seed box.

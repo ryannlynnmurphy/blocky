@@ -71,6 +71,15 @@ Stone takes 3 s by hand and **drops nothing without a pickaxe**.
 Recipes live in `scripts/recipes.gd`; hardness and tool classes in
 `scripts/blocks.gd`.
 
+## Sound
+
+There are no audio files. `scripts/sfx.gd` synthesizes every sound at
+startup from filtered noise and tone sweeps: footsteps that change with
+the block underfoot, digging ticks and the final crack, placing, hits,
+hurt, the Shade's bite and groans, pickups, eating, dying, and looping
+bird/wind ambience that crossfades with the sun. `Sfx.play("name", pos)`
+from anywhere. `-- --mute` silences everything.
+
 ## Saving
 
 Your game is saved to one readable JSON file:

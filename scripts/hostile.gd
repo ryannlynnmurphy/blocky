@@ -15,6 +15,7 @@ const BURN_INTERVAL := 0.5   # seconds per health lost in daylight
 
 var _bite_cooldown := 0.6    # a moment's grace when it first reaches you
 var _burn_timer := 0.0
+var _groan_timer := 2.0
 
 
 func _init() -> void:
@@ -26,6 +27,10 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	_bite_cooldown = maxf(_bite_cooldown - delta, 0.0)
+	_groan_timer -= delta
+	if _groan_timer <= 0.0:
+		_groan_timer = _rng.randf_range(3.0, 7.0)
+		Sfx.play("groan", global_position, 0.2, -4.0)
 	if _flash_timer > 0.0:
 		_flash_timer -= delta
 		if _flash_timer <= 0.0:
@@ -94,6 +99,7 @@ func _bite(target: Node3D) -> void:
 		away = away.normalized()
 		target.take_damage(BITE_DAMAGE)
 		target.apply_knockback(away * 6.0 + Vector3.UP * 3.0)
+		Sfx.play("bite", global_position, 0.1)
 
 
 ## Being hit doesn't scare it off.

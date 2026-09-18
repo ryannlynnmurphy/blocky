@@ -93,6 +93,7 @@ func take_hit(damage: int, from: Vector3, attacker: Node = null) -> void:
 	velocity.y = 4.0            # a little hop
 	_mat.albedo_color = body_color.lerp(Color.RED, 0.7)
 	_flash_timer = 0.15
+	Sfx.play("thud", global_position, 0.15)
 	# Run away from the attacker.
 	_wandering = true
 	_dir = away

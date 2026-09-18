@@ -224,3 +224,11 @@ func _physics_process(_delta: float) -> void:
 		790:
 			print("selftest: 3 s of daylight: shade alive %s (expect false), hostiles %d" % [
 				is_instance_valid(_shade), world.hostile_count()])
+			# Every sound hook should have fired at least once by now.
+			var counts: Dictionary = Sfx.instance.plays if Sfx.instance != null else {}
+			var keys := counts.keys()
+			keys.sort()
+			var parts: PackedStringArray = []
+			for k in keys:
+				parts.append("%s x%d" % [k, counts[k]])
+			print("selftest: sounds played: %s" % ", ".join(parts))

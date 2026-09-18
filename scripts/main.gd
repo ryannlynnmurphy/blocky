@@ -19,6 +19,11 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	world.player = player
 	player.world = world
+	# Testing aids: `-- --perf` prints chunk timings; `-- --radius=8` sets view distance.
+	world.perf_enabled = "--perf" in args
+	for arg in args:
+		if arg.begins_with("--radius="):
+			world.view_radius = int(arg.get_slice("=", 1))
 
 	# Find dry land near the origin to spawn on.
 	var sx := 8

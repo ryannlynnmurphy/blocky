@@ -23,6 +23,15 @@ var player: Node3D
 
 var _last_player_chunk := Vector2i(1 << 20, 1 << 20)
 
+# ---- perf counters (printed with `-- --perf`) ----
+var perf_enabled := false
+var _gen_usec := 0
+var _gen_count := 0
+var _mesh_usec := 0
+var _mesh_count := 0
+var _worst_frame_usec := 0
+var _perf_frames := 0
+
 # ---- creatures ----
 const MAX_CREATURES := 40
 const CREATURE_SCENE := preload("res://scenes/creature.tscn")
@@ -50,6 +59,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if player == null:
 		return
+	var frame_start := Time.get_ticks_usec()
 	var pc := chunk_coord_of(player.global_position)
 	if pc != _last_player_chunk:
 		_last_player_chunk = pc
@@ -60,12 +70,29 @@ func _process(_delta: float) -> void:
 	while budget > 0 and mesh_queue.size() > 0:
 		var cpos: Vector2i = mesh_queue.pop_front()
 		if chunks.has(cpos) and chunks[cpos].dirty:
+			var t0 := Time.get_ticks_usec()
 			chunks[cpos].build_mesh()
+			_mesh_usec += Time.get_ticks_usec() - t0
+			_mesh_count += 1
 			budget -= 1
 			# Only now is there ground to stand on, so spawn animals here.
 			if not _populated.has(cpos):
 				_populated[cpos] = true
 				_populate_chunk(cpos)
+
+	if perf_enabled:
+		var frame_usec := Time.get_ticks_usec() - frame_start
+		_worst_frame_usec = maxi(_worst_frame_usec, frame_usec)
+		_perf_frames += 1
+		if _perf_frames % 60 == 0:
+			print_perf()
+
+
+func print_perf() -> void:
+	var gen_avg := (_gen_usec / 1000.0 / _gen_count) if _gen_count > 0 else 0.0
+	var mesh_avg := (_mesh_usec / 1000.0 / _mesh_count) if _mesh_count > 0 else 0.0
+	print("perf: radius %d | generated %d chunks, avg %.1f ms | meshed %d chunks, avg %.1f ms | worst world frame %.1f ms | queue %d | loaded %d"
+		% [view_radius, _gen_count, gen_avg, _mesh_count, mesh_avg, _worst_frame_usec / 1000.0, mesh_queue.size(), chunks.size()])
 
 
 # ---------------------------------------------------------------- lookups
@@ -130,7 +157,10 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 func ensure_data(cpos: Vector2i) -> void:
 	if chunk_data.has(cpos):
 		return
+	var t0 := Time.get_ticks_usec()
 	var result := gen.fill_chunk(cpos)
+	_gen_usec += Time.get_ticks_usec() - t0
+	_gen_count += 1
 	var d: PackedByteArray = result[0]
 	var max_y: int = result[1]
 	# Re-apply anything the player changed here in an earlier session.

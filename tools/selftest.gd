@@ -99,7 +99,7 @@ func _physics_process(_delta: float) -> void:
 			player.died.connect(func(): _deaths += 1)
 			player.global_position.y += 8.0   # drop from 8 blocks up (lands after ~0.85 s)
 		280:
-			print("selftest: health after fall:  %d" % player.health)
+			print("selftest: health after ~8-block fall: %d (expect 4-5: 8 blocks plus whatever we stood above ground)" % player.health)
 			player.hunger = 3   # pretend we've been out a while
 			var ate := player.eat()
 			print("selftest: ate meat: %s, hunger now %d (expect 7), %s" % [ate, player.hunger, player.inventory.summary()])
@@ -121,6 +121,10 @@ func _physics_process(_delta: float) -> void:
 					c.take_hit(1, player.global_position, player)
 			print("selftest: after 2 kills: level %d, xp %d/%d, max health %d, health %d"
 				% [player.level, player.xp, player.xp_needed(), player.max_health, player.health])
+		302:
+			player.global_position.y += 3.6   # a small drop: should cost exactly 1 (lands ~0.6 s later)
+		345:
+			print("selftest: health after a 3.6-block drop: %d (expect 11)" % player.health)
 		330:
 			# Dig a hole and remember where, then save.
 			player.set_look(0.0, -0.8)

@@ -36,7 +36,8 @@ godot --path .
 You have 10 health (the red squares) and 10 hunger (the orange ones).
 Hunger drops one point every 45 s, three times faster while sprinting.
 At 7+ hunger you regain 1 health every 4 s; at 0 you lose 1 health every
-10 s (down to 1). Falling more than 3 blocks hurts; at 0 health you
+10 s (down to 1). Falling hurts from about 3.5 blocks (1 per extra
+block, rounded — 8 blocks costs 5, ~13 is lethal); at 0 health you
 respawn where you started, keeping your inventory.
 
 Killing creatures quietly makes you tougher: every 10×N kills-worth of

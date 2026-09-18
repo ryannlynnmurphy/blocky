@@ -250,8 +250,10 @@ func _check_fall_damage() -> void:
 		_peak_y = maxf(_peak_y, global_position.y)
 	elif not _was_on_floor:
 		var fall := _peak_y - global_position.y
-		if fall > SAFE_FALL:
-			take_damage(int(fall - SAFE_FALL))
+		# Rounded, not truncated: a 3.5-block drop already costs 1.
+		var damage := roundi(fall - SAFE_FALL)
+		if damage > 0:
+			take_damage(damage)
 	_was_on_floor = on_floor
 
 

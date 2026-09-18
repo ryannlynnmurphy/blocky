@@ -53,7 +53,7 @@ class SlotView extends Control:
 		var id := shown_id()
 		if id == Blocks.AIR:
 			return
-		draw_rect(r.grow(-9), Blocks.face_color(id, 2))
+		draw_texture_rect(Blocks.icon(id), r.grow(-9), false)
 		var n := shown_count()
 		if n > 1:
 			draw_string(ThemeDB.fallback_font, Vector2(0, size.y - 5), str(n),
@@ -75,7 +75,7 @@ class CursorView extends Control:
 		if ui.cursor_count == 0:
 			return
 		var p := get_local_mouse_position() - Vector2(16, 16)
-		draw_rect(Rect2(p, Vector2(32, 32)), Blocks.face_color(ui.cursor_id, 2))
+		draw_texture_rect(Blocks.icon(ui.cursor_id), Rect2(p, Vector2(32, 32)), false)
 		draw_rect(Rect2(p, Vector2(32, 32)), Color(0, 0, 0, 0.6), false, 2.0)
 		if ui.cursor_count > 1:
 			draw_string(ThemeDB.fallback_font, p + Vector2(0, 30), str(ui.cursor_count),

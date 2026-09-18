@@ -102,7 +102,7 @@ class HotbarView extends Control:
 			draw_rect(r, Color(0.08, 0.08, 0.1, 0.75))
 			var id: int = ids[i] if i < ids.size() else Blocks.AIR
 			if id != Blocks.AIR:
-				draw_rect(r.grow(-8), Blocks.face_color(id, 2))
+				draw_texture_rect(Blocks.icon(id), r.grow(-8), false)
 			if i == selected:
 				draw_rect(r, Color.WHITE, false, 3.0)
 			else:

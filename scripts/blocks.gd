@@ -3,10 +3,8 @@ extends RefCounted
 ## The block registry: every block type the game knows about.
 ##
 ## A block in the world is just a number (its ID). This file is the lookup
-## table that says what each number means: its name and its colors.
-## Blocks are drawn with the pixel-art texture atlas in res://blocky
-## (see BlockAtlas); COLORS below now only feeds icons and dropped-item
-## cubes, which still use flat vertex color.
+## table that says what each number means: its name, its world texture
+## (see BlockAtlas / atlas_faces()) and its icon (see ICON / icon()).
 
 ## Blocks (things that exist in the world) and items (things you can only
 ## carry) share one ID space, because they share the inventory. New IDs
@@ -86,41 +84,38 @@ static func atlas_faces(id: int) -> Array:
 	return BlockAtlas.FACES[family] if family != "" else []
 
 
-## Colors per block: [top face, side faces, bottom face].
-const COLORS := {
-	GRASS:  [Color(0.44, 0.78, 0.30), Color(0.50, 0.40, 0.25), Color(0.55, 0.38, 0.24)],
-	DIRT:   [Color(0.55, 0.38, 0.24), Color(0.52, 0.36, 0.22), Color(0.48, 0.33, 0.20)],
-	STONE:  [Color(0.58, 0.58, 0.60), Color(0.52, 0.52, 0.55), Color(0.45, 0.45, 0.48)],
-	SAND:   [Color(0.92, 0.86, 0.60), Color(0.88, 0.80, 0.55), Color(0.82, 0.75, 0.50)],
-	LOG:    [Color(0.62, 0.48, 0.30), Color(0.42, 0.29, 0.16), Color(0.62, 0.48, 0.30)],
-	LEAVES: [Color(0.28, 0.62, 0.26), Color(0.24, 0.55, 0.22), Color(0.20, 0.48, 0.20)],
-	SNOW:   [Color(0.96, 0.97, 1.00), Color(0.86, 0.90, 0.96), Color(0.80, 0.84, 0.90)],
-	PLANKS: [Color(0.78, 0.62, 0.38), Color(0.72, 0.56, 0.34), Color(0.65, 0.50, 0.30)],
-	MEAT:   [Color(0.88, 0.40, 0.42), Color(0.80, 0.32, 0.35), Color(0.70, 0.28, 0.30)],
-	WORKBENCH: [Color(0.76, 0.56, 0.32), Color(0.55, 0.38, 0.22), Color(0.45, 0.30, 0.18)],
-	STICK:  [Color(0.55, 0.40, 0.22), Color(0.55, 0.40, 0.22), Color(0.55, 0.40, 0.22)],
-	WOOD_PICKAXE:  [Color(0.72, 0.52, 0.30), Color(0.72, 0.52, 0.30), Color(0.72, 0.52, 0.30)],
-	WOOD_AXE:      [Color(0.66, 0.47, 0.27), Color(0.66, 0.47, 0.27), Color(0.66, 0.47, 0.27)],
-	STONE_PICKAXE: [Color(0.58, 0.58, 0.62), Color(0.58, 0.58, 0.62), Color(0.58, 0.58, 0.62)],
-	STONE_AXE:     [Color(0.50, 0.50, 0.54), Color(0.50, 0.50, 0.54), Color(0.50, 0.50, 0.54)],
-	COAL_ORE: [Color(0.36, 0.36, 0.38), Color(0.32, 0.32, 0.34), Color(0.28, 0.28, 0.30)],
-	IRON_ORE: [Color(0.66, 0.54, 0.44), Color(0.60, 0.49, 0.40), Color(0.52, 0.42, 0.34)],
-	COAL:     [Color(0.14, 0.14, 0.15), Color(0.14, 0.14, 0.15), Color(0.14, 0.14, 0.15)],
-	IRON:     [Color(0.80, 0.70, 0.60), Color(0.80, 0.70, 0.60), Color(0.80, 0.70, 0.60)],
-	IRON_PICKAXE: [Color(0.82, 0.80, 0.78), Color(0.82, 0.80, 0.78), Color(0.82, 0.80, 0.78)],
-	IRON_AXE:     [Color(0.76, 0.74, 0.72), Color(0.76, 0.74, 0.72), Color(0.76, 0.74, 0.72)],
+## Icon per block/item, for the hotbar, inventory slots, the cursor
+## stack and dropped-item cubes. Reuses one existing 16x16 face texture
+## per id — no separate icon art needed, and no per-frame loading
+## (preload resolves these once, at parse time).
+const ICON := {
+	GRASS: preload("res://blocky/textures/blocks/grass_side.png"),
+	DIRT: preload("res://blocky/textures/blocks/dirt.png"),
+	STONE: preload("res://blocky/textures/blocks/stone.png"),
+	SAND: preload("res://blocky/textures/blocks/sand.png"),
+	LOG: preload("res://blocky/textures/blocks/log_side.png"),
+	LEAVES: preload("res://blocky/textures/blocks/leaves.png"),
+	SNOW: preload("res://blocky/textures/blocks/snow.png"),
+	PLANKS: preload("res://blocky/textures/blocks/planks.png"),
+	WORKBENCH: preload("res://blocky/textures/blocks/workbench_top.png"),
+	COAL_ORE: preload("res://blocky/textures/blocks/coal_ore.png"),
+	IRON_ORE: preload("res://blocky/textures/blocks/iron_ore.png"),
+	MEAT: preload("res://blocky/textures/items/meat.png"),
+	STICK: preload("res://blocky/textures/items/stick.png"),
+	COAL: preload("res://blocky/textures/items/coal.png"),
+	IRON: preload("res://blocky/textures/items/iron.png"),
+	WOOD_PICKAXE: preload("res://blocky/textures/items/wooden_pickaxe.png"),
+	WOOD_AXE: preload("res://blocky/textures/items/wooden_axe.png"),
+	STONE_PICKAXE: preload("res://blocky/textures/items/stone_pickaxe.png"),
+	STONE_AXE: preload("res://blocky/textures/items/stone_axe.png"),
+	IRON_PICKAXE: preload("res://blocky/textures/items/iron_pickaxe.png"),
+	IRON_AXE: preload("res://blocky/textures/items/iron_axe.png"),
 }
+
+
+static func icon(id: int) -> Texture2D:
+	return ICON.get(id)
 
 
 static func is_solid(id: int) -> bool:
 	return id != AIR
-
-
-## face: 0 +X, 1 -X, 2 +Y (top), 3 -Y (bottom), 4 +Z, 5 -Z  (see Chunk.FACES)
-static func face_color(id: int, face: int) -> Color:
-	var set: Array = COLORS[id]
-	if face == 2:
-		return set[0]
-	if face == 3:
-		return set[2]
-	return set[1]

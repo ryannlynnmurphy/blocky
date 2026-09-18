@@ -21,7 +21,8 @@ func _ready() -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(0.3, 0.3, 0.3)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Blocks.face_color(item_id, 1)
+	mat.albedo_texture = Blocks.icon(item_id)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
 	mat.roughness = 1.0
 	_mesh.mesh = box
 	_mesh.material_override = mat

@@ -132,13 +132,7 @@ func _add_key(action: String, key: Key) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _no_input or ui_open:
-		return
-	if event.is_action_pressed("ui_cancel"):   # Esc
-		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		return
+		return   # Esc / Tab are handled by main.gd's screen state machine
 
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		if event is InputEventMouseButton and event.pressed:
@@ -340,10 +334,24 @@ func _tick_hunger(delta: float, running: bool) -> void:
 		_starve_timer = 0.0
 
 
+## Announces the death; main.gd shows the death screen and calls
+## respawn() when the player chooses to.
 func _die() -> void:
-	died.emit()
 	Sfx.play("died")
+	died.emit()
+
+
+## Back to square one for a New Game.
+func reset_for_new_game() -> void:
+	inventory.from_dict({})
+	level = 1
+	xp = 0
+	max_health = BASE_HEALTH
+	selected = 0
+	set_look(0.0, -0.3)
 	respawn()
+	xp_changed.emit(xp, xp_needed(), level)
+	hotbar_changed.emit(selected)
 
 
 func respawn() -> void:

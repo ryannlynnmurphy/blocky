@@ -30,6 +30,7 @@ func _physics_process(_delta: float) -> void:
 	_frame += 1
 	match _frame:
 		1:
+			main.save_path = TEST_SAVE   # never touch the real save file
 			player.set_look(0.0, -1.0)   # look down at the ground just ahead
 		40:
 			print("selftest: inventory before break: %s" % player.inventory.summary())
@@ -110,8 +111,13 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: regen after %.0f s: health %d -> %d" % [Player.REGEN_SECONDS, before, player.health])
 		290:
 			player.take_damage(100)
-			print("selftest: after lethal damage: deaths %d, health %d, at spawn: %s"
-				% [_deaths, player.health, player.global_position.distance_to(player.spawn_point) < 0.01])
+			print("selftest: after lethal damage: deaths %d, death screen up: %s, game paused: %s"
+				% [_deaths, main.state == main.State.DEAD, get_tree().paused])
+		296:
+			main.respawn_from_death()   # press "Respawn" (a few frames later, so it's on camera)
+			print("selftest: after respawn: health %d, at spawn: %s, playing: %s"
+				% [player.health, player.global_position.distance_to(player.spawn_point) < 0.01,
+					main.state == main.State.PLAYING])
 		300:
 			print("selftest: level %d, xp %d/%d, max health %d"
 				% [player.level, player.xp, player.xp_needed(), player.max_health])
@@ -233,6 +239,18 @@ func _physics_process(_delta: float) -> void:
 			for k in keys:
 				parts.append("%s x%d" % [k, counts[k]])
 			print("selftest: sounds played: %s" % ", ".join(parts))
+		810:
+			# Screens: pause, then title, then a new game with a fixed seed.
+			main._enter(main.State.PAUSED)
+			print("selftest: paused: %s, tree paused: %s" % [main.state == main.State.PAUSED, get_tree().paused])
+		826:
+			main._enter(main.State.TITLE)
+			print("selftest: title: %s, HUD hidden: %s" % [main.state == main.State.TITLE, not main.hud.visible])
+		842:
+			main._new_game("42")
+			print("selftest: new game: seed %d (expect 42), inventory %s, health %d, playing: %s"
+				% [world.world_seed, player.inventory.summary(), player.health, main.state == main.State.PLAYING])
+			print("selftest: real save untouched: save path is %s" % main.save_path)
 		800:
 			# Survey a few chunks for caves and ores.
 			var air_below := 0

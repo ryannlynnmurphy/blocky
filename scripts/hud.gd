@@ -177,7 +177,7 @@ func _ready() -> void:
 	add_child(_inventory_ui)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place   1-9 / wheel pick block   E eat   Tab inventory + crafting   F5 save   T fast-forward"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place   1-9 / wheel pick block   E eat   Tab inventory   Esc pause   F5 save   T fast-forward"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.position = Vector2(12, 10)
 	add_child(hint)
@@ -209,7 +209,6 @@ func bind_player(player: Player) -> void:
 	player.health_changed.connect(_health_bar.set_value)
 	player.hunger_changed.connect(_hunger_bar.set_value)
 	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
-	player.died.connect(func(): show_message("You died"))
 	_health_bar.set_value(player.health, player.max_health)
 	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
 	_hotbar.refresh(player)

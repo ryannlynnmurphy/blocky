@@ -22,6 +22,7 @@ var day_night: DayNight       # for the day/night ambience crossfade
 var plays := {}               # name -> how many times played (tests)
 
 var _sounds := {}             # name -> AudioStreamWAV
+var _sfx_bus := -1
 var _pool_3d: Array[AudioStreamPlayer3D] = []
 var _pool_2d: Array[AudioStreamPlayer] = []
 var _amb_day: AudioStreamPlayer
@@ -37,10 +38,10 @@ func _ready() -> void:
 	print("sfx: synthesized %d sounds in %d ms" % [_sounds.size(), Time.get_ticks_msec() - t0])
 
 	# All effects go through their own bus so one number sets their loudness.
-	var bus := AudioServer.bus_count
-	AudioServer.add_bus(bus)
-	AudioServer.set_bus_name(bus, "SFX")
-	AudioServer.set_bus_volume_db(bus, SFX_DB)
+	_sfx_bus = AudioServer.bus_count
+	AudioServer.add_bus(_sfx_bus)
+	AudioServer.set_bus_name(_sfx_bus, "SFX")
+	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB)
 
 	for i in POOL_3D:
 		var p := AudioStreamPlayer3D.new()
@@ -66,6 +67,11 @@ func _ready() -> void:
 
 	if "--mute" in OS.get_cmdline_user_args():
 		AudioServer.set_bus_mute(0, true)
+
+
+## Player-facing volume, 0..1, on top of the built-in SFX_DB level.
+func set_volume(v: float) -> void:
+	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB + linear_to_db(maxf(v, 0.001)))
 
 
 ## Stop the loops before the tree tears down, or the audio thread still

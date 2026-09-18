@@ -1,9 +1,13 @@
 extends Node3D
-## Entry point. Wires the world, the player and the HUD together, and
-## owns saving/loading.
+## Entry point. Wires the world, the player and the HUD together, owns
+## saving/loading, and runs the screen state machine (title, playing,
+## paused, dead, inventory).
 
 const SAVE_PATH := "user://save.json"
+const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
+
+enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -11,23 +15,25 @@ const AUTOSAVE_SECONDS := 30.0
 @onready var day_night: DayNight = $DayNight
 @onready var hud := $HUD
 
+var state := State.TITLE
+var screens: Screens
+var sfx: Sfx
+## Where this session saves. Tests point it at a throwaway file so they
+## can never touch the real save.
+var save_path: String = SAVE_PATH
 var _autosave_timer := 0.0
 var _was_night := false
+var _spawn_col := Vector2i(8, 8)
 
 
 func _ready() -> void:
 	print("Voxel RPG booted. Godot %s" % Engine.get_version_info()["string"])
+	process_mode = Node.PROCESS_MODE_ALWAYS   # menus and Esc must work while paused
+	world.process_mode = Node.PROCESS_MODE_ALWAYS   # chunks keep streaming behind the title
 	var args := OS.get_cmdline_user_args()
 	world.player = player
 	world.day_night = day_night
 	player.world = world
-
-	# All sound is synthesized here at startup.
-	var sfx := Sfx.new()
-	sfx.name = "Sfx"
-	sfx.day_night = day_night
-	add_child(sfx)
-	player.inventory.added.connect(func(_id: int, _n: int): Sfx.play("pickup", null, 0.05, -6.0))
 	# Testing aids: `-- --perf` prints chunk timings; `-- --radius=8` sets view distance.
 	world.perf_enabled = "--perf" in args
 	for arg in args:
@@ -40,50 +46,83 @@ func _ready() -> void:
 	env.fog_depth_begin = view_dist * 0.6
 	env.fog_depth_end = view_dist * 0.97
 
-	# Find dry land near the origin to spawn on.
-	var sx := 8
-	var sz := 8
+	# All sound is synthesized here at startup.
+	sfx = Sfx.new()
+	sfx.name = "Sfx"
+	sfx.day_night = day_night
+	add_child(sfx)
+	player.inventory.added.connect(func(_id: int, _n: int): Sfx.play("pickup", null, 0.05, -6.0))
+
 	# Testing aid: `godot --path . -- --spawn=-300,-20` spawns at that column.
 	for arg in args:
 		if arg.begins_with("--spawn="):
 			var xy := arg.get_slice("=", 1).split(",")
-			sx = int(xy[0])
-			sz = int(xy[1])
-	while world.height_at(sx, sz) <= WorldGen.SEA_LEVEL + 2 and sx < 400:
-		sx += 4
-	var spawn := Vector3(sx + 0.5, world.height_at(sx, sz) + 2.0, sz + 0.5)
-	player.global_position = spawn
-	player.spawn_point = spawn
+			_spawn_col = Vector2i(int(xy[0]), int(xy[1]))
+	_place_player_at_spawn()
 
+	# Testing aid: `-- --save=user://x.json` uses another save file.
+	for arg in args:
+		if arg.begins_with("--save="):
+			save_path = arg.get_slice("=", 1)
 	# Continue the saved game unless told to start over.
-	if "--fresh" not in args and SaveGame.exists(SAVE_PATH):
+	if "--fresh" not in args and SaveGame.exists(save_path):
 		load_game()
-		print("Loaded save from %s" % ProjectSettings.globalize_path(SAVE_PATH))
+		print("Loaded save from %s" % ProjectSettings.globalize_path(save_path))
 
 	hud.bind_player(player)
 	hud.bind_day_night(day_night)
 	hud.bind_world(world, player)
 	_build_ground_under_player()
 
+	# Menus.
+	screens = Screens.new()
+	screens.name = "Screens"
+	add_child(screens)
+	screens.continue_pressed.connect(func(): _enter(State.PLAYING))
+	screens.new_game_pressed.connect(_new_game)
+	screens.quit_pressed.connect(func(): get_tree().quit())
+	screens.resume_pressed.connect(func(): _enter(State.PLAYING))
+	screens.save_pressed.connect(func():
+		save_game()
+		hud.show_message("Saved"))
+	screens.to_title_pressed.connect(func():
+		if state != State.DEAD:
+			save_game()
+		_enter(State.TITLE))
+	screens.respawn_pressed.connect(respawn_from_death)
+	screens.sfx_volume_changed.connect(_set_sfx_volume)
+	player.died.connect(func():
+		if state == State.PLAYING:
+			_enter(State.DEAD))
+	_load_settings()
+
 	# We save on close, so ask Godot not to quit on its own.
 	get_tree().set_auto_accept_quit(false)
 	_was_night = day_night.is_night()   # no banner at startup
 
+	# Testing aid: `-- --critter` puts one animal right in front of you.
+	if "--critter" in args:
+		world.spawn_creature(_spawn_col.x, _spawn_col.y - 3)
 	# Testing aid: `-- --look=3.14,-0.3` points the camera (yaw, pitch in radians).
 	for arg in args:
 		if arg.begins_with("--look="):
 			var yp := arg.get_slice("=", 1).split(",")
 			player.set_look(float(yp[0]), float(yp[1]))
-	# Testing aid: `-- --critter` puts one animal right in front of you.
-	if "--critter" in args:
-		world.spawn_creature(sx, sz - 3)
 	# Testing aid: `-- --selftest` exercises the game's systems automatically.
-	if "--selftest" in args:
+	var selftest := "--selftest" in args
+	if selftest:
 		var test: Node = load("res://tools/selftest.gd").new()
 		test.player = player
 		test.world = world
 		test.main = self
+		test.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(test)
+
+	# Start on the title screen, unless a test or recording wants to skip it.
+	if selftest or "--skiptitle" in args:
+		_enter(State.PLAYING)
+	else:
+		_enter(State.TITLE)
 
 
 func _process(delta: float) -> void:
@@ -91,6 +130,8 @@ func _process(delta: float) -> void:
 	water.global_position.x = player.global_position.x
 	water.global_position.z = player.global_position.z
 
+	if state != State.PLAYING and state != State.INVENTORY:
+		return
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_SECONDS:
 		_autosave_timer = 0.0
@@ -104,29 +145,99 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		var key := (event as InputEventKey).keycode
-		if key == KEY_F5:
-			save_game()
-			hud.show_message("Saved")
-		elif key == KEY_TAB:
-			set_inventory_open(not hud.is_inventory_open())
-		elif key == KEY_ESCAPE and hud.is_inventory_open():
-			set_inventory_open(false)
-
-
-## Opens/closes the inventory screen; the player stops taking input and
-## the mouse is freed while it's open.
-func set_inventory_open(open: bool) -> void:
-	hud.set_inventory_open(open)
-	player.ui_open = open
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if open else Input.MOUSE_MODE_CAPTURED
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	var key := (event as InputEventKey).keycode
+	match state:
+		State.PLAYING:
+			if key == KEY_ESCAPE:
+				_enter(State.PAUSED)
+			elif key == KEY_TAB:
+				_enter(State.INVENTORY)
+			elif key == KEY_F5:
+				save_game()
+				hud.show_message("Saved")
+		State.PAUSED:
+			if key == KEY_ESCAPE:
+				_enter(State.PLAYING)
+		State.INVENTORY:
+			if key == KEY_ESCAPE or key == KEY_TAB:
+				_enter(State.PLAYING)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		save_game()
+		if state != State.TITLE:
+			save_game()
 		get_tree().quit()
+
+
+# ---------------------------------------------------------------- screens
+
+## The one place that decides what's on screen, whether the game runs,
+## and whether the mouse is captured.
+func _enter(s: State) -> void:
+	state = s
+	screens.hide_all()
+	hud.set_inventory_open(false)
+	match s:
+		State.TITLE:
+			screens.show_title(SaveGame.exists(save_path))
+		State.PAUSED:
+			screens.show_pause()
+		State.DEAD:
+			screens.show_death()
+		State.INVENTORY:
+			hud.set_inventory_open(true)
+	var playing := s == State.PLAYING
+	hud.visible = s != State.TITLE
+	player.ui_open = not playing
+	get_tree().paused = s in [State.TITLE, State.PAUSED, State.DEAD]
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if playing else Input.MOUSE_MODE_VISIBLE
+
+
+## Kept for tests: opens/closes the inventory screen.
+func set_inventory_open(open: bool) -> void:
+	_enter(State.INVENTORY if open else State.PLAYING)
+
+
+func respawn_from_death() -> void:
+	player.respawn()
+	_enter(State.PLAYING)
+
+
+func _new_game(seed_text: String) -> void:
+	var seed_value: int
+	if seed_text.strip_edges() == "":
+		seed_value = randi()
+	elif seed_text.is_valid_int():
+		seed_value = int(seed_text)
+	else:
+		seed_value = hash(seed_text)
+	if SaveGame.exists(save_path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	world.load_save_data({"seed": seed_value, "edits": {}})
+	world.clear_entities()
+	day_night.load_save_data({"time_of_day": day_night.start_time, "day_count": 1})
+	player.reset_for_new_game()
+	_place_player_at_spawn()
+	_build_ground_under_player()
+	_was_night = day_night.is_night()
+	_enter(State.PLAYING)
+	hud.show_message("Seed %d" % seed_value)
+
+
+# ---------------------------------------------------------------- spawning
+
+## Finds dry land near the spawn column and puts the player there.
+func _place_player_at_spawn() -> void:
+	var sx := _spawn_col.x
+	var sz := _spawn_col.y
+	while world.height_at(sx, sz) <= WorldGen.SEA_LEVEL + 2 and sx < 400:
+		sx += 4
+	var spawn := Vector3(sx + 0.5, world.height_at(sx, sz) + 2.0, sz + 0.5)
+	player.global_position = spawn
+	player.spawn_point = spawn
 
 
 ## Builds the chunk under the player immediately so they don't fall
@@ -139,7 +250,9 @@ func _build_ground_under_player() -> void:
 
 # ---------------------------------------------------------------- saving
 
-func save_game(path: String = SAVE_PATH) -> bool:
+func save_game(path: String = "") -> bool:
+	if path == "":
+		path = save_path
 	var data := {
 		"version": 1,
 		"world": world.get_save_data(),
@@ -149,7 +262,9 @@ func save_game(path: String = SAVE_PATH) -> bool:
 	return SaveGame.write(path, data)
 
 
-func load_game(path: String = SAVE_PATH) -> bool:
+func load_game(path: String = "") -> bool:
+	if path == "":
+		path = save_path
 	var data := SaveGame.read(path)
 	if data.is_empty():
 		return false
@@ -158,3 +273,15 @@ func load_game(path: String = SAVE_PATH) -> bool:
 	day_night.load_save_data(data.get("time", {}))
 	_build_ground_under_player()
 	return true
+
+
+func _set_sfx_volume(v: float) -> void:
+	sfx.set_volume(v)
+	SaveGame.write(SETTINGS_PATH, {"sfx_volume": v})
+
+
+func _load_settings() -> void:
+	var s := SaveGame.read(SETTINGS_PATH)
+	var v := float(s.get("sfx_volume", 1.0))
+	sfx.set_volume(v)
+	screens.set_volume_slider(v)

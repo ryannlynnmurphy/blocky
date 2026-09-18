@@ -76,6 +76,12 @@ and verified before the next starts. No system gets built "all at once."
       drop Coal / Iron; tool tiers (iron ore needs a stone pickaxe);
       iron pickaxe/axe recipes.
 
+- [x] **M18 — Screens.** Title (Continue / New Game with seed / Quit),
+      pause (Esc: Resume / Save / sound slider / Quit to Title), death
+      (Respawn / Quit to Title), and a Minecraft-style inventory grid with
+      icon-based recipes. One state machine in `main.gd` owns screens,
+      pausing and the mouse. Tests use their own save file.
+
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
@@ -87,4 +93,3 @@ how much they'd change the feel of the game:
 - [ ] A simple generated music loop.
 - [ ] Furnace: smelt iron ore properly; torches from coal + sticks.
 - [ ] Water you can swim in.
-- [ ] Title screen with New Game / Continue and a seed box.

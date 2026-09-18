@@ -16,6 +16,15 @@ From a terminal, without the editor:
 godot --path . 
 ```
 
+## Screens
+
+The game opens on a title screen (BLOCKY): **Continue** your save, or
+**New Game** with an optional seed (a number, or any word — blank picks
+one at random). Esc pauses; dying shows a death screen with Respawn.
+`scripts/screens.gd` builds the menus; `main.gd` has the state machine
+(title / playing / paused / dead / inventory) that decides what's shown,
+whether the world is frozen, and whether the mouse is captured.
+
 ## Controls
 
 | Input | Action |
@@ -30,6 +39,7 @@ godot --path .
 | 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
 | E | Eat one Meat (+4 hunger) |
 | Tab | Inventory and crafting screen (Esc or Tab closes) |
+| Esc | Pause: Resume, Save, sound volume, Quit to Title |
 | F5 | Save now (it also autosaves every 30 s and when you close the window) |
 | T (hold) | Fast-forward time (watch the sun set) |
 
@@ -111,6 +121,8 @@ godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minut
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
 godot --path . -- --fresh              ignore the save file, start a new game
+godot --path . -- --skiptitle          start playing immediately (recordings)
+godot --path . -- --save=user://x.json use a different save file
 godot --path . -- --perf --radius=8    print chunk generation/meshing timings
 godot --path . -- --selftest --no-input --fresh
                                        auto-run break/place, punch/kill/pickup,
@@ -142,7 +154,8 @@ scripts/drop.gd      a dropped item on the ground; walk into it to pick it up
 scripts/player.gd    movement, camera, aiming, break/place, punch, health, respawn, XP/levels
 scripts/inventory.gd what you're carrying: a count per block/item ID
 scripts/recipes.gd   crafting recipes (ingredients -> result, workbench or not)
-scripts/inventory_ui.gd  the Tab screen: inventory list + Craft buttons
+scripts/inventory_ui.gd  the Tab screen: slot grid + icon recipes with Craft buttons
+scripts/screens.gd   title / pause / death menus
 scripts/day_night.gd sun/moon orbit, sky + light color over the day
 scripts/hud.gd       crosshair, hotbar, clock, hints
 ```

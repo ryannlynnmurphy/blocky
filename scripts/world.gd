@@ -511,7 +511,7 @@ func creature_count() -> int:
 
 ## At night, every few seconds, a Shade appears somewhere out of sight.
 func _tick_hostile_spawns(delta: float) -> void:
-	if day_night == null or day_night.sun_elevation() > -0.1:
+	if day_night == null or day_night.sun_elevation() > -0.1 or get_tree().paused:
 		return
 	_hostile_timer += delta
 	if _hostile_timer < HOSTILE_SPAWN_SECONDS:
@@ -541,6 +541,14 @@ func spawn_hostile_at(pos: Vector3) -> Hostile:
 
 func hostile_count() -> int:
 	return _hostiles.get_child_count()
+
+
+## Removes every creature, drop and hostile (New Game).
+func clear_entities() -> void:
+	for group in [_creatures, _drops, _hostiles]:
+		for c in group.get_children():
+			c.queue_free()
+	_populated.clear()
 
 
 ## Leaves an item on the ground at a world position.

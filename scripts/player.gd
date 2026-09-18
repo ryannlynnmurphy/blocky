@@ -55,6 +55,14 @@ var _no_input := false   # dev: ignore mouse/keys so recordings are repeatable
 var _walk_cycle := 0.0    # advances while walking; drives the limb swing
 var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
 
+const BASE_FOV := 70.0
+const RUN_FOV := 80.0     # the camera widens a little while sprinting
+const RUN_LEAN := 0.14    # radians of forward lean while sprinting
+
+## Tests drive movement through these when input is locked out.
+var test_move := Vector2.ZERO
+var test_run := false
+
 
 func _ready() -> void:
 	_setup_input_actions()
@@ -140,35 +148,42 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_SPEED
 
 	# Movement is relative to where the camera is looking.
-	var input := Vector2.ZERO
+	var input := test_move
+	var run_held := test_run
 	if not _no_input:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+		run_held = Input.is_action_pressed("run")
 	var dir := (_pivot.global_basis * Vector3(input.x, 0, input.y))
 	dir.y = 0
 	dir = dir.normalized()
-	var speed := RUN_SPEED if Input.is_action_pressed("run") else WALK_SPEED
+	var moving := dir.length() > 0.1
+	var running := run_held and moving
+	var speed := RUN_SPEED if running else WALK_SPEED
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 
 	move_and_slide()
 	_check_fall_damage()
 
-	# Turn the model to face the way we're walking.
-	if dir.length() > 0.1:
+	# Turn the model to face the way we're walking; lean into a sprint.
+	if moving:
 		var target := atan2(-dir.x, -dir.z)
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 12.0 * delta)
+	_model.rotation.x = lerp_angle(_model.rotation.x, -RUN_LEAN if running else 0.0, 8.0 * delta)
+	_camera.fov = lerpf(_camera.fov, RUN_FOV if running else BASE_FOV, 6.0 * delta)
 
-	_animate_limbs(delta, dir.length() > 0.1 and is_on_floor(), speed)
+	_animate_limbs(delta, moving and is_on_floor(), speed, running)
 	_update_highlight()
 
 
 ## Swings arms and legs while walking; throws the right arm on a punch.
 ## Limb pivots sit at the shoulder/hip, and a positive X rotation moves
 ## the hand or foot forward (toward the model's -Z).
-func _animate_limbs(delta: float, walking: bool, speed: float) -> void:
+func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) -> void:
 	if walking:
 		_walk_cycle += delta * speed * 2.2
-	var swing := sin(_walk_cycle) * 0.7 if walking else 0.0
+	var amplitude := 1.1 if running else 0.7
+	var swing := sin(_walk_cycle) * amplitude if walking else 0.0
 	var k := 12.0 * delta
 	_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, swing, k)
 	_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, -swing, k)

@@ -7,6 +7,7 @@ extends Node
 ##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
 ##   frames 300..320   kill two critters, reach level 2 (progression)
 ##   frames 330..360   save, wreck the state, load it back (saving)
+##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -17,6 +18,7 @@ var _frame := 0
 var _critter: Creature
 var _deaths := 0
 var _hole := Vector3i.ZERO
+var _move_start := Vector3.ZERO
 
 
 func _physics_process(_delta: float) -> void:
@@ -132,3 +134,19 @@ func _physics_process(_delta: float) -> void:
 					world.get_block(_hole.x, _hole.y, _hole.z),
 					player.global_position.distance_to(Vector3(_hole) + Vector3(0.5, 0, 0.5)) < 6.0])
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
+		370:
+			player.set_look(0.0, -0.2)
+			_move_start = player.global_position
+			player.test_move = Vector2(0, -1)   # forward
+			player.test_run = false
+		400:
+			var d := player.global_position.distance_to(_move_start)
+			print("selftest: walked %.2f blocks in 0.5 s (expect ~%.2f)" % [d, Player.WALK_SPEED * 0.5])
+			_move_start = player.global_position
+			player.test_run = true
+		430:
+			var d := player.global_position.distance_to(_move_start)
+			print("selftest: ran %.2f blocks in 0.5 s (expect ~%.2f), fov %.0f, lean %.2f"
+				% [d, Player.RUN_SPEED * 0.5, player._camera.fov, player._model.rotation.x])
+			player.test_move = Vector2.ZERO
+			player.test_run = false

@@ -6,12 +6,17 @@ extends Node
 ##   frames 120..200   spawn a critter, punch it dead, pick up its drop (combat)
 ##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
 ##   frames 300..320   kill two critters, reach level 2 (progression)
+##   frames 330..360   save, wreck the state, load it back (saving)
+
+const TEST_SAVE := "user://selftest_save.json"
 
 var player: Player
 var world: VoxelWorld
+var main: Node
 var _frame := 0
 var _critter: Creature
 var _deaths := 0
+var _hole := Vector3i.ZERO
 
 
 func _physics_process(_delta: float) -> void:
@@ -99,3 +104,31 @@ func _physics_process(_delta: float) -> void:
 					c.take_hit(1, player.global_position, player)
 			print("selftest: after 2 kills: level %d, xp %d/%d, max health %d, health %d"
 				% [player.level, player.xp, player.xp_needed(), player.max_health, player.health])
+		330:
+			# Dig a hole and remember where, then save.
+			player.set_look(0.0, -0.8)
+			var hit := player._aim_ray()
+			_hole = Vector3i((hit.position - hit.normal * 0.5).floor())
+			player._break_block()
+			var ok: bool = main.save_game(TEST_SAVE)
+			print("selftest: saved to %s: %s (hole at %s, block there now %d)"
+				% [TEST_SAVE, ok, _hole, world.get_block(_hole.x, _hole.y, _hole.z)])
+		340:
+			# Wreck everything the save should restore.
+			player.level = 1
+			player.xp = 0
+			player.inventory.from_dict({})
+			player.global_position += Vector3(5, 0, 5)
+			world.edits.clear()
+			world.reset_chunks()
+			world.ensure_data(Vector2i(_hole.x >> 4, _hole.z >> 4))   # regenerate now, not next frame
+			print("selftest: wrecked: level %d, %s, block at hole after regen: %d (expect 1 = grass back)"
+				% [player.level, player.inventory.summary(), world.get_block(_hole.x, _hole.y, _hole.z)])
+		350:
+			var ok: bool = main.load_game(TEST_SAVE)
+			world.ensure_data(Vector2i(_hole.x >> 4, _hole.z >> 4))
+			print("selftest: loaded: %s -> level %d, xp %d, %s, block at hole: %d (expect 0 = hole kept), moved back: %s"
+				% [ok, player.level, player.xp, player.inventory.summary(),
+					world.get_block(_hole.x, _hole.y, _hole.z),
+					player.global_position.distance_to(Vector3(_hole) + Vector3(0.5, 0, 0.5)) < 6.0])
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))

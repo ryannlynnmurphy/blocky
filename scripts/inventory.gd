@@ -27,6 +27,22 @@ func take(id: int, n: int = 1) -> bool:
 	return true
 
 
+## For saving: {"1": 3, "3": 1}. JSON keys have to be strings.
+func to_dict() -> Dictionary:
+	var out := {}
+	for id in _counts.keys():
+		if _counts[id] > 0:
+			out[str(id)] = _counts[id]
+	return out
+
+
+func from_dict(d: Dictionary) -> void:
+	_counts.clear()
+	for key in d.keys():
+		_counts[int(key)] = int(d[key])
+	changed.emit()
+
+
 ## "Dirt x3, Stone x1" — for logs and tests.
 func summary() -> String:
 	var parts: PackedStringArray = []

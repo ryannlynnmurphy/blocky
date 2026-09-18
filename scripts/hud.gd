@@ -114,7 +114,7 @@ func _ready() -> void:
 	add_child(_message_label)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   E eat   T fast-forward   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   E eat   F5 save   T fast-forward   Esc free mouse"
 	hint.position = Vector2(12, 8)
 	add_child(hint)
 

@@ -28,6 +28,7 @@ godot --path .
 | Right click | Place the selected block |
 | 1–8 | Pick which block to place (you must have one — break blocks to collect them) |
 | E | Eat one Meat (+4 health) |
+| F5 | Save now (it also autosaves every 30 s and when you close the window) |
 | T (hold) | Fast-forward time (watch the sun set) |
 
 You have 10 health (the red squares). Falling more than 3 blocks hurts;
@@ -35,6 +36,15 @@ at 0 you respawn where you started, keeping your inventory.
 
 Killing a creature gives 5 XP (the gold bar). Level N needs 10×N XP;
 each level adds 2 max health and heals you fully.
+
+## Saving
+
+Your game is saved to one readable JSON file:
+`%APPDATA%\Godot\app_userdata\Voxel RPG\save.json`. It holds the world
+seed, every block you changed (the terrain itself is regenerated), your
+position, health, level, XP, inventory, and the time of day. The game
+loads it automatically at startup. To start over, delete that file or
+run with `-- --fresh`.
 | Esc | Free / re-capture the mouse |
 
 ## Dev switches
@@ -45,10 +55,12 @@ Anything after `--` on the command line is for our scripts, not Godot:
 godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
-godot --path . -- --selftest --no-input   auto-run break/place, punch/kill/pickup,
-                                          fall/eat/die/respawn and XP/level-up, printing
-                                          results; --no-input keeps your mouse out of
-                                          recordings
+godot --path . -- --fresh              ignore the save file, start a new game
+godot --path . -- --selftest --no-input --fresh
+                                       auto-run break/place, punch/kill/pickup,
+                                       fall/eat/die/respawn, XP/level-up and
+                                       save/load, printing results; --no-input keeps
+                                       your mouse out of recordings
 godot --headless --path . --script tools/biome_survey.gd   print a biome map
 ```
 
@@ -59,7 +71,8 @@ project.godot        engine settings (window size, main scene, crisp-pixel rende
 scenes/main.tscn     the level: sky, sun, world, water, player, HUD
 scenes/player.tscn   the character's body, collision capsule and camera rig
 scenes/creature.tscn a critter's body and collision box
-scripts/main.gd      wires everything together, picks a spawn point
+scripts/main.gd      wires everything together, picks a spawn point, saves/loads
+scripts/save_game.gd reads/writes the JSON save file
 scripts/blocks.gd    block registry: IDs, names, colors
 scripts/world_gen.gd noise terrain, biomes, grass tint, trees -> fills a chunk
 tools/               headless dev scripts (not part of the game)

@@ -1,25 +1,30 @@
 extends Node3D
-## Entry point. Wires the world, the player and the HUD together.
+## Entry point. Wires the world, the player and the HUD together, and
+## owns saving/loading.
+
+const SAVE_PATH := "user://save.json"
+const AUTOSAVE_SECONDS := 30.0
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
 @onready var water: MeshInstance3D = $Water
+@onready var day_night: DayNight = $DayNight
 @onready var hud := $HUD
+
+var _autosave_timer := 0.0
 
 
 func _ready() -> void:
 	print("Voxel RPG booted. Godot %s" % Engine.get_version_info()["string"])
+	var args := OS.get_cmdline_user_args()
 	world.player = player
 	player.world = world
-	hud.bind_player(player)
-	hud.bind_day_night($DayNight)
-	hud.bind_world(world, player)
 
 	# Find dry land near the origin to spawn on.
 	var sx := 8
 	var sz := 8
 	# Testing aid: `godot --path . -- --spawn=-300,-20` spawns at that column.
-	for arg in OS.get_cmdline_user_args():
+	for arg in args:
 		if arg.begins_with("--spawn="):
 			var xy := arg.get_slice("=", 1).split(",")
 			sx = int(xy[0])
@@ -30,24 +35,81 @@ func _ready() -> void:
 	player.global_position = spawn
 	player.spawn_point = spawn
 
-	# Build the ground under the player immediately so they don't fall
-	# through the world while the rest streams in.
-	var pc := world.chunk_coord_of(spawn)
-	world.update_chunks(pc)
-	world.build_chunk_now(pc)
+	# Continue the saved game unless told to start over.
+	if "--fresh" not in args and SaveGame.exists(SAVE_PATH):
+		load_game()
+		print("Loaded save from %s" % ProjectSettings.globalize_path(SAVE_PATH))
+
+	hud.bind_player(player)
+	hud.bind_day_night(day_night)
+	hud.bind_world(world, player)
+	_build_ground_under_player()
+
+	# We save on close, so ask Godot not to quit on its own.
+	get_tree().set_auto_accept_quit(false)
 
 	# Testing aid: `-- --critter` puts one animal right in front of you.
-	if "--critter" in OS.get_cmdline_user_args():
+	if "--critter" in args:
 		world.spawn_creature(sx, sz - 3)
-	# Testing aid: `-- --selftest` breaks and places a block automatically.
-	if "--selftest" in OS.get_cmdline_user_args():
+	# Testing aid: `-- --selftest` exercises the game's systems automatically.
+	if "--selftest" in args:
 		var test: Node = load("res://tools/selftest.gd").new()
 		test.player = player
 		test.world = world
+		test.main = self
 		add_child(test)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# The water is one big flat plane that follows the player.
 	water.global_position.x = player.global_position.x
 	water.global_position.z = player.global_position.z
+
+	_autosave_timer += delta
+	if _autosave_timer >= AUTOSAVE_SECONDS:
+		_autosave_timer = 0.0
+		save_game()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).keycode == KEY_F5:
+			save_game()
+			hud.show_message("Saved")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		save_game()
+		get_tree().quit()
+
+
+## Builds the chunk under the player immediately so they don't fall
+## through the world while the rest streams in.
+func _build_ground_under_player() -> void:
+	var pc := world.chunk_coord_of(player.global_position)
+	world.update_chunks(pc)
+	world.build_chunk_now(pc)
+
+
+# ---------------------------------------------------------------- saving
+
+func save_game(path: String = SAVE_PATH) -> bool:
+	var data := {
+		"version": 1,
+		"world": world.get_save_data(),
+		"player": player.get_save_data(),
+		"time": day_night.get_save_data(),
+	}
+	return SaveGame.write(path, data)
+
+
+func load_game(path: String = SAVE_PATH) -> bool:
+	var data := SaveGame.read(path)
+	if data.is_empty():
+		return false
+	world.load_save_data(data.get("world", {}))
+	player.load_save_data(data.get("player", {}))
+	day_night.load_save_data(data.get("time", {}))
+	_build_ground_under_player()
+	return true

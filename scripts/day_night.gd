@@ -111,5 +111,15 @@ func _apply() -> void:
 	_env.ambient_light_energy = lerpf(0.25, 1.0, smoothstep(-0.15, 0.25, e))
 
 
+func get_save_data() -> Dictionary:
+	return {"time_of_day": time_of_day, "day_count": day_count}
+
+
+func load_save_data(d: Dictionary) -> void:
+	time_of_day = float(d.get("time_of_day", time_of_day))
+	day_count = int(d.get("day_count", day_count))
+	_apply()
+
+
 func _lerp_palette(a: Array, b: Array, t: float) -> Array:
 	return [a[0].lerp(b[0], t), a[1].lerp(b[1], t), a[2].lerp(b[2], t)]

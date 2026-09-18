@@ -208,6 +208,41 @@ func respawn() -> void:
 	health_changed.emit(health, max_health)
 
 
+# ---------------------------------------------------------------- saving
+
+func get_save_data() -> Dictionary:
+	return {
+		"position": [global_position.x, global_position.y, global_position.z],
+		"yaw": _yaw,
+		"pitch": _pitch,
+		"health": health,
+		"max_health": max_health,
+		"level": level,
+		"xp": xp,
+		"selected": selected,
+		"inventory": inventory.to_dict(),
+	}
+
+
+func load_save_data(d: Dictionary) -> void:
+	var p: Array = d.get("position", [global_position.x, global_position.y, global_position.z])
+	global_position = Vector3(p[0], p[1], p[2])
+	velocity = Vector3.ZERO
+	_peak_y = global_position.y
+	_was_on_floor = false
+	set_look(float(d.get("yaw", _yaw)), float(d.get("pitch", _pitch)))
+	level = int(d.get("level", 1))
+	xp = int(d.get("xp", 0))
+	max_health = int(d.get("max_health", BASE_HEALTH))
+	health = int(d.get("health", max_health))
+	selected = int(d.get("selected", 0))
+	inventory.from_dict(d.get("inventory", {}))
+	# Tell the HUD.
+	health_changed.emit(health, max_health)
+	xp_changed.emit(xp, xp_needed(), level)
+	hotbar_changed.emit(selected)
+
+
 # ---------------------------------------------------------------- progression
 
 ## XP needed to finish the current level.

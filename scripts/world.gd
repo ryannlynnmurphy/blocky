@@ -14,6 +14,9 @@ var gen: WorldGen
 var chunk_data := {}    # Vector2i -> PackedByteArray (kept forever, so edits survive)
 var chunk_max_y := {}   # Vector2i -> int
 var chunk_tints := {}   # Vector2i -> PackedColorArray (grass color per column)
+## Every block the player changed: Vector2i chunk -> {block index: id}.
+## Terrain is regenerated from the seed on load; only this diff is saved.
+var edits := {}
 var chunks := {}        # Vector2i -> Chunk node (only the ones near the player)
 var mesh_queue: Array[Vector2i] = []
 var player: Node3D
@@ -98,10 +101,14 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 	if not chunk_data.has(cpos):
 		return
 	var d: PackedByteArray = chunk_data[cpos]
-	d[(wx & 15) + SIZE * ((wz & 15) + SIZE * wy)] = id
+	var i := (wx & 15) + SIZE * ((wz & 15) + SIZE * wy)
+	d[i] = id
 	chunk_data[cpos] = d
 	if id != Blocks.AIR and wy > chunk_max_y[cpos]:
 		chunk_max_y[cpos] = wy
+	if not edits.has(cpos):
+		edits[cpos] = {}
+	edits[cpos][i] = id
 
 	_rebuild_now(cpos)
 	# A block on a chunk edge changes which faces the neighbour shows.
@@ -124,8 +131,18 @@ func ensure_data(cpos: Vector2i) -> void:
 	if chunk_data.has(cpos):
 		return
 	var result := gen.fill_chunk(cpos)
-	chunk_data[cpos] = result[0]
-	chunk_max_y[cpos] = result[1]
+	var d: PackedByteArray = result[0]
+	var max_y: int = result[1]
+	# Re-apply anything the player changed here in an earlier session.
+	if edits.has(cpos):
+		for i in edits[cpos]:
+			var id: int = edits[cpos][i]
+			d[i] = id
+			var y: int = int(i) / (SIZE * SIZE)
+			if id != Blocks.AIR and y > max_y:
+				max_y = y
+	chunk_data[cpos] = d
+	chunk_max_y[cpos] = max_y
 	chunk_tints[cpos] = result[2]
 
 
@@ -226,3 +243,45 @@ func spawn_drop(pos: Vector3, item_id: int) -> Drop:
 
 func drop_count() -> int:
 	return _drops.get_child_count()
+
+
+# ---------------------------------------------------------------- saving
+
+func get_save_data() -> Dictionary:
+	var e := {}
+	for cpos in edits.keys():
+		var inner := {}
+		for i in edits[cpos].keys():
+			inner[str(i)] = edits[cpos][i]
+		e["%d,%d" % [cpos.x, cpos.y]] = inner
+	return {"seed": world_seed, "edits": e}
+
+
+## Restores the seed and edits, then throws away every generated chunk
+## so they come back with the edits applied.
+func load_save_data(d: Dictionary) -> void:
+	world_seed = int(d.get("seed", world_seed))
+	gen = WorldGen.new(world_seed)
+	edits.clear()
+	var e: Dictionary = d.get("edits", {})
+	for key in e.keys():
+		var parts: PackedStringArray = key.split(",")
+		var cpos := Vector2i(int(parts[0]), int(parts[1]))
+		var inner := {}
+		for k in e[key].keys():
+			inner[int(k)] = int(e[key][k])
+		edits[cpos] = inner
+	reset_chunks()
+
+
+## Forgets all generated chunks and meshes; they regenerate on demand.
+func reset_chunks() -> void:
+	for c in chunks.values():
+		c.queue_free()
+	chunks.clear()
+	chunk_data.clear()
+	chunk_max_y.clear()
+	chunk_tints.clear()
+	mesh_queue.clear()
+	_populated.clear()
+	_last_player_chunk = Vector2i(1 << 20, 1 << 20)

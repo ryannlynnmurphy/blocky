@@ -46,11 +46,21 @@ and verified before the next starts. No system gets built "all at once."
       Each level adds +2 max health and fully heals. Gold XP bar with
       "Lv N", "Level N!" banner.
 
-## Next (in order)
+- [x] **M12 — Saving.** One JSON save (`user://save.json`): seed + block
+      edits (terrain regenerates, only the diff is stored), player
+      position/look/health/level/XP/inventory, time of day. Autosave
+      every 30 s, on window close, and F5. Loads on start; `--fresh` skips.
 
-- [ ] M12 — Saving: world edits, inventory and position survive a restart.
+## Next — pick a direction
 
-## Later (not yet)
+The original wish list is covered. Candidates, roughly in order of
+how much they'd change the feel of the game:
 
-Hostile creatures, tools/crafting, sound, greedy meshing / performance
-work, larger view distance.
+- [ ] Hostile creature at night: something that hunts you after dark,
+      giving the day/night cycle teeth.
+- [ ] Tools & crafting: a workbench, wooden/stone pickaxe, faster mining.
+- [ ] Sound: footsteps, hits, ambient wind, a simple music loop.
+- [ ] Performance: greedy meshing, larger view distance, threaded
+      chunk generation.
+- [ ] Water you can swim in, caves, ores.
+- [ ] Title screen with New Game / Continue and a seed box.

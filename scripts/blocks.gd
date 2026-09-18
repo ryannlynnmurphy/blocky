@@ -7,9 +7,15 @@ extends RefCounted
 ## No textures yet — every block is a flat colored cube, which is the
 ## chunky low-poly look we want.
 
-enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS }
+## IDs up to PLANKS are blocks that exist in the world. IDs after that
+## are items: things you can carry but not place (they share the same
+## inventory, so they share this list).
+enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, MEAT }
 
-const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks"]
+const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks", "Meat"]
+
+## Items (not blocks) worth listing on the HUD.
+const ITEMS := [MEAT]
 
 ## Blocks you can pick with keys 1-8 and place.
 const HOTBAR := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, PLANKS, SNOW]
@@ -24,6 +30,7 @@ const COLORS := {
 	LEAVES: [Color(0.28, 0.62, 0.26), Color(0.24, 0.55, 0.22), Color(0.20, 0.48, 0.20)],
 	SNOW:   [Color(0.96, 0.97, 1.00), Color(0.86, 0.90, 0.96), Color(0.80, 0.84, 0.90)],
 	PLANKS: [Color(0.78, 0.62, 0.38), Color(0.72, 0.56, 0.34), Color(0.65, 0.50, 0.30)],
+	MEAT:   [Color(0.88, 0.40, 0.42), Color(0.80, 0.32, 0.35), Color(0.70, 0.28, 0.30)],
 }
 
 

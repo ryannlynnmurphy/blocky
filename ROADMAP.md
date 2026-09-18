@@ -33,10 +33,13 @@ and verified before the next starts. No system gets built "all at once."
 - [x] **M8 — Inventory.** Breaking a block puts it in your inventory;
       placing spends one. Hotbar shows counts (`inventory.gd`).
 
+- [x] **M9 — Combat.** Left click punches a creature under the crosshair
+      within 3 blocks (else breaks a block). Creatures have 3 health,
+      flash red, get knocked back and flee; at 0 they die and leave a
+      Meat drop you walk over to collect (`drop.gd`).
+
 ## Next (in order)
 
-- [ ] M9 — Combat: a punch that hurts creatures; creatures have health,
-      flinch, and can die (and drop something).
 - [ ] M10 — Player stats: health bar, taking damage, respawn.
 - [ ] M11 — RPG progression: XP from creatures, levels raise health.
 - [ ] M12 — Saving: world edits, inventory and position survive a restart.

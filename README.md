@@ -24,7 +24,7 @@ godot --path .
 | Mouse | Look |
 | Space | Jump |
 | Shift | Run |
-| Left click | Break the highlighted block |
+| Left click | Punch a creature under the crosshair (within 3 blocks), otherwise break the highlighted block |
 | Right click | Place the selected block |
 | 1–8 | Pick which block to place (you must have one — break blocks to collect them) |
 | T (hold) | Fast-forward time (watch the sun set) |
@@ -38,8 +38,9 @@ Anything after `--` on the command line is for our scripts, not Godot:
 godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
 godot --path . -- --critter            put one animal right in front of you
-godot --path . -- --selftest --no-input   auto break + place a block, print inventory;
-                                          --no-input keeps your mouse out of recordings
+godot --path . -- --selftest --no-input   auto-run break/place and punch/kill/pickup,
+                                          printing results; --no-input keeps your
+                                          mouse out of recordings
 godot --headless --path . --script tools/biome_survey.gd   print a biome map
 ```
 
@@ -57,7 +58,8 @@ tools/               headless dev scripts (not part of the game)
 scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
 scripts/world.gd     owns all chunks, streams them around the player, get/set block,
                      spawns/despawns creatures
-scripts/creature.gd  critter brain: idle / wander, hop steps, avoid cliffs + water
+scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs + water
+scripts/drop.gd      a dropped item on the ground; walk into it to pick it up
 scripts/player.gd    movement, camera, aiming, break/place
 scripts/inventory.gd what you're carrying: a count per block ID
 scripts/day_night.gd sun/moon orbit, sky + light color over the day

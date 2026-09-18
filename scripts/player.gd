@@ -10,6 +10,11 @@ const JUMP_SPEED := 7.5
 const GRAVITY := 22.0
 const MOUSE_SENS := 0.0025
 const REACH := 6.0   # how far you can break/place, in blocks
+const PUNCH_RANGE := 3.0
+const PUNCH_DAMAGE := 1
+const PUNCH_COOLDOWN := 0.35
+
+var _punch_cooldown := 0.0
 
 var world: VoxelWorld
 var selected := 0    # index into Blocks.HOTBAR
@@ -88,7 +93,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			_break_block()
+			_attack_or_break()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_place_block()
 
@@ -101,6 +106,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_punch_cooldown = maxf(_punch_cooldown - delta, 0.0)
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif not _no_input and Input.is_action_just_pressed("jump"):
@@ -125,6 +131,39 @@ func _physics_process(delta: float) -> void:
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 12.0 * delta)
 
 	_update_highlight()
+
+
+# ---------------------------------------------------------------- combat
+
+## Left click: punch a creature if one is under the crosshair and close,
+## otherwise break the block.
+func _attack_or_break() -> void:
+	var target := _aim_creature()
+	if target != null:
+		if _punch_cooldown > 0.0:
+			return
+		_punch_cooldown = PUNCH_COOLDOWN
+		target.take_hit(PUNCH_DAMAGE, global_position)
+		return
+	_break_block()
+
+
+## The creature under the crosshair within punching range, or null.
+func _aim_creature() -> Creature:
+	var from := _camera.global_position
+	var to := from + (-_camera.global_basis.z) * (PUNCH_RANGE + _arm.spring_length)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [get_rid()]
+	query.collision_mask = 3   # blocks AND creatures, so walls shield them
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return null
+	var creature := hit.collider as Creature
+	if creature == null:
+		return null
+	if creature.global_position.distance_to(global_position) > PUNCH_RANGE + 0.5:
+		return null
+	return creature
 
 
 # ---------------------------------------------------------------- block editing

@@ -42,6 +42,7 @@ func _ready() -> void:
 	if "--selftest" in OS.get_cmdline_user_args():
 		var test: Node = load("res://tools/selftest.gd").new()
 		test.player = player
+		test.world = world
 		add_child(test)
 
 

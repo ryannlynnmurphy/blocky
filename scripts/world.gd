@@ -32,6 +32,7 @@ const COAT_COLORS := [
 	Color(0.92, 0.92, 0.95),   # Tundra: white
 ]
 var _creatures := Node3D.new()
+var _drops := Node3D.new()
 var _populated := {}   # Vector2i -> true once a chunk has rolled for animals
 
 
@@ -39,6 +40,8 @@ func _ready() -> void:
 	gen = WorldGen.new(world_seed)
 	_creatures.name = "Creatures"
 	add_child(_creatures)
+	_drops.name = "Drops"
+	add_child(_drops)
 
 
 func _process(_delta: float) -> void:
@@ -137,7 +140,7 @@ func update_chunks(pc: Vector2i) -> void:
 
 	# Animals that wandered (or were left) too far away are removed.
 	var despawn_dist := float((view_radius + 2) * SIZE)
-	for c in _creatures.get_children():
+	for c in _creatures.get_children() + _drops.get_children():
 		if c.global_position.distance_to(player.global_position) > despawn_dist:
 			c.queue_free()
 
@@ -205,3 +208,16 @@ func spawn_creature(wx: int, wz: int) -> Creature:
 
 func creature_count() -> int:
 	return _creatures.get_child_count()
+
+
+## Leaves an item on the ground at a world position.
+func spawn_drop(pos: Vector3, item_id: int) -> Drop:
+	var d := Drop.new()
+	d.item_id = item_id
+	_drops.add_child(d)
+	d.global_position = pos
+	return d
+
+
+func drop_count() -> int:
+	return _drops.get_child_count()

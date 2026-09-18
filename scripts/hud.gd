@@ -26,7 +26,7 @@ func _ready() -> void:
 	add_child(cross)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB break   RMB place   1-8 pick block   T fast-forward time   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   T fast-forward   Esc free mouse"
 	hint.position = Vector2(12, 8)
 	add_child(hint)
 
@@ -84,7 +84,14 @@ func _refresh_hotbar(selected: int) -> void:
 		if i == selected:
 			entry = "[ %s ]" % entry
 		parts.append(entry)
-	_hotbar_label.text = "    ".join(parts)
+	var text := "    ".join(parts)
+	# Items you carry but can't place go after a divider.
+	if _player != null:
+		for id in Blocks.ITEMS:
+			var n := _player.inventory.count(id)
+			if n > 0:
+				text += "    |    %s ×%d" % [Blocks.NAMES[id], n]
+	_hotbar_label.text = text
 
 
 func _make_label() -> Label:

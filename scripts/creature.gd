@@ -8,26 +8,32 @@ extends CharacterBody3D
 
 const GRAVITY := 22.0
 const WALK_SPEED := 2.0
+const FLEE_SPEED := 4.5
 const JUMP_SPEED := 6.5
+const MAX_HEALTH := 3
 
 var world: VoxelWorld
 var body_color := Color(0.85, 0.70, 0.50)
+var health := MAX_HEALTH
 
 var _wandering := false
 var _timer := 0.0
 var _dir := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
+var _flee_timer := 0.0
+var _flash_timer := 0.0
+var _knock := Vector3.ZERO   # push from being hit, fades out
+var _mat := StandardMaterial3D.new()
 
 @onready var _model: Node3D = $Model
 
 
 func _ready() -> void:
 	_rng.randomize()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = body_color
-	mat.roughness = 1.0
-	$Model/Body.material_override = mat
-	$Model/Head.material_override = mat
+	_mat.albedo_color = body_color
+	_mat.roughness = 1.0
+	$Model/Body.material_override = _mat
+	$Model/Head.material_override = _mat
 	_go_idle()
 
 
@@ -36,6 +42,12 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 
 	_timer -= delta
+	_flee_timer = maxf(_flee_timer - delta, 0.0)
+	if _flash_timer > 0.0:
+		_flash_timer -= delta
+		if _flash_timer <= 0.0:
+			_mat.albedo_color = body_color
+
 	if _timer <= 0.0:
 		if _wandering:
 			_go_idle()
@@ -45,8 +57,9 @@ func _physics_process(delta: float) -> void:
 	if _wandering:
 		if _path_blocked():
 			_go_wander()   # pick another direction
-		velocity.x = _dir.x * WALK_SPEED
-		velocity.z = _dir.z * WALK_SPEED
+		var speed := FLEE_SPEED if _flee_timer > 0.0 else WALK_SPEED
+		velocity.x = _dir.x * speed
+		velocity.z = _dir.z * speed
 		# Walked into a block? Hop.
 		if is_on_floor() and is_on_wall():
 			velocity.y = JUMP_SPEED
@@ -54,11 +67,40 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, 10.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 10.0 * delta)
 
+	velocity.x += _knock.x
+	velocity.z += _knock.z
+	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
+
 	move_and_slide()
 
 	if _wandering:
 		var target := atan2(-_dir.x, -_dir.z)
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 8.0 * delta)
+
+
+## Called by whatever hits us. `from` is where the hit came from.
+func take_hit(damage: int, from: Vector3) -> void:
+	health -= damage
+	var away := global_position - from
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
+	_knock = away * 6.0
+	velocity.y = 4.0            # a little hop
+	_mat.albedo_color = body_color.lerp(Color.RED, 0.7)
+	_flash_timer = 0.15
+	# Run away from the attacker.
+	_wandering = true
+	_dir = away
+	_flee_timer = 2.5
+	_timer = 2.5
+	if health <= 0:
+		_die()
+
+
+func _die() -> void:
+	if world != null:
+		world.spawn_drop(global_position, Blocks.MEAT)
+	queue_free()
 
 
 func _go_idle() -> void:

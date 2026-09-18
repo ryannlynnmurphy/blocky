@@ -25,7 +25,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS   # menus keep working while the game is paused
 
 	# ---- title ----
-	var t := _panel("BLOCKY", 72, Color(0, 0, 0, 0.35))
+	var t := _panel_with_logo(Color(0, 0, 0, 0.35))
 	_title = t[0]
 	var tv: VBoxContainer = t[1]
 	var sub := Label.new()
@@ -111,6 +111,35 @@ func set_volume_slider(v: float) -> void:
 ## A dimmed full-screen backdrop with a big title and a centred column
 ## for buttons. Returns [root control, the column].
 func _panel(title: String, title_size: int, dim: Color) -> Array:
+	var shell := _panel_shell(dim)
+	var label := Label.new()
+	label.text = title
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", title_size)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 3)
+	label.add_theme_constant_override("shadow_offset_y", 3)
+	var column: VBoxContainer = shell[1]
+	column.add_child(label)
+	column.add_child(_spacer(8))
+	return shell
+
+
+## Same as _panel(), but heads the column with the game's real logo
+## instead of a text title. Title-screen only.
+func _panel_with_logo(dim: Color) -> Array:
+	var shell := _panel_shell(dim)
+	var logo := TextureRect.new()
+	logo.texture = preload("res://blocky/textures/ui/logo.png")
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size = Vector2(336, 96)   # 2x the source art
+	var column: VBoxContainer = shell[1]
+	column.add_child(logo)
+	column.add_child(_spacer(8))
+	return shell
+
+
+func _panel_shell(dim: Color) -> Array:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
@@ -125,15 +154,6 @@ func _panel(title: String, title_size: int, dim: Color) -> Array:
 	column.add_theme_constant_override("separation", 12)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	centre.add_child(column)
-	var label := Label.new()
-	label.text = title
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", title_size)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("shadow_offset_x", 3)
-	label.add_theme_constant_override("shadow_offset_y", 3)
-	column.add_child(label)
-	column.add_child(_spacer(8))
 	return [root, column]
 
 

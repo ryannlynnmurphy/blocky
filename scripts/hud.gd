@@ -23,6 +23,14 @@ var _message_timer := 0.0
 ## A crosshair in the centre, with a small progress bar under it while
 ## you're breaking a block.
 class Crosshair extends Control:
+	const CROSSHAIR_TEX := preload("res://blocky/textures/ui/crosshair.png")
+	const BAR_TEX := preload("res://blocky/textures/ui/break_bar.png")
+	## break_bar.png is one 64x8 snapshot with both looks baked in at fixed
+	## pixel columns: 2..39 solid fill color, 40..63 the empty track (with
+	## its own border) — not a 0..1 template you can width-clip directly,
+	## so each piece is sourced separately and recomposed at any progress.
+	const BAR_TRACK_SRC := Rect2(40, 0, 24, 8)
+	const BAR_FILL_SRC := Rect2(2, 0, 38, 8)
 	var progress := 0.0
 
 	func _ready() -> void:
@@ -34,12 +42,12 @@ class Crosshair extends Control:
 
 	func _draw() -> void:
 		var c := size / 2.0
-		draw_line(c + Vector2(-8, 0), c + Vector2(8, 0), Color.WHITE, 2.0)
-		draw_line(c + Vector2(0, -8), c + Vector2(0, 8), Color.WHITE, 2.0)
+		draw_texture_rect(CROSSHAIR_TEX, Rect2(c - Vector2(15, 15), Vector2(30, 30)), false)
 		if progress > 0.0:
-			var bar := Rect2(c + Vector2(-30, 16), Vector2(60, 6))
-			draw_rect(bar, Color(0, 0, 0, 0.6))
-			draw_rect(Rect2(bar.position, Vector2(60 * progress, 6)), Color.WHITE)
+			var bar := Rect2(c + Vector2(-30, 16), Vector2(60, 8))
+			draw_texture_rect_region(BAR_TEX, bar, BAR_TRACK_SRC)
+			var fill := Rect2(bar.position, Vector2(60 * progress, 8))
+			draw_texture_rect_region(BAR_TEX, fill, BAR_FILL_SRC)
 
 
 ## A row of heart/drumstick-style icons, full/half/empty per icon, 2 points

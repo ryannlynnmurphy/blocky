@@ -68,41 +68,64 @@ taking damage flat-red-overlays the screen (not `hurt_vignette.png`),
 picking things up shows a magnet + text popup (not `pickup_spark.png`).
 Swapping in the real sprites is cosmetic, not new mechanics.
 
-## 6. UI — hearts/hunger/hotbar ✅ textured, rest still shapes
+## 6. UI — ✅ textured where the art actually fits; 4 assets skipped
 
-Health row (`heart_full/half/empty.png`) and hunger row
-(`drumstick_full/half/empty.png`) are `hud.gd`'s `IconBar` class, 2
-points per icon with a real half state. The hotbar draws
-`hotbar_slot.png` per slot (its border is baked into the texture's own
-edge shading) and `slot_selected.png` — a hollow-centre frame, drawn
-a bit oversized — over whichever slot is selected. `slot_frame.png`
-turned out to be fully opaque with no transparent hole at all (not a
-border despite the name), so it's unused for now; it likely belongs on
-the inventory/workbench grid instead, whenever that gets its pass.
+Health/hunger rows, hotbar frame, crosshair, break-progress bar, the
+title-screen logo, and the inventory/workbench slot backgrounds are
+all textured now:
 
-Still plain `_draw()` calls (rectangles, lines, `Label`s): the
-inventory/workbench panel, crosshair, break-progress bar, title/pause/
-death screens and buttons, the sound slider, and message text — vs the
-generated `inventory_panel.png` / `crosshair.png` / `break_bar.png` /
-`button*.png` / `sound_slider.png` / `message_text.png` / `logo.png`.
-Same deal as the hotbar was: low-risk, swap what a
-`draw_rect`/`draw_texture` call points at, no gameplay logic changes.
+- Health row (`heart_full/half/empty.png`) and hunger row
+  (`drumstick_full/half/empty.png`) are `hud.gd`'s `IconBar` class, 2
+  points per icon with a real half state.
+- The hotbar draws `hotbar_slot.png` per slot (its border is baked
+  into the texture's own edge shading) and `slot_selected.png` — a
+  hollow-centre frame, drawn a bit oversized — over the selected slot.
+- `Crosshair` draws `crosshair.png`; its break bar sources
+  `break_bar.png` in two pieces, since that texture is one 64×8
+  snapshot baked at a fixed ~60% fill (not a width-clippable
+  template) — the filled and empty segments are sourced separately
+  via `draw_texture_rect_region` and recomposed at any real progress.
+- The title screen shows `logo.png` instead of a "BLOCKY" text label
+  (pause/death keep plain text titles — only the game's own name is
+  constant enough to bake).
+- `inventory_ui.gd`'s `SlotView` backgrounds are `slot_frame.png`
+  (turns out that's exactly where it belongs — see below), with
+  `slot_selected.png` marking the result slot.
+
+**Deliberately skipped — checked by inspecting actual pixel data, not
+just filenames**, and confirmed with Ryann rather than guessed:
+- `button.png`/`button_hover.png`: literally say "PLAY" in the art.
+  Fine for one title-screen action, wrong under "Quit"/"Resume"/
+  "Save"/"Respawn"/"Quit to Title" — not worth it for a single button.
+- `sound_slider.png`: one snapshot, grabber + fill baked at a fixed
+  ~70% position, no separate track/grabber layers — can't represent a
+  real dynamic volume value.
+- `message_text.png`: baked with the example text "IRON PICKAXE", not
+  a blank backdrop.
+- `inventory_panel.png`: bakes in "INVENTORY"/"CRAFTING" headings and
+  a fixed-size grid that won't line up with our dynamically-sized slot
+  layout (2×2 vs 3×3 crafting, 27+9 inventory slots).
+
+These four are the reason `slot_frame.png` "unused for now" in an
+earlier version of this doc turned out to be wrong — it just wasn't
+the hotbar's frame, it's the inventory grid's.
 
 ## Suggested order by impact, updated
 
 1. ~~Block textures~~ ✅ done
 2. ~~Item icons~~ ✅ done
-3. ~~UI chrome, part 1 (hearts, hunger, hotbar frames)~~ ✅ done
-4. Rest of UI chrome (inventory/workbench panel, crosshair, break bar,
-   buttons, logo, sound slider, message text) — biggest visible jump
-   left
-5. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
-6. ~~Named wildlife/hostile GLBs~~ ✅ done (rabbit/deer/fox/boar/bird,
+3. ~~UI chrome~~ ✅ done (hearts/hunger/hotbar, then crosshair/break
+   bar/logo/inventory slots — buttons/slider/message/panel skipped,
+   see §6)
+4. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
+5. ~~Named wildlife/hostile GLBs~~ ✅ done (rabbit/deer/fox/boar/bird,
    goblin/wisp/witch) — wildlife no longer spawns the old box
    placeholder at all; the box "Shade" is now just one of four hostile
    skins, the other three (goblin/wisp/witch) textured
-7. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
+6. Environment props (trees/rocks/flowers/mushrooms/reeds) — pick
    voxel-vs-GLB for trees first
-8. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
+7. Water shoreline/mesh, sky textures, visible sun/moon/clouds, effect
    sprites
+8. Generic-label button/slider/message/panel art, if that ever gets
+   generated (see §6's skip list)
 </content>

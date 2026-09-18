@@ -129,18 +129,43 @@ and verified before the next starts. No system gets built "all at once."
       a border by name but is actually fully opaque edge-to-edge (no
       transparent hole), so layering it over every unselected slot as
       first written would have blanked out any item icon there — it's
-      not used for the hotbar. Crosshair/break-bar/buttons/logo/
-      inventory-panel/message-text/sound-slider still plain-drawn.
+      not used for the hotbar.
+- [x] **M24 — HUD chrome, part 2: crosshair, break bar, logo, inventory
+      slots.** `hud.gd`'s `Crosshair` now draws `crosshair.png`; its
+      break-progress bar sources `break_bar.png` in two pieces (it's
+      one 64x8 snapshot baked at a fixed ~60% fill, columns 2-39 solid
+      fill / 40-63 empty track — not a width-clippable 0..1 template —
+      so the track and fill segments are sourced separately via
+      `draw_texture_rect_region` and recomposed at any real progress).
+      The title screen swaps its "BLOCKY" text label for `logo.png`
+      (pause/death keep plain text titles). `inventory_ui.gd`'s
+      `SlotView` now uses `slot_frame.png` for its background (the
+      landing spot `slot_frame.png` turned out to actually fit — see
+      M23) and `slot_selected.png` to mark the result slot, replacing
+      the old flat-rect borders.
+      **Deliberately skipped, checked by inspecting actual pixel
+      data**: `button.png`/`button_hover.png` have the literal word
+      "PLAY" baked into them (fine for one title-screen action, wrong
+      under "Quit"/"Resume"/"Save"/etc, so not worth wiring for a
+      single button); `sound_slider.png` is one snapshot with the
+      grabber and fill baked at a fixed ~70%, no separate track/
+      grabber layers, so it can't represent a real dynamic volume
+      value; `message_text.png` is baked with the example text "IRON
+      PICKAXE", not a blank backdrop; `inventory_panel.png` bakes in
+      "INVENTORY"/"CRAFTING" headings and a fixed-size grid that won't
+      line up with our dynamically-sized slot layout (2x2 vs 3x3
+      crafting, 27+9 inventory slots). Ryann confirmed: skip all four
+      rather than force a mismatched fit.
 
 ## Next — pick a direction
 
 The original wish list is covered. Candidates, roughly in order of
 how much they'd change the feel of the game:
 
-- [ ] Rest of the UI chrome: crosshair, break bar, buttons, logo,
-      inventory/workbench panel frame, message text, sound slider
-      (see ART.md §6) — `slot_frame.png` most likely belongs on the
-      inventory grid, not the hotbar.
+- [ ] Generic-label button/slider/message/panel art, if that ever gets
+      generated — the current button/sound-slider/message-text/
+      inventory-panel assets bake in example content that doesn't fit
+      (see M24).
 - [ ] Environment props as GLBs (trees/rocks/flowers/reeds) — first
       needs a decision: keep voxel trees (minable, consistent) or
       switch to the nicer-silhouette GLB trees, or both by biome.

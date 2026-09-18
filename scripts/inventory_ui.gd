@@ -22,6 +22,8 @@ var _cursor_view: Control
 
 ## One slot. Draws its contents; clicks go to the screen.
 class SlotView extends Control:
+	const SLOT_TEX := preload("res://blocky/textures/ui/slot_frame.png")
+	const SELECTED_TEX := preload("res://blocky/textures/ui/slot_selected.png")
 	var inv: Inventory       # which container (null for the result slot)
 	var index := 0
 	var ui: InventoryUI
@@ -48,16 +50,19 @@ class SlotView extends Control:
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(r, Color(0.08, 0.08, 0.1, 0.85))
-		draw_rect(r, Color(0.9, 0.85, 0.5, 0.9) if is_result else Color(0, 0, 0, 0.6), false, 2.0)
+		draw_texture_rect(SLOT_TEX, r, false)
 		var id := shown_id()
-		if id == Blocks.AIR:
-			return
-		draw_texture_rect(Blocks.icon(id), r.grow(-9), false)
-		var n := shown_count()
-		if n > 1:
-			draw_string(ThemeDB.fallback_font, Vector2(0, size.y - 5), str(n),
-				HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, Color.WHITE)
+		if id != Blocks.AIR:
+			draw_texture_rect(Blocks.icon(id), r.grow(-9), false)
+			var n := shown_count()
+			if n > 1:
+				draw_string(ThemeDB.fallback_font, Vector2(0, size.y - 5), str(n),
+					HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, Color.WHITE)
+		# slot_selected.png is a hollow-centre frame (see the hotbar), safe
+		# to draw last; marks the result slot the same way the hotbar marks
+		# the selected one.
+		if is_result:
+			draw_texture_rect(SELECTED_TEX, r.grow(3), false)
 
 
 ## Draws the stack you're carrying, following the mouse, above everything.

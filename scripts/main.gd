@@ -59,6 +59,11 @@ func _ready() -> void:
 	# We save on close, so ask Godot not to quit on its own.
 	get_tree().set_auto_accept_quit(false)
 
+	# Testing aid: `-- --look=3.14,-0.3` points the camera (yaw, pitch in radians).
+	for arg in args:
+		if arg.begins_with("--look="):
+			var yp := arg.get_slice("=", 1).split(",")
+			player.set_look(float(yp[0]), float(yp[1]))
 	# Testing aid: `-- --critter` puts one animal right in front of you.
 	if "--critter" in args:
 		world.spawn_creature(sx, sz - 3)

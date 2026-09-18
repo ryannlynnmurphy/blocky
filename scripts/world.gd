@@ -20,9 +20,25 @@ var player: Node3D
 
 var _last_player_chunk := Vector2i(1 << 20, 1 << 20)
 
+# ---- creatures ----
+const MAX_CREATURES := 40
+const CREATURE_SCENE := preload("res://scenes/creature.tscn")
+## Chance that a freshly built chunk gets a group of animals, per biome.
+const SPAWN_CHANCE := [0.35, 0.25, 0.08, 0.2]   # Plains, Forest, Desert, Tundra
+const COAT_COLORS := [
+	Color(0.85, 0.70, 0.50),   # Plains: tan
+	Color(0.55, 0.38, 0.25),   # Forest: brown
+	Color(0.90, 0.80, 0.55),   # Desert: sandy
+	Color(0.92, 0.92, 0.95),   # Tundra: white
+]
+var _creatures := Node3D.new()
+var _populated := {}   # Vector2i -> true once a chunk has rolled for animals
+
 
 func _ready() -> void:
 	gen = WorldGen.new(world_seed)
+	_creatures.name = "Creatures"
+	add_child(_creatures)
 
 
 func _process(_delta: float) -> void:
@@ -40,6 +56,10 @@ func _process(_delta: float) -> void:
 		if chunks.has(cpos) and chunks[cpos].dirty:
 			chunks[cpos].build_mesh()
 			budget -= 1
+			# Only now is there ground to stand on, so spawn animals here.
+			if not _populated.has(cpos):
+				_populated[cpos] = true
+				_populate_chunk(cpos)
 
 
 # ---------------------------------------------------------------- lookups
@@ -113,6 +133,13 @@ func update_chunks(pc: Vector2i) -> void:
 		if max(d.x, d.y) > view_radius + 2:
 			chunks[cpos].queue_free()
 			chunks.erase(cpos)
+			_populated.erase(cpos)   # animals may return when you come back
+
+	# Animals that wandered (or were left) too far away are removed.
+	var despawn_dist := float((view_radius + 2) * SIZE)
+	for c in _creatures.get_children():
+		if c.global_position.distance_to(player.global_position) > despawn_dist:
+			c.queue_free()
 
 	var wanted: Array[Vector2i] = []
 	for dz in range(-view_radius, view_radius + 1):
@@ -143,3 +170,38 @@ func _rebuild_now(cpos: Vector2i) -> void:
 
 func build_chunk_now(cpos: Vector2i) -> void:
 	_rebuild_now(cpos)
+
+
+# ---------------------------------------------------------------- creatures
+
+## Rolls the dice for a small group of animals in a chunk.
+func _populate_chunk(cpos: Vector2i) -> void:
+	var biome := gen.biome_at(cpos.x * SIZE + 8, cpos.y * SIZE + 8)
+	if randf() > SPAWN_CHANCE[biome]:
+		return
+	for i in randi_range(1, 3):
+		var wx := cpos.x * SIZE + randi_range(0, SIZE - 1)
+		var wz := cpos.y * SIZE + randi_range(0, SIZE - 1)
+		spawn_creature(wx, wz)
+
+
+## Puts one animal on the ground at world column (wx, wz), if there's
+## room. Returns it, or null.
+func spawn_creature(wx: int, wz: int) -> Creature:
+	if _creatures.get_child_count() >= MAX_CREATURES:
+		return null
+	var h := gen.height_at(wx, wz)
+	if h <= WorldGen.SEA_LEVEL + 1:
+		return null   # beach or under water
+	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
+		return null   # something (a tree?) is in the way
+	var c: Creature = CREATURE_SCENE.instantiate()
+	c.world = self
+	c.body_color = COAT_COLORS[gen.biome_at(wx, wz)]
+	_creatures.add_child(c)
+	c.global_position = Vector3(wx + 0.5, h + 1.5, wz + 0.5)
+	return c
+
+
+func creature_count() -> int:
+	return _creatures.get_child_count()

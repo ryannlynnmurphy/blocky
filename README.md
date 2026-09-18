@@ -37,6 +37,7 @@ Anything after `--` on the command line is for our scripts, not Godot:
 ```
 godot --path . -- --day-length=5       a day lasts 5 seconds instead of 10 minutes
 godot --path . -- --spawn=-300,-20     spawn at that x,z column
+godot --path . -- --critter            put one animal right in front of you
 godot --headless --path . --script tools/biome_survey.gd   print a biome map
 ```
 
@@ -46,16 +47,26 @@ godot --headless --path . --script tools/biome_survey.gd   print a biome map
 project.godot        engine settings (window size, main scene, crisp-pixel rendering)
 scenes/main.tscn     the level: sky, sun, world, water, player, HUD
 scenes/player.tscn   the character's body, collision capsule and camera rig
+scenes/creature.tscn a critter's body and collision box
 scripts/main.gd      wires everything together, picks a spawn point
 scripts/blocks.gd    block registry: IDs, names, colors
 scripts/world_gen.gd noise terrain, biomes, grass tint, trees -> fills a chunk
 tools/               headless dev scripts (not part of the game)
 scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
-scripts/world.gd     owns all chunks, streams them around the player, get/set block
+scripts/world.gd     owns all chunks, streams them around the player, get/set block,
+                     spawns/despawns creatures
+scripts/creature.gd  critter brain: idle / wander, hop steps, avoid cliffs + water
 scripts/player.gd    movement, camera, aiming, break/place
 scripts/day_night.gd sun/moon orbit, sky + light color over the day
 scripts/hud.gd       crosshair, hotbar, clock, hints
 ```
+
+## Physics layers
+
+| Layer | Who | Notes |
+|-------|-----|-------|
+| 1 | terrain chunks | camera arm and block-aiming rays only look here |
+| 2 | creatures | player collides with 1+2, creatures with 1+2 |
 
 ## How the world is stored
 

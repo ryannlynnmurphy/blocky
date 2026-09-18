@@ -119,6 +119,7 @@ func _aim_ray() -> Dictionary:
 	var to := from + (-_camera.global_basis.z) * (REACH + _arm.spring_length)
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [get_rid()]
+	query.collision_mask = 1   # blocks only; creatures live on layer 2
 	return get_world_3d().direct_space_state.intersect_ray(query)
 
 

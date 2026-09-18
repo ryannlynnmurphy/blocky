@@ -35,6 +35,10 @@ func _ready() -> void:
 	world.update_chunks(pc)
 	world.build_chunk_now(pc)
 
+	# Testing aid: `-- --critter` puts one animal right in front of you.
+	if "--critter" in OS.get_cmdline_user_args():
+		world.spawn_creature(sx, sz - 3)
+
 
 func _process(_delta: float) -> void:
 	# The water is one big flat plane that follows the player.

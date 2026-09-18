@@ -1,0 +1,71 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/creature.gd" id="1_creature"]
+
+[sub_resource type="BoxShape3D" id="shape"]
+size = Vector3(0.6, 0.8, 1.0)
+
+[sub_resource type="BoxMesh" id="body_mesh"]
+size = Vector3(0.6, 0.5, 0.9)
+
+[sub_resource type="BoxMesh" id="head_mesh"]
+size = Vector3(0.36, 0.34, 0.36)
+
+[sub_resource type="BoxMesh" id="leg_mesh"]
+size = Vector3(0.18, 0.3, 0.18)
+
+[sub_resource type="BoxMesh" id="eye_mesh"]
+size = Vector3(0.07, 0.07, 0.02)
+
+[sub_resource type="StandardMaterial3D" id="mat_dark"]
+albedo_color = Color(0.2, 0.15, 0.12, 1)
+roughness = 1.0
+
+[node name="Creature" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_creature")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("shape")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("body_mesh")
+
+[node name="Head" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, -0.55)
+mesh = SubResource("head_mesh")
+
+[node name="EyeL" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.09, 0.76, -0.74)
+mesh = SubResource("eye_mesh")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="EyeR" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, 0.76, -0.74)
+mesh = SubResource("eye_mesh")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="LegFL" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.15, -0.3)
+mesh = SubResource("leg_mesh")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="LegFR" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.15, -0.3)
+mesh = SubResource("leg_mesh")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="LegBL" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.15, 0.3)
+mesh = SubResource("leg_mesh")
+surface_material_override/0 = SubResource("mat_dark")
+
+[node name="LegBR" type="MeshInstance3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.15, 0.3)
+mesh = SubResource("leg_mesh")
+surface_material_override/0 = SubResource("mat_dark")

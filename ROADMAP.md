@@ -25,9 +25,13 @@ and verified before the next starts. No system gets built "all at once."
       grass and leaves smoothly across the map. HUD shows the biome.
       Trees are decided per world column so they cross chunk edges.
 
+- [x] **M7 — First creature.** A boxy four-legged critter that idles and
+      wanders, hops 1-block steps, avoids cliffs and water. Spawns in
+      small groups per chunk with a biome-colored coat; despawns when far
+      (`creature.gd`, spawner in `world.gd`).
+
 ## Next (in order)
 
-- [ ] M7 — First creature: a wandering animal you can bump into.
 - [ ] M8 — Inventory: breaking a block gives you that block; placing
       spends it.
 

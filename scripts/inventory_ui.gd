@@ -8,10 +8,12 @@ const COLUMNS := 9
 const MIN_SLOTS := 18
 
 var player: Player
+var bench_mode := false   # opened from a Workbench: tool recipes available
 
 var _grid: GridContainer
+var _title: Label
 var _bench_label: Label
-var _rows := []   # [recipe, button, [ingredient icons], result icon] per recipe
+var _rows := []   # [recipe, row, button, [ingredient icons], result icon] per recipe
 
 
 ## One inventory slot: a coloured square for the item, count in the
@@ -63,7 +65,8 @@ func _ready() -> void:
 	vbox.add_theme_constant_override("separation", 8)
 	add_child(vbox)
 
-	vbox.add_child(_heading("Inventory"))
+	_title = _heading("Inventory")
+	vbox.add_child(_title)
 	_grid = GridContainer.new()
 	_grid.columns = COLUMNS
 	_grid.add_theme_constant_override("h_separation", 4)
@@ -95,7 +98,7 @@ func _ready() -> void:
 		row.add_child(result)
 		var name := Label.new()
 		var out_id: int = recipe["out"].keys()[0]
-		name.text = "  %s" % Blocks.NAMES[out_id] + ("   (workbench)" if recipe["bench"] else "")
+		name.text = "  %s" % Blocks.NAMES[out_id]
 		name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name)
 		var button := Button.new()
@@ -104,10 +107,10 @@ func _ready() -> void:
 		button.pressed.connect(_on_craft.bind(recipe))
 		row.add_child(button)
 		vbox.add_child(row)
-		_rows.append([recipe, button, icons, result])
+		_rows.append([recipe, row, button, icons, result])
 
 	var hint := Label.new()
-	hint.text = "Hover a slot for its name.   Tab or Esc to close."
+	hint.text = "Hover a slot for its name.   Esc to close."
 	hint.modulate = Color(1, 1, 1, 0.7)
 	vbox.add_child(hint)
 
@@ -117,7 +120,8 @@ func bind_player(p: Player) -> void:
 	p.inventory.changed.connect(func(): if visible: refresh())
 
 
-func open() -> void:
+func open(at_bench: bool = false) -> void:
+	bench_mode = at_bench
 	visible = true
 	refresh()
 
@@ -142,25 +146,28 @@ func refresh() -> void:
 	for i in range(shown, pad):
 		_grid.add_child(SlotIcon.new())
 
-	# Crafting rows.
-	var near_bench := player.near_workbench()
-	_bench_label.text = "Workbench nearby" if near_bench else "No workbench nearby"
-	_bench_label.modulate = Color(0.6, 1, 0.6) if near_bench else Color(1, 1, 1, 0.5)
+	# Crafting rows. At a Workbench every recipe shows; from your pockets
+	# (Tab) only the simple ones do.
+	_title.text = "Workbench" if bench_mode else "Inventory"
+	_bench_label.text = "" if bench_mode else "Right-click a Workbench for tools"
+	_bench_label.modulate = Color(1, 1, 1, 0.6)
 	for row in _rows:
 		var recipe: Dictionary = row[0]
-		var button: Button = row[1]
-		for pair in row[2]:
+		var row_control: Control = row[1]
+		var button: Button = row[2]
+		row_control.visible = bench_mode or not recipe["bench"]
+		for pair in row[3]:
 			var id: int = pair[0]
 			var icon: SlotIcon = pair[1]
 			icon.set_item(id, player.inventory.count(id), recipe["in"][id])
 		var out_id: int = recipe["out"].keys()[0]
-		var result: SlotIcon = row[3]
+		var result: SlotIcon = row[4]
 		result.set_item(out_id, recipe["out"][out_id])
-		button.disabled = not Recipes.can_craft(player.inventory, recipe, near_bench)
+		button.disabled = not Recipes.can_craft(player.inventory, recipe, bench_mode)
 
 
 func _on_craft(recipe: Dictionary) -> void:
-	if Recipes.can_craft(player.inventory, recipe, player.near_workbench()):
+	if Recipes.can_craft(player.inventory, recipe, bench_mode):
 		Recipes.craft(player.inventory, recipe)
 	refresh()
 

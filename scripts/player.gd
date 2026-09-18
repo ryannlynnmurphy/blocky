@@ -10,6 +10,7 @@ signal xp_changed(xp: int, xp_needed: int, level: int)
 signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
+signal workbench_used   # right-clicked a Workbench block
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -502,15 +503,6 @@ func drops_when_broken(id: int) -> bool:
 	return best_tool(need[0])[1] >= need[1]
 
 
-## Is there a Workbench block within 3 blocks?
-func near_workbench() -> bool:
-	var c := Vector3i(global_position.floor())
-	for dy in range(-2, 3):
-		for dz in range(-3, 4):
-			for dx in range(-3, 4):
-				if world.get_block(c.x + dx, c.y + dy, c.z + dz) == Blocks.WORKBENCH:
-					return true
-	return false
 
 
 func _reset_breaking() -> void:
@@ -583,6 +575,11 @@ func _break_block() -> void:
 func _place_block() -> void:
 	var hit := _aim_ray()
 	if hit.is_empty():
+		return
+	# Right-clicking a Workbench opens it instead of building on it.
+	var target := Vector3i((hit.position - hit.normal * 0.5).floor())
+	if world.get_block(target.x, target.y, target.z) == Blocks.WORKBENCH:
+		workbench_used.emit()
 		return
 	# Step half a block OUT of the face we hit to land in the empty neighbour.
 	var block := Vector3i((hit.position + hit.normal * 0.5).floor())

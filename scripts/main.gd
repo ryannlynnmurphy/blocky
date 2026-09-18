@@ -7,7 +7,7 @@ const SAVE_PATH := "user://save.json"
 const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
 
-enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY }
+enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -94,6 +94,9 @@ func _ready() -> void:
 	player.died.connect(func():
 		if state == State.PLAYING:
 			_enter(State.DEAD))
+	player.workbench_used.connect(func():
+		if state == State.PLAYING:
+			_enter(State.WORKBENCH))
 	_load_settings()
 
 	# We save on close, so ask Godot not to quit on its own.
@@ -130,7 +133,7 @@ func _process(delta: float) -> void:
 	water.global_position.x = player.global_position.x
 	water.global_position.z = player.global_position.z
 
-	if state != State.PLAYING and state != State.INVENTORY:
+	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH]:
 		return
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_SECONDS:
@@ -160,7 +163,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		State.PAUSED:
 			if key == KEY_ESCAPE:
 				_enter(State.PLAYING)
-		State.INVENTORY:
+		State.INVENTORY, State.WORKBENCH:
 			if key == KEY_ESCAPE or key == KEY_TAB:
 				_enter(State.PLAYING)
 
@@ -189,6 +192,8 @@ func _enter(s: State) -> void:
 			screens.show_death()
 		State.INVENTORY:
 			hud.set_inventory_open(true)
+		State.WORKBENCH:
+			hud.set_inventory_open(true, true)
 	var playing := s == State.PLAYING
 	hud.visible = s != State.TITLE
 	player.ui_open = not playing

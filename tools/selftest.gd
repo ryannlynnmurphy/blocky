@@ -193,17 +193,20 @@ func _physics_process(_delta: float) -> void:
 			Recipes.craft(inv, r_bench)
 			print("selftest: stone by hand: x%.1f, drops: %s (expect 1.0, false)"
 				% [player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
-			print("selftest: pickaxe craftable far from a bench: %s (expect false)"
-				% Recipes.can_craft(inv, r_pick, player.near_workbench()))
-			# Put a workbench block down next to the player and try again.
-			var c := Vector3i(player.global_position.floor())
-			world.set_block(c.x + 2, c.y, c.z, Blocks.WORKBENCH)
-			print("selftest: near workbench now: %s" % player.near_workbench())
-			if Recipes.can_craft(inv, r_pick, player.near_workbench()):
+			print("selftest: pickaxe craftable from pockets: %s (expect false)"
+				% Recipes.can_craft(inv, r_pick, false))
+			# Put a Workbench block where the crosshair points, then right-click it.
+			player.set_look(0.0, -0.6)
+			var hit := player._aim_ray()
+			var spot := Vector3i((hit.position + hit.normal * 0.5).floor())
+			world.set_block(spot.x, spot.y, spot.z, Blocks.WORKBENCH)
+			player._place_block()   # right-click on the bench: should open it, not build
+			print("selftest: right-clicked workbench: screen is workbench: %s, block still there: %s"
+				% [main.state == main.State.WORKBENCH, world.get_block(spot.x, spot.y, spot.z) == Blocks.WORKBENCH])
+			if Recipes.can_craft(inv, r_pick, main.state == main.State.WORKBENCH):
 				Recipes.craft(inv, r_pick)
 			print("selftest: after pickaxe: %s | stone x%.1f, drops: %s (expect 2.5, true)"
 				% [inv.summary(), player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
-			main.set_inventory_open(true)   # show the screen for the recording
 		480:
 			main.set_inventory_open(false)
 		490:

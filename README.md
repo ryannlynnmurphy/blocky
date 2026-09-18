@@ -35,7 +35,7 @@ whether the world is frozen, and whether the mouse is captured.
 | Shift | Run |
 | Left click | Punch a creature under the crosshair (within 3 blocks) |
 | Left click (hold) | Break the highlighted block — leaves take 0.25 s, dirt 0.5 s, stone 1.5 s. It pops out as an item that flies to you when you're close |
-| Right click | Place the selected block |
+| Right click | Place the selected block — or open a Workbench you're pointing at |
 | 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
 | E | Eat one Meat (+4 hunger) |
 | Tab | Inventory and crafting screen (Esc or Tab closes) |
@@ -65,16 +65,18 @@ Dig in or build walls until "Dawn." appears.
 
 ## Crafting and tools
 
-Press Tab. Recipes are a list, not a grid:
+Tab opens your pockets: simple recipes only. Place a Workbench (hotbar
+slot 9) and **right-click it** to open the Workbench screen, where the
+tool recipes live.
 
 | Ingredients | Result | Where |
 |---|---|---|
-| 1 Log | 4 Planks | anywhere |
-| 2 Planks | 4 Sticks | anywhere |
-| 4 Planks | 1 Workbench (hotbar slot 9, place it) | anywhere |
-| 3 Planks + 2 Sticks | Wooden Pickaxe / Wooden Axe | within 3 blocks of a Workbench |
-| 3 Stone + 2 Sticks | Stone Pickaxe / Stone Axe | within 3 blocks of a Workbench |
-| 3 Iron + 2 Sticks | Iron Pickaxe / Iron Axe | within 3 blocks of a Workbench |
+| 1 Log | 4 Planks | pockets (Tab) |
+| 2 Planks | 4 Sticks | pockets (Tab) |
+| 4 Planks | 1 Workbench | pockets (Tab) |
+| 3 Planks + 2 Sticks | Wooden Pickaxe / Wooden Axe | Workbench |
+| 3 Stone + 2 Sticks | Stone Pickaxe / Stone Axe | Workbench |
+| 3 Iron + 2 Sticks | Iron Pickaxe / Iron Axe | Workbench |
 
 Tools aren't equipped — owning one is enough. A pickaxe speeds up stone
 and ores (wood ×2.5, stone ×4, iron ×6); an axe speeds up logs, planks

@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 
@@ -23,6 +23,12 @@ size = Vector3(0.5, 0.4, 0.26)
 
 [sub_resource type="BoxMesh" id="leg_mesh"]
 size = Vector3(0.2, 0.54, 0.24)
+
+[sub_resource type="BoxMesh" id="sleeve_mesh"]
+size = Vector3(0.14, 0.28, 0.14)
+
+[sub_resource type="BoxMesh" id="hand_mesh"]
+size = Vector3(0.14, 0.12, 0.14)
 
 [sub_resource type="BoxMesh" id="highlight_mesh"]
 size = Vector3(1.02, 1.02, 1.02)
@@ -96,13 +102,45 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.74, 0)
 mesh = SubResource("torso_mesh")
 surface_material_override/0 = SubResource("mat_shirt")
 
-[node name="LegL" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.27, 0)
+[node name="ArmL" type="Node3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32, 0.92, 0)
+
+[node name="Sleeve" type="MeshInstance3D" parent="Model/ArmL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.14, 0)
+mesh = SubResource("sleeve_mesh")
+surface_material_override/0 = SubResource("mat_shirt")
+
+[node name="Hand" type="MeshInstance3D" parent="Model/ArmL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.34, 0)
+mesh = SubResource("hand_mesh")
+surface_material_override/0 = SubResource("mat_skin")
+
+[node name="ArmR" type="Node3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, 0.92, 0)
+
+[node name="Sleeve" type="MeshInstance3D" parent="Model/ArmR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.14, 0)
+mesh = SubResource("sleeve_mesh")
+surface_material_override/0 = SubResource("mat_shirt")
+
+[node name="Hand" type="MeshInstance3D" parent="Model/ArmR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.34, 0)
+mesh = SubResource("hand_mesh")
+surface_material_override/0 = SubResource("mat_skin")
+
+[node name="LegL" type="Node3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.12, 0.54, 0)
+
+[node name="Leg" type="MeshInstance3D" parent="Model/LegL"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.27, 0)
 mesh = SubResource("leg_mesh")
 surface_material_override/0 = SubResource("mat_pants")
 
-[node name="LegR" type="MeshInstance3D" parent="Model"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.27, 0)
+[node name="LegR" type="Node3D" parent="Model"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.12, 0.54, 0)
+
+[node name="Leg" type="MeshInstance3D" parent="Model/LegR"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.27, 0)
 mesh = SubResource("leg_mesh")
 surface_material_override/0 = SubResource("mat_pants")
 

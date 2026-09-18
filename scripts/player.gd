@@ -47,6 +47,13 @@ var _no_input := false   # dev: ignore mouse/keys so recordings are repeatable
 @onready var _camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
 @onready var _model: Node3D = $Model
 @onready var _highlight: MeshInstance3D = $Highlight
+@onready var _arm_l: Node3D = $Model/ArmL
+@onready var _arm_r: Node3D = $Model/ArmR
+@onready var _leg_l: Node3D = $Model/LegL
+@onready var _leg_r: Node3D = $Model/LegR
+
+var _walk_cycle := 0.0    # advances while walking; drives the limb swing
+var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
 
 
 func _ready() -> void:
@@ -151,7 +158,26 @@ func _physics_process(delta: float) -> void:
 		var target := atan2(-dir.x, -dir.z)
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 12.0 * delta)
 
+	_animate_limbs(delta, dir.length() > 0.1 and is_on_floor(), speed)
 	_update_highlight()
+
+
+## Swings arms and legs while walking; throws the right arm on a punch.
+## Limb pivots sit at the shoulder/hip, and a positive X rotation moves
+## the hand or foot forward (toward the model's -Z).
+func _animate_limbs(delta: float, walking: bool, speed: float) -> void:
+	if walking:
+		_walk_cycle += delta * speed * 2.2
+	var swing := sin(_walk_cycle) * 0.7 if walking else 0.0
+	var k := 12.0 * delta
+	_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, swing, k)
+	_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, -swing, k)
+	_leg_r.rotation.x = lerp_angle(_leg_r.rotation.x, swing, k)
+	if _punch_timer > 0.0:
+		_punch_timer -= delta
+		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, 1.5, 30.0 * delta)
+	else:
+		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, -swing, k)
 
 
 # ---------------------------------------------------------------- health
@@ -267,6 +293,7 @@ func gain_xp(amount: int) -> void:
 ## Left click: punch a creature if one is under the crosshair and close,
 ## otherwise break the block.
 func _attack_or_break() -> void:
+	_punch_timer = 0.25   # arm swing, whatever we hit
 	var target := _aim_creature()
 	if target != null:
 		if _punch_cooldown > 0.0:

@@ -1,11 +1,13 @@
 extends CanvasLayer
-## On-screen overlay: crosshair, hotbar, and control hints.
+## On-screen overlay: crosshair, hotbar, health/hunger/XP bars, messages.
+## Everything is drawn with _draw() calls — no image files — to keep the
+## same chunky look as the world.
 
-var _hotbar_label: Label
 var _clock_label: Label
 var _message_label: Label
-var _health_bar: HealthBar
-var _xp_bar: XpBar
+var _health_bar: SquareBar
+var _hunger_bar: SquareBar
+var _hotbar: HotbarView
 var _damage_flash: ColorRect
 var _day_night: DayNight
 var _world: VoxelWorld
@@ -24,58 +26,93 @@ class Crosshair extends Control:
 		draw_line(c + Vector2(0, -8), c + Vector2(0, 8), Color.WHITE, 2.0)
 
 
-## A row of chunky squares: red = health you have, dark = health you lost.
-class HealthBar extends Control:
+## A row of chunky squares: filled = what you have, dark = what you lost.
+## Grows leftward from centre (side = -1) or rightward (side = +1).
+class SquareBar extends Control:
 	const CELL := 18.0
 	const GAP := 4.0
-	var health := 10
-	var max_health := 10
+	var value := 10
+	var max_value := 10
+	var color := Color(0.9, 0.2, 0.25)
+	var side := -1
 
 	func _ready() -> void:
 		resized.connect(queue_redraw)
 
-	func set_health(h: int, m: int) -> void:
-		health = h
-		max_health = m
+	func set_value(v: int, m: int) -> void:
+		value = v
+		max_value = m
 		queue_redraw()
 
 	func _draw() -> void:
-		var total := max_health * CELL + (max_health - 1) * GAP
-		var x0 := (size.x - total) / 2.0
-		for i in max_health:
-			var r := Rect2(x0 + i * (CELL + GAP), 0, CELL, CELL)
-			var col := Color(0.9, 0.2, 0.25) if i < health else Color(0.1, 0.1, 0.12, 0.6)
+		var total := max_value * CELL + (max_value - 1) * GAP
+		var x0 := size.x / 2.0 - 10.0 - total if side < 0 else size.x / 2.0 + 10.0
+		for i in max_value:
+			# Right-growing bars fill from the left; left-growing from the right.
+			var slot := i if side > 0 else max_value - 1 - i
+			var r := Rect2(x0 + slot * (CELL + GAP), 0, CELL, CELL)
+			var col := color if i < value else Color(0.1, 0.1, 0.12, 0.6)
 			draw_rect(r, col)
 			draw_rect(r, Color(0, 0, 0, 0.5), false, 2.0)
 
 
-## A thin gold bar showing progress to the next level, with "Lv N" beside it.
-class XpBar extends Control:
-	const WIDTH := 240.0
-	const HEIGHT := 8.0
-	var xp := 0
-	var xp_needed := 10
-	var level := 1
+## The hotbar: one square per placeable block in its own colour, with the
+## count in the corner; the selected slot is outlined. Items you can carry
+## but not place (meat) get their own slots to the right.
+class HotbarView extends Control:
+	const SLOT := 44.0
+	const GAP := 6.0
+	var counts: Array[int] = []
+	var item_counts := {}
+	var selected := 0
 
 	func _ready() -> void:
 		resized.connect(queue_redraw)
 
-	func set_xp(x: int, needed: int, lv: int) -> void:
-		xp = x
-		xp_needed = needed
-		level = lv
+	func refresh(player: Player) -> void:
+		counts.clear()
+		for id in Blocks.HOTBAR:
+			counts.append(player.inventory.count(id))
+		item_counts.clear()
+		for id in Blocks.ITEMS:
+			item_counts[id] = player.inventory.count(id)
+		selected = player.selected
 		queue_redraw()
 
 	func _draw() -> void:
-		var x0 := (size.x - WIDTH) / 2.0
-		var bg := Rect2(x0, 0, WIDTH, HEIGHT)
-		draw_rect(bg, Color(0.1, 0.1, 0.12, 0.6))
-		var frac := clampf(float(xp) / float(xp_needed), 0.0, 1.0)
-		draw_rect(Rect2(x0, 0, WIDTH * frac, HEIGHT), Color(0.95, 0.78, 0.2))
-		draw_rect(bg, Color(0, 0, 0, 0.5), false, 2.0)
 		var font := ThemeDB.fallback_font
-		draw_string(font, Vector2(x0 - 44, HEIGHT + 4), "Lv %d" % level,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+		var n := Blocks.HOTBAR.size()
+		var total := n * SLOT + (n - 1) * GAP
+		var x0 := (size.x - total) / 2.0
+		for i in n:
+			var id: int = Blocks.HOTBAR[i]
+			var count: int = counts[i] if i < counts.size() else 0
+			_draw_slot(font, Rect2(x0 + i * (SLOT + GAP), 0, SLOT, SLOT),
+				Blocks.face_color(id, 2), count, str(i + 1), i == selected)
+		# Items, after a gap.
+		var x := x0 + total + 18.0
+		for id in Blocks.ITEMS:
+			var count: int = item_counts.get(id, 0)
+			if count > 0:
+				_draw_slot(font, Rect2(x, 0, SLOT, SLOT), Blocks.face_color(id, 1), count,
+					"E", false)
+				x += SLOT + GAP
+
+	func _draw_slot(font: Font, r: Rect2, color: Color, count: int, label: String,
+			is_selected: bool) -> void:
+		draw_rect(r, Color(0.08, 0.08, 0.1, 0.75))
+		if count == 0:
+			color.a = 0.3   # dimmed: you don't have any
+		draw_rect(r.grow(-8), color)
+		if is_selected:
+			draw_rect(r, Color.WHITE, false, 3.0)
+		else:
+			draw_rect(r, Color(0, 0, 0, 0.6), false, 2.0)
+		draw_string(font, r.position + Vector2(4, 12), label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.85, 0.85))
+		if count > 0:
+			draw_string(font, r.position + Vector2(0, SLOT - 5), str(count),
+				HORIZONTAL_ALIGNMENT_RIGHT, SLOT - 4, 14, Color.WHITE)
 
 
 func _ready() -> void:
@@ -91,19 +128,18 @@ func _ready() -> void:
 	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(cross)
 
-	_health_bar = HealthBar.new()
-	_health_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_health_bar.offset_top = -74
-	_health_bar.offset_bottom = -56
-	_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_health_bar)
+	# Bottom stack, from the bottom up: hotbar, then health + hunger row.
+	_hotbar = HotbarView.new()
+	_add_bottom_wide(_hotbar, -58, -14)
 
-	_xp_bar = XpBar.new()
-	_xp_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_xp_bar.offset_top = -90
-	_xp_bar.offset_bottom = -82
-	_xp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_xp_bar)
+	_health_bar = SquareBar.new()
+	_health_bar.side = -1
+	_add_bottom_wide(_health_bar, -84, -66)
+
+	_hunger_bar = SquareBar.new()
+	_hunger_bar.side = 1
+	_hunger_bar.color = Color(0.95, 0.6, 0.2)
+	_add_bottom_wide(_hunger_bar, -84, -66)
 
 	_message_label = _make_label()
 	_message_label.add_theme_font_size_override("font_size", 48)
@@ -114,7 +150,7 @@ func _ready() -> void:
 	add_child(_message_label)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 pick block   E eat   F5 save   T fast-forward   Esc free mouse"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / break   RMB place   1-8 / wheel pick block   E eat   F5 save   T fast-forward   Esc free mouse"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.position = Vector2(12, 10)
 	add_child(hint)
@@ -128,27 +164,26 @@ func _ready() -> void:
 	_clock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	add_child(_clock_label)
 
-	_hotbar_label = _make_label()
-	_hotbar_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_hotbar_label.offset_top = -44
-	_hotbar_label.offset_bottom = -12
-	_hotbar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(_hotbar_label)
-	_refresh_hotbar(0)
+
+func _add_bottom_wide(c: Control, top: float, bottom: float) -> void:
+	c.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	c.offset_top = top
+	c.offset_bottom = bottom
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
 
 
 func bind_player(player: Player) -> void:
 	_player = player
-	player.hotbar_changed.connect(_refresh_hotbar)
-	player.inventory.changed.connect(func(): _refresh_hotbar(player.selected))
-	player.health_changed.connect(_health_bar.set_health)
+	player.hotbar_changed.connect(func(_i: int): _hotbar.refresh(player))
+	player.inventory.changed.connect(func(): _hotbar.refresh(player))
+	player.health_changed.connect(_health_bar.set_value)
+	player.hunger_changed.connect(_hunger_bar.set_value)
 	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
 	player.died.connect(func(): show_message("You died"))
-	player.xp_changed.connect(_xp_bar.set_xp)
-	player.leveled_up.connect(func(lv: int): show_message("Level %d!" % lv))
-	_health_bar.set_health(player.health, player.max_health)
-	_xp_bar.set_xp(player.xp, player.xp_needed(), player.level)
-	_refresh_hotbar(player.selected)
+	_health_bar.set_value(player.health, player.max_health)
+	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
+	_hotbar.refresh(player)
 
 
 ## Big centred text for a couple of seconds.
@@ -168,7 +203,7 @@ func bind_world(world: VoxelWorld, player: Player) -> void:
 
 
 func _process(delta: float) -> void:
-	# Fade the hurt flash and the death message.
+	# Fade the hurt flash and the message.
 	_damage_flash.color.a = move_toward(_damage_flash.color.a, 0.0, 1.2 * delta)
 	if _message_timer > 0.0:
 		_message_timer -= delta
@@ -182,26 +217,6 @@ func _process(delta: float) -> void:
 	if _day_night != null:
 		parts.append(_day_night.clock_text())
 	_clock_label.text = "   ".join(parts)
-
-
-func _refresh_hotbar(selected: int) -> void:
-	var parts: PackedStringArray = []
-	for i in Blocks.HOTBAR.size():
-		var id: int = Blocks.HOTBAR[i]
-		var entry := "%d %s" % [i + 1, Blocks.NAMES[id]]
-		if _player != null:
-			entry += " ×%d" % _player.inventory.count(id)
-		if i == selected:
-			entry = "[ %s ]" % entry
-		parts.append(entry)
-	var text := "    ".join(parts)
-	# Items you carry but can't place go after a divider.
-	if _player != null:
-		for id in Blocks.ITEMS:
-			var n := _player.inventory.count(id)
-			if n > 0:
-				text += "    |    %s ×%d" % [Blocks.NAMES[id], n]
-	_hotbar_label.text = text
 
 
 func _make_label() -> Label:

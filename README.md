@@ -26,16 +26,20 @@ godot --path .
 | Shift | Run |
 | Left click | Punch a creature under the crosshair (within 3 blocks), otherwise break the highlighted block |
 | Right click | Place the selected block |
-| 1–8 | Pick which block to place (you must have one — break blocks to collect them) |
-| E | Eat one Meat (+4 health) |
+| 1–8 / mouse wheel | Pick which block to place (you must have one — break blocks to collect them) |
+| E | Eat one Meat (+4 hunger) |
 | F5 | Save now (it also autosaves every 30 s and when you close the window) |
 | T (hold) | Fast-forward time (watch the sun set) |
 
-You have 10 health (the red squares). Falling more than 3 blocks hurts;
-at 0 you respawn where you started, keeping your inventory.
+You have 10 health (the red squares) and 10 hunger (the orange ones).
+Hunger drops one point every 45 s, three times faster while sprinting.
+At 7+ hunger you regain 1 health every 4 s; at 0 you lose 1 health every
+10 s (down to 1). Falling more than 3 blocks hurts; at 0 health you
+respawn where you started, keeping your inventory.
 
-Killing a creature gives 5 XP (the gold bar). Level N needs 10×N XP;
-each level adds 2 max health and heals you fully.
+Killing creatures quietly makes you tougher: every 10×N kills-worth of
+XP adds 2 max health (the health row grows). There is no level display
+by design.
 
 ## Saving
 

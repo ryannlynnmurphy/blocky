@@ -8,6 +8,7 @@ signal damaged(amount: int)
 signal died
 signal xp_changed(xp: int, xp_needed: int, level: int)
 signal leveled_up(level: int)
+signal hunger_changed(hunger: int, max_hunger: int)
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -24,7 +25,20 @@ var _punch_cooldown := 0.0
 const BASE_HEALTH := 10
 const HEALTH_PER_LEVEL := 2
 const SAFE_FALL := 3.0    # blocks you can drop without getting hurt
-const MEAT_HEAL := 4
+
+# ---- hunger ----
+const MAX_HUNGER := 10
+const MEAT_FOOD := 4              # hunger points one Meat restores
+const HUNGER_DRAIN_SECONDS := 45.0   # seconds per hunger point lost
+const RUN_HUNGER_MULT := 3.0      # sprinting burns food this much faster
+const REGEN_HUNGER := 7           # at or above this, health regenerates
+const REGEN_SECONDS := 4.0        # seconds per health point regained
+const STARVE_SECONDS := 10.0      # seconds per health point lost at 0 hunger
+
+var hunger := MAX_HUNGER
+var _hunger_timer := 0.0
+var _regen_timer := 0.0
+var _starve_timer := 0.0
 
 var world: VoxelWorld
 var selected := 0    # index into Blocks.HOTBAR
@@ -129,15 +143,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			_attack_or_break()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_place_block()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			select_slot(selected + 1)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			select_slot(selected - 1)
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		var key := event as InputEventKey
 		var n := int(key.keycode) - int(KEY_1)
 		if n >= 0 and n < Blocks.HOTBAR.size():
-			selected = n
-			hotbar_changed.emit(selected)
+			select_slot(n)
 		elif key.keycode == KEY_E:
 			eat()
+
+
+## Picks a hotbar slot; wraps around at both ends (for the scroll wheel).
+func select_slot(index: int) -> void:
+	selected = posmod(index, Blocks.HOTBAR.size())
+	hotbar_changed.emit(selected)
 
 
 func _physics_process(delta: float) -> void:
@@ -173,6 +196,7 @@ func _physics_process(delta: float) -> void:
 	_camera.fov = lerpf(_camera.fov, RUN_FOV if running else BASE_FOV, 6.0 * delta)
 
 	_animate_limbs(delta, moving and is_on_floor(), speed, running)
+	_tick_hunger(delta, running)
 	_update_highlight()
 
 
@@ -227,12 +251,41 @@ func heal(amount: int) -> void:
 	health_changed.emit(health, max_health)
 
 
-## Eats one Meat for MEAT_HEAL health. Returns false if you can't.
+## Eats one Meat for MEAT_FOOD hunger. Returns false if you can't
+## (already full, or nothing to eat).
 func eat() -> bool:
-	if health >= max_health or not inventory.take(Blocks.MEAT):
+	if hunger >= MAX_HUNGER or not inventory.take(Blocks.MEAT):
 		return false
-	heal(MEAT_HEAL)
+	hunger = mini(hunger + MEAT_FOOD, MAX_HUNGER)
+	hunger_changed.emit(hunger, MAX_HUNGER)
 	return true
+
+
+## Hunger slowly drains (faster when sprinting). Well fed = health
+## regenerates; starving = health drains, but never below 1.
+func _tick_hunger(delta: float, running: bool) -> void:
+	_hunger_timer += delta * (RUN_HUNGER_MULT if running else 1.0)
+	if _hunger_timer >= HUNGER_DRAIN_SECONDS:
+		_hunger_timer -= HUNGER_DRAIN_SECONDS
+		if hunger > 0:
+			hunger -= 1
+			hunger_changed.emit(hunger, MAX_HUNGER)
+
+	if hunger >= REGEN_HUNGER and health < max_health:
+		_regen_timer += delta
+		if _regen_timer >= REGEN_SECONDS:
+			_regen_timer -= REGEN_SECONDS
+			heal(1)
+	else:
+		_regen_timer = 0.0
+
+	if hunger == 0 and health > 1:
+		_starve_timer += delta
+		if _starve_timer >= STARVE_SECONDS:
+			_starve_timer -= STARVE_SECONDS
+			take_damage(1)
+	else:
+		_starve_timer = 0.0
 
 
 func _die() -> void:
@@ -247,6 +300,8 @@ func respawn() -> void:
 	_was_on_floor = false
 	health = max_health
 	health_changed.emit(health, max_health)
+	hunger = MAX_HUNGER
+	hunger_changed.emit(hunger, MAX_HUNGER)
 
 
 # ---------------------------------------------------------------- saving
@@ -258,6 +313,7 @@ func get_save_data() -> Dictionary:
 		"pitch": _pitch,
 		"health": health,
 		"max_health": max_health,
+		"hunger": hunger,
 		"level": level,
 		"xp": xp,
 		"selected": selected,
@@ -276,10 +332,12 @@ func load_save_data(d: Dictionary) -> void:
 	xp = int(d.get("xp", 0))
 	max_health = int(d.get("max_health", BASE_HEALTH))
 	health = int(d.get("health", max_health))
+	hunger = int(d.get("hunger", MAX_HUNGER))
 	selected = int(d.get("selected", 0))
 	inventory.from_dict(d.get("inventory", {}))
 	# Tell the HUD.
 	health_changed.emit(health, max_health)
+	hunger_changed.emit(hunger, MAX_HUNGER)
 	xp_changed.emit(xp, xp_needed(), level)
 	hotbar_changed.emit(selected)
 

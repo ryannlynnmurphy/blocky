@@ -90,8 +90,13 @@ func _physics_process(_delta: float) -> void:
 			player.global_position.y += 8.0   # drop from 8 blocks up (lands after ~0.85 s)
 		280:
 			print("selftest: health after fall:  %d" % player.health)
+			player.hunger = 3   # pretend we've been out a while
 			var ate := player.eat()
-			print("selftest: ate meat: %s, health now %d, %s" % [ate, player.health, player.inventory.summary()])
+			print("selftest: ate meat: %s, hunger now %d (expect 7), %s" % [ate, player.hunger, player.inventory.summary()])
+			# Simulate 4 s of being well fed: should regenerate 1 health.
+			var before := player.health
+			player._tick_hunger(Player.REGEN_SECONDS, false)
+			print("selftest: regen after %.0f s: health %d -> %d" % [Player.REGEN_SECONDS, before, player.health])
 		290:
 			player.take_damage(100)
 			print("selftest: after lethal damage: deaths %d, health %d, at spawn: %s"

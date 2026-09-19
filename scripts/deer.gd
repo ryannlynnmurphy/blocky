@@ -6,7 +6,7 @@ extends Creature
 
 const DEER_GLB := preload("res://blocky/models/deer.glb")
 ## Antler-tip height, in meters, that the raw ~2.4m-tall rig gets scaled
-## down to. Puts its shoulders roughly chest-high on the 1.3m player and
+## down to. Puts its shoulders roughly chest-high on the 2.0m player and
 ## its antlers a bit above their head.
 const MODEL_HEIGHT := 1.7
 

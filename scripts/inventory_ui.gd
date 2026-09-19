@@ -34,7 +34,7 @@ class SlotView extends Control:
 	var result_count := 0
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(44, 44)
+		custom_minimum_size = Vector2(56, 56)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 
 	func _gui_input(event: InputEvent) -> void:
@@ -55,11 +55,11 @@ class SlotView extends Control:
 		draw_texture_rect(SLOT_TEX, r, false)
 		var id := shown_id()
 		if id != Blocks.AIR:
-			draw_texture_rect(Blocks.icon(id), r.grow(-9), false)
+			draw_texture_rect(Blocks.icon(id), r.grow(-11), false)
 			var n := shown_count()
 			if n > 1:
-				draw_string(ThemeDB.fallback_font, Vector2(0, size.y - 5), str(n),
-					HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 13, Color.WHITE)
+				draw_string(ThemeDB.fallback_font, Vector2(0, size.y - 6), str(n),
+					HORIZONTAL_ALIGNMENT_RIGHT, size.x - 4, 15, Color.WHITE)
 		# slot_selected.png is a hollow-centre frame (see the hotbar), safe
 		# to draw last; marks the result slot the same way the hotbar marks
 		# the selected one.
@@ -188,6 +188,10 @@ func _build_layout() -> void:
 	var hint := Label.new()
 	hint.text = "Click: pick up / drop a stack.   Right-click: split / place one.   Shift-click result: craft into bag.   Esc to close."
 	hint.modulate = Color(1, 1, 1, 0.6)
+	# Word-wrap instead of a single unbroken line — otherwise its full
+	# unwrapped width forces the whole panel wider than the slot grids,
+	# stranding them on the left with dead space to the right.
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_column.add_child(hint)
 
 
@@ -283,6 +287,13 @@ func _redraw_slots() -> void:
 	_result_view.queue_redraw()
 	for v in _slot_views:
 		v.queue_redraw()
+	# CursorView only redraws itself every frame while it's holding
+	# something (to track the mouse); the moment a click drops cursor_count
+	# to 0 nothing asks it to redraw again, so its last-painted icon stays
+	# cached on screen — a stuck "ghost" copy of whatever you just placed.
+	# One explicit redraw here, right when the cursor's contents change,
+	# lets _draw()'s cursor_count == 0 early-out actually run and clear it.
+	_cursor_view.queue_redraw()
 
 
 ## Furnace grid: slot 0 = ore, slot 1 = fuel. The only recipe right now

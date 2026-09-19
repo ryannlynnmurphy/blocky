@@ -11,11 +11,13 @@ extends RefCounted
 ## are always appended at the end so old save files keep meaning the same.
 enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, MEAT,
 	WORKBENCH, STICK, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED, SWORD, FURNACE }
+	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED, SWORD, FURNACE,
+	MUSHROOM, REEDS, TALL_GRASS }
 
 const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks", "Meat",
 	"Workbench", "Stick", "Wooden Pickaxe", "Wooden Axe", "Stone Pickaxe", "Stone Axe",
-	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed", "Sword", "Furnace"]
+	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed", "Sword", "Furnace",
+	"Mushroom", "Reeds", "Tall Grass"]
 
 ## Everything that can exist in the world as a block.
 const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH, COAL_ORE, IRON_ORE,
@@ -23,7 +25,7 @@ const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH,
 
 ## Items (not blocks) worth listing on the HUD.
 const ITEMS := [MEAT, STICK, COAL, IRON, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	IRON_PICKAXE, IRON_AXE, SWORD]
+	IRON_PICKAXE, IRON_AXE, SWORD, MUSHROOM, REEDS, TALL_GRASS]
 
 ## How many uses a tool/weapon survives before it breaks. Missing = never
 ## wears out (blocks, raw materials, ...). "Uses" means one completed
@@ -134,6 +136,9 @@ const ICON := {
 	BED: preload("res://blocky/textures/blocks/bed_top.png"),
 	SWORD: preload("res://blocky/textures/items/sword.png"),
 	FURNACE: preload("res://blocky/textures/blocks/furnace_side.png"),
+	MUSHROOM: preload("res://blocky/models/mushroom_cluster_0.png"),
+	REEDS: preload("res://blocky/models/reeds_0.png"),
+	TALL_GRASS: preload("res://blocky/models/grass_tuft_0.png"),
 }
 
 

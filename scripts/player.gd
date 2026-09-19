@@ -102,6 +102,13 @@ const BASE_FOV := 70.0
 const RUN_FOV := 80.0     # the camera widens a little while sprinting
 const RUN_LEAN := 0.14    # radians of forward lean while sprinting
 
+# ---- camera view mode ----
+var first_person := false
+const TP_ARM_OFFSET := Vector3(0.55, 0.15, 0)   # over-the-shoulder, from player.tscn
+const FP_ARM_OFFSET := Vector3(0.0, 0.15, 0)    # centered, at the same eye height
+const TP_SPRING_LENGTH := 4.0
+const FP_SPRING_LENGTH := 0.0
+
 ## Tests drive movement through these when input is locked out.
 var test_move := Vector2.ZERO
 var test_run := false
@@ -133,8 +140,13 @@ func _ready() -> void:
 
 const PLAYER_GLB := preload("res://blocky/models/player.glb")
 const SWORD_GLB := preload("res://blocky/models/short_sword.glb")
-const MODEL_HEIGHT := 1.3   # matches the collision capsule; the source
-                            # asset is authored at real human scale (~1.85 m)
+const MODEL_HEIGHT := 2.0   # visual height: a two-block-tall player; the
+                            # source asset is authored at real human scale
+                            # (~1.85 m)
+const BODY_HEIGHT := 1.8   # actual collision capsule height (see player.tscn)
+                            # — deliberately a bit under two blocks, or the
+                            # capsule exactly fills a 2-tall passage with zero
+                            # clearance and catches on the ceiling
 const SWORD_SCALE := 0.42   # extra shrink so a "short" sword looks short on us
 
 ## Parts that don't animate on their own: everything except the four limbs.
@@ -171,10 +183,10 @@ func _build_model() -> void:
 	# sits at the pommel with the blade pointing up, so flipping it 180
 	# hangs the blade down beside the hand. Only shown while Blocks.SWORD
 	# is actually the held item (see _physics_process). It's authored at
-	# ~1.7 units (nearly our whole 1.3-tall body) because the asset
-	# assumes a real human-scale wearer, so it needs its own extra
-	# scale-down on top of the body's, or the blade drives into the
-	# ground when it hangs.
+	# ~1.7 units (most of our real human-scale source asset's height)
+	# because the asset assumes a real human-scale wearer, so it needs its
+	# own extra scale-down on top of the body's, or the blade drives into
+	# the ground when it hangs.
 	_sword = SWORD_GLB.instantiate()
 	var hand_r: Node = _arm_r.find_child("hand_R", true, false)
 	hand_r.add_child(_sword)
@@ -214,6 +226,20 @@ func set_look(yaw: float, pitch: float) -> void:
 	_pitch = clampf(pitch, -1.3, 0.8)
 	_pivot.rotation.y = _yaw
 	_arm.rotation.x = _pitch
+
+
+func toggle_view() -> void:
+	set_first_person(not first_person)
+
+
+## Swings the camera onto the player's shoulder, or right up to their eyes.
+## First-person hides the body model — otherwise you'd be staring at the
+## inside of your own head.
+func set_first_person(fp: bool) -> void:
+	first_person = fp
+	_arm.position = FP_ARM_OFFSET if fp else TP_ARM_OFFSET
+	_arm.spring_length = FP_SPRING_LENGTH if fp else TP_SPRING_LENGTH
+	_model.visible = not fp
 
 
 ## Registers keyboard actions in code. (The usual Godot way is
@@ -268,6 +294,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			select_slot(n)
 		elif key.keycode == KEY_E:
 			eat()
+		elif key.keycode == KEY_V:
+			toggle_view()
 
 
 ## Picks a hotbar slot; wraps around at both ends (for the scroll wheel).
@@ -765,5 +793,5 @@ func _overlaps_player(block: Vector3i) -> bool:
 	var p := global_position
 	var half := 0.3
 	return (block.x + 1 > p.x - half and block.x < p.x + half
-		and block.y + 1 > p.y and block.y < p.y + 1.3
+		and block.y + 1 > p.y and block.y < p.y + BODY_HEIGHT
 		and block.z + 1 > p.z - half and block.z < p.z + half)

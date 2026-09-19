@@ -193,7 +193,7 @@ func _ready() -> void:
 	add_child(_inventory_ui)
 
 	var hint := _make_label()
-	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place held block   1-9 / wheel pick slot   E eat   Tab inventory   Esc pause   F5 save   T fast-forward"
+	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place held block   1-9 / wheel pick slot   E eat   V camera view   Tab inventory   Esc pause   F5 save   T fast-forward"
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.position = Vector2(12, 10)
 	add_child(hint)

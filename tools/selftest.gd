@@ -18,6 +18,8 @@ extends Node
 ##   frames 1030..1060 sword: hits harder than a fist, only visible while held, wears out
 ##   frames 1070..1080 furnace: iron ore only smelts into Iron there, not on breaking it
 ##   frames 1090..1100 swimming: gentle sink, swim-up, slower move speed, no fall damage
+##   frames 1110..1200 a carved 2-tall corridor doesn't snag the player's head
+##   frame  1210       breaking the ground under a prop removes it and drops an item
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -36,6 +38,7 @@ var _shelter_shade: Hostile
 var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
 var _swim_health_before := 0
+var _corridor_start := Vector3.ZERO
 
 
 func _physics_process(_delta: float) -> void:
@@ -46,6 +49,52 @@ func _physics_process(_delta: float) -> void:
 			player.set_look(0.0, -1.0)   # look down at the ground just ahead
 			print("selftest: music loop playing: %s (expect true)"
 				% (Sfx.instance != null and Sfx.instance._music.playing))
+		3:
+			# Exercise the real click path (slot_clicked), not just direct
+			# grid mutation — the reported "doubles the item" bug can only
+			# show up through the actual mouse-click code.
+			player.inventory.set_slot(9, Blocks.DIRT, 5)
+			player.inventory.set_slot(10, Blocks.STONE, 3)
+			main.set_inventory_open(true)
+		4:
+			var ui: InventoryUI = main.hud.inventory_ui()
+			var v9 := _find_slot_view(ui, player.inventory, 9)
+			v9.ui.slot_clicked(v9, MOUSE_BUTTON_LEFT, false)   # pick up the 5 Dirt
+			print("selftest: after pickup: cursor %s x%d, bag %s (expect Dirt x5 cursor, Dirt x0 Stone x3 bag)"
+				% [Blocks.NAMES[ui.cursor_id], ui.cursor_count, player.inventory.summary()])
+		5:
+			var ui: InventoryUI = main.hud.inventory_ui()
+			var v11 := _find_slot_view(ui, player.inventory, 11)   # empty slot
+			v11.ui.slot_clicked(v11, MOUSE_BUTTON_LEFT, false)   # drop the 5 Dirt there
+			print("selftest: after drop into empty slot: cursor %s x%d, bag %s (expect Air cursor, Dirt x5 Stone x3, total 8)"
+				% [Blocks.NAMES[ui.cursor_id], ui.cursor_count, player.inventory.summary()])
+		6:
+			var ui: InventoryUI = main.hud.inventory_ui()
+			var v11 := _find_slot_view(ui, player.inventory, 11)
+			v11.ui.slot_clicked(v11, MOUSE_BUTTON_LEFT, false)   # pick the Dirt back up
+			var v10 := _find_slot_view(ui, player.inventory, 10)
+			v10.ui.slot_clicked(v10, MOUSE_BUTTON_LEFT, false)   # swap with the Stone
+			print("selftest: after swap: cursor %s x%d, bag %s (expect Stone x3 cursor, Dirt x5 in slot 10, total still 8)"
+				% [Blocks.NAMES[ui.cursor_id], ui.cursor_count, player.inventory.summary()])
+		7:
+			var ui: InventoryUI = main.hud.inventory_ui()
+			var v10 := _find_slot_view(ui, player.inventory, 10)
+			v10.ui.slot_clicked(v10, MOUSE_BUTTON_LEFT, false)   # drop the Stone back where it swapped from... into Dirt x5
+			print("selftest: after re-place onto mismatched stack (swap again): bag %s (expect total still 8, no duplication)"
+				% player.inventory.summary())
+			main.set_inventory_open(false)
+			player.inventory.clear()
+		20:
+			print("selftest: default view: first_person %s, arm offset %s, spring %.1f, model visible %s (expect false, x=0.55, 4.0, true)"
+				% [player.first_person, player._arm.position, player._arm.spring_length, player._model.visible])
+			player.toggle_view()
+		21:
+			print("selftest: after toggle: first_person %s, arm offset %s, spring %.1f, model visible %s (expect true, x=0.0, 0.0, false)"
+				% [player.first_person, player._arm.position, player._arm.spring_length, player._model.visible])
+			player.toggle_view()
+		22:
+			print("selftest: after toggle back: first_person %s, arm offset %s, spring %.1f, model visible %s (expect false, x=0.55, 4.0, true)"
+				% [player.first_person, player._arm.position, player._arm.spring_length, player._model.visible])
 		40:
 			print("selftest: inventory before break: %s" % player.inventory.summary())
 			player.test_hold_break = true   # hold the button...
@@ -213,7 +262,9 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: stone by hand: x%.1f, drops: %s (expect 1.0, false)"
 				% [player.tool_multiplier(Blocks.STONE), player.drops_when_broken(Blocks.STONE)])
 			# Put a Workbench block where the crosshair points, then right-click it.
-			player.set_look(0.0, -0.6)
+			# (Steeper than the -0.6 used elsewhere: from the taller player's
+			# higher camera, -0.6 now overshoots past the nearby dig-test hole.)
+			player.set_look(0.0, -1.0)
 			var hit := player._aim_ray()
 			var spot := Vector3i((hit.position + hit.normal * 0.5).floor())
 			world.set_block(spot.x, spot.y, spot.z, Blocks.WORKBENCH)
@@ -525,3 +576,54 @@ func _physics_process(_delta: float) -> void:
 		1100:
 			print("selftest: no fall damage from diving into water: health %d (expect %d, unchanged)"
 				% [player.health, _swim_health_before])
+		1110:
+			# Carve a straight 2-tall, 1-wide corridor and walk it end to end.
+			# A capsule that exactly fills a 2-tall gap catches on the ceiling
+			# from physics jitter alone; this is the regression check for that.
+			var base := Vector3i(int(floorf(player.global_position.x)), 25, int(floorf(player.global_position.z)))
+			for i in 10:
+				world.set_block(base.x + i, base.y - 1, base.z, Blocks.STONE)   # floor
+				world.set_block(base.x + i, base.y, base.z, Blocks.AIR)        # feet level
+				world.set_block(base.x + i, base.y + 1, base.z, Blocks.AIR)    # head level
+				world.set_block(base.x + i, base.y + 2, base.z, Blocks.STONE)  # ceiling
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(base.x + 0.5, base.y, base.z + 0.5)
+			player.set_look(0.0, 0.0)   # face +X, the corridor's direction
+			player.test_move = Vector2(1, 0)
+			_corridor_start = player.global_position
+		1200:
+			player.test_move = Vector2.ZERO
+			var traveled := player.global_position.distance_to(_corridor_start)
+			print("selftest: walked %.1f blocks through a 2-tall corridor in 1.5 s (expect > 5.0 — near 0 means the head snagged the ceiling)"
+				% traveled)
+		1210:
+			# Plant a synthetic mushroom prop on solid ground, then knock
+			# the ground out from under it.
+			var cpos := world.chunk_coord_of(player.global_position)
+			var lx := 5
+			var lz := 5
+			var by := 30
+			var bx := cpos.x * VoxelWorld.SIZE + lx
+			var bz := cpos.y * VoxelWorld.SIZE + lz
+			world.set_block(bx, by - 1, bz, Blocks.STONE)   # ground
+			world.set_block(bx, by, bz, Blocks.AIR)         # clear space for it
+			var entry := {"type": "mushroom_cluster", "lx": lx, "lz": lz, "y": by, "rot": 0.0}
+			if not world.chunk_props.has(cpos):
+				world.chunk_props[cpos] = []
+			world.chunk_props[cpos].append(entry)
+			world._instantiate_props(world.chunks[cpos], [entry])
+			var wpos := Vector3i(bx, by, bz)
+			print("selftest: mushroom prop placed: tracked %s (expect true)" % world._prop_nodes.has(wpos))
+			var before_drops := world.drop_count()
+			world.set_block(bx, by - 1, bz, Blocks.AIR)   # break the ground it stands on
+			print("selftest: after breaking ground under it: prop gone %s (expect true), item dropped %s (expect true)"
+				% [not world._prop_nodes.has(wpos), world.drop_count() > before_drops])
+
+
+## Finds the SlotView the InventoryUI built for a given (inv, index) pair,
+## so a test can drive the real click handler instead of poking data.
+func _find_slot_view(ui: InventoryUI, inv: Inventory, index: int) -> InventoryUI.SlotView:
+	for v in ui._slot_views:
+		if v.inv == inv and v.index == index:
+			return v
+	return null

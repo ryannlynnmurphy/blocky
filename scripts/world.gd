@@ -104,7 +104,19 @@ const PROP_SCENES := {
 	"mushroom_cluster": preload("res://blocky/models/mushroom_cluster.glb"),
 	"reeds": preload("res://blocky/models/reeds.glb"),
 }
+## What breaking the block a prop stands on pops out, for the prop types
+## that are worth picking up. Rocks/boulders/flowers are left alone for
+## now — purely decorative, no item defined for them yet.
+const PROP_DROP := {
+	"mushroom_cluster": Blocks.MUSHROOM,
+	"reeds": Blocks.REEDS,
+	"grass_tuft": Blocks.TALL_GRASS,
+}
 var _props_placed := {}   # Vector2i -> true once a chunk's props are queued/instantiated
+## World position (the block it rests on, +1 in y) -> instantiated prop
+## node, so breaking that block can find and remove the prop standing on
+## it instead of leaving it floating with nothing underneath.
+var _prop_nodes := {}   # Vector3i -> Node3D
 ## Chunks whose props still need instantiating, budgeted a few per frame
 ## (see _process_prop_queue) so a burst of finished chunks at load time
 ## can't spike a frame the way an unthrottled loop over all of them would.
@@ -329,6 +341,9 @@ func _instantiate_props(chunk: Chunk, props: Array) -> void:
 		chunk.add_child(inst)
 		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
 		inst.rotation.y = p["rot"]
+		var wpos := Vector3i(chunk.cpos.x * SIZE + int(p["lx"]), int(p["y"]),
+			chunk.cpos.y * SIZE + int(p["lz"]))
+		_prop_nodes[wpos] = inst
 
 
 func _is_near(cpos: Vector2i, pc: Vector2i, radius: int) -> bool:
@@ -482,6 +497,36 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 	elif lz == 15:
 		_rebuild_now(cpos + Vector2i(0, 1))
 
+	if old_id != id:
+		_remove_prop_above(wx, wy, wz, cpos)
+
+
+## A prop (grass tuft, mushroom, reeds, ...) resting on this block loses
+## its footing when the block underneath changes — remove it instead of
+## leaving it floating with nothing underneath, and pop out an item for
+## the prop types worth picking up (see PROP_DROP).
+func _remove_prop_above(wx: int, wy: int, wz: int, cpos: Vector2i) -> void:
+	var wpos := Vector3i(wx, wy + 1, wz)
+	if not _prop_nodes.has(wpos):
+		return
+	var node: Node3D = _prop_nodes[wpos]
+	_prop_nodes.erase(wpos)
+	if is_instance_valid(node):
+		node.queue_free()
+	if not chunk_props.has(cpos):
+		return
+	var arr: Array = chunk_props[cpos]
+	var lx := wx & 15
+	var lz := wz & 15
+	for i in arr.size():
+		var p: Dictionary = arr[i]
+		if int(p["lx"]) == lx and int(p["lz"]) == lz and int(p["y"]) == wy + 1:
+			arr.remove_at(i)
+			var drop_id: int = PROP_DROP.get(p["type"], -1)
+			if drop_id != -1:
+				spawn_drop(Vector3(wpos) + Vector3(0.5, 0.1, 0.5), drop_id)
+			break
+
 
 func _add_torch_light(pos: Vector3i) -> void:
 	if _torch_lights.has(pos):
@@ -558,6 +603,10 @@ func update_chunks(pc: Vector2i) -> void:
 			chunks.erase(cpos)
 			_populated.erase(cpos)   # animals may return when you come back
 			_props_placed.erase(cpos)   # re-instantiated (same layout) when you come back
+			if chunk_props.has(cpos):
+				for p in chunk_props[cpos]:
+					_prop_nodes.erase(Vector3i(cpos.x * SIZE + int(p["lx"]), int(p["y"]),
+						cpos.y * SIZE + int(p["lz"])))
 
 	# Collision follows the player: nearby chunks get shapes (queued,
 	# nearest first), far ones drop theirs.
@@ -788,6 +837,7 @@ func reset_chunks() -> void:
 	_collision_queue.clear()
 	_populated.clear()
 	_props_placed.clear()
+	_prop_nodes.clear()
 	for light in _torch_lights.values():
 		light.queue_free()
 	_torch_lights.clear()

@@ -132,6 +132,14 @@ func _ready() -> void:
 	else:
 		_enter(State.TITLE)
 
+	# Testing aid: `-- --show-inventory` stocks the bag and opens the pockets
+	# screen, for UI screenshots.
+	if "--show-inventory" in args:
+		for id in [Blocks.LOG, Blocks.STONE, Blocks.PLANKS, Blocks.STICK,
+				Blocks.COAL, Blocks.IRON_ORE, Blocks.DIRT, Blocks.SAND]:
+			player.inventory.add(id, 8)
+		set_inventory_open(true)
+
 
 func _process(delta: float) -> void:
 	# The water is one big flat plane that follows the player.

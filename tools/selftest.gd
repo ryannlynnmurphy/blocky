@@ -17,6 +17,7 @@ extends Node
 ##   frames 900..1020  shelter: a walled-in player is never bitten by a chasing Shade
 ##   frames 1030..1060 sword: hits harder than a fist, only visible while held, wears out
 ##   frames 1070..1080 furnace: iron ore only smelts into Iron there, not on breaking it
+##   frames 1090..1100 swimming: gentle sink, swim-up, slower move speed, no fall damage
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -34,6 +35,7 @@ var _torch_pos := Vector3i.ZERO
 var _shelter_shade: Hostile
 var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
+var _swim_health_before := 0
 
 
 func _physics_process(_delta: float) -> void:
@@ -494,3 +496,32 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: smelted: %s (expect Iron x1), ore/fuel slots emptied: %s (expect true)"
 				% [player.inventory.summary(), ui.grid.is_empty()])
 			main.set_inventory_open(false)
+		1090:
+			# Swimming: find real deep water and dive in from a height.
+			var wp := player.global_position
+			var wx := int(floor(wp.x))
+			var wz := int(floor(wp.z))
+			var tries := 0
+			while world.height_at(wx, wz) > WorldGen.SEA_LEVEL - 1 and tries < 400:
+				wx += 4
+				tries += 1
+			print("selftest: found water near column (%d, %d): ground height %d (expect <= %d)"
+				% [wx, wz, world.height_at(wx, wz), WorldGen.SEA_LEVEL - 1])
+			_swim_health_before = player.health
+			player.global_position = Vector3(wx + 0.5, WorldGen.SEA_LEVEL - 1.0, wz + 0.5)
+			player.velocity = Vector3(0, -20.0, 0)   # as if just diving in from a height
+			player.test_move = Vector2(0, -1)   # swim forward
+		1091:
+			print("selftest: in water: %s (expect true), gentle sink velocity.y %.2f (expect > -%.1f, nowhere near the -20 dive speed)"
+				% [player._in_water, player.velocity.y, Player.SWIM_SPEED + 0.5])
+			print("selftest: swim speed while moving: %.1f (expect %.1f, slower than walking)"
+				% [Vector2(player.velocity.x, player.velocity.z).length(), Player.SWIM_SPEED])
+			player.test_move = Vector2.ZERO
+			player.test_swim_up = true
+		1092:
+			print("selftest: holding jump swims up: velocity.y %.1f (expect %.1f)"
+				% [player.velocity.y, Player.SWIM_RISE_SPEED])
+			player.test_swim_up = false
+		1100:
+			print("selftest: no fall damage from diving into water: health %d (expect %d, unchanged)"
+				% [player.health, _swim_health_before])

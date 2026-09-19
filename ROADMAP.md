@@ -334,11 +334,55 @@ and verified before the next starts. No system gets built "all at once."
       re-proving — this instead calls `player.furnace_used.emit()`
       directly, the same way the Bed/sleep test already does, and
       focuses the raycast-dependent proof where it already lives.
+- [x] **M31 — Swimming.** The Water plane (`main.tscn`, a flat visual
+      mesh with no collision, following the player's x/z at a fixed
+      `y = 19.9`) never had any gameplay hook — the player fell straight
+      through it and took full fall damage hitting the seabed
+      underneath. `player.gd` now checks `global_position.y <
+      WATER_SURFACE_Y` every physics frame (`WorldGen.SEA_LEVEL + 0.9`,
+      matching the plane's own y exactly, so it doesn't drift out of
+      sync with world-gen's own sea level constant) and swaps in gentler
+      physics while it's true: `WATER_GRAVITY` (4.0, vs. dry `GRAVITY`
+      22.0) sinks you slowly instead of dropping, capped at `-SWIM_SPEED`
+      so swimming up always wins against sinking; holding jump rises at
+      `SWIM_RISE_SPEED`; horizontal movement drops to the slower
+      `SWIM_SPEED` in any direction. `_check_fall_damage()` treats being
+      in water as an immediate safe "landing" (resets `_peak_y`, sets
+      `_was_on_floor = true`) the moment you enter it, so diving from a
+      cliff into water never hurts, and swimming down to touch the
+      actual seabed afterward doesn't retroactively charge the drop.
+      One check is a single flat "feet below the water plane" test, not
+      Minecraft's separate waist-deep/fully-submerged states — wading
+      through ankle-deep water uses full swim physics too, a stated
+      simplification, not a bug. No breath meter/drowning and no
+      underwater visual effects (fog tint, muffled audio) — scope
+      trade-offs in the same spirit as M27 skipping "monsters nearby"
+      for sleep: the core mechanic (being in water changes how you
+      move, and you control your depth) is what "swimmable" most
+      literally asks for.
+      Added `test_swim_up` (mirroring the existing `test_move`/
+      `test_run`/`test_hold_break` dev-only override pattern) since the
+      real swim-up check reads `Input.is_action_pressed("jump")`, which
+      — like the existing dry-land jump — is unreachable under
+      `--no-input`; there was no prior selftest precedent for testing
+      jump-driven behavior at all.
+      Verified: a new selftest phase (frames 1090-1100) that searches
+      outward from the player's position for a real ocean column
+      (`world.height_at() <= SEA_LEVEL - 1`, not a hardcoded location),
+      dives in at -20 vertical velocity as if falling from a height, and
+      confirms `_in_water` is true, the sink speed is capped nowhere
+      near the dive speed, holding jump reaches exactly
+      `SWIM_RISE_SPEED`, horizontal speed is exactly `SWIM_SPEED`, and
+      health is completely unchanged after the "fall" — plus a
+      screenshot confirming the player visibly swimming at the correct
+      depth near a real shoreline.
+
+This closes out every item on the original backlog. See "Next" below
+for what's left — all either blocked on missing inputs (new art/audio
+that doesn't exist yet) or deliberate, stated scope trims from
+milestones above, not gaps that were missed.
 
 ## Next — pick a direction
-
-The original wish list is covered. Candidates, roughly in order of
-how much they'd change the feel of the game:
 
 - [ ] Generic-label button/slider/message/panel art, if that ever gets
       generated — the current button/sound-slider/message-text/
@@ -348,6 +392,10 @@ how much they'd change the feel of the game:
       non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
       duplicate tools wearing independently ever turns out to matter.
-- [ ] Water you can swim in (or the proper GLB water/shoreline system).
 - [ ] Sleeping could block on "monsters nearby" like Minecraft (M27
       skipped this for scope).
+- [ ] Breath meter/drowning, underwater fog/muffled audio (M31 skipped
+      these for scope — the core swim mechanic is there).
+- [ ] The proper GLB water/shoreline system (`blocky/models/water_tile.glb`),
+      instead of the flat plane — a bigger visual project, deliberately
+      deferred since M20.

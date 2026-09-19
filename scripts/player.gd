@@ -21,6 +21,14 @@ const RUN_SPEED := 7.5
 const JUMP_SPEED := 7.5
 const GRAVITY := 22.0
 const MOUSE_SENS := 0.0025
+# ---- swimming ----
+# The Water plane (see main.tscn) sits at y=19.9, just under the top of
+# the sea-level block — matches WorldGen.SEA_LEVEL (19) + 0.9.
+const WATER_SURFACE_Y := WorldGen.SEA_LEVEL + 0.9
+const SWIM_SPEED := 3.0
+const SWIM_RISE_SPEED := 3.0
+const WATER_GRAVITY := 4.0   # much gentler than GRAVITY — you sink slowly, not drop
+var _in_water := false
 const REACH := 6.0   # how far you can break/place, in blocks
 const PUNCH_RANGE := 3.0
 const PUNCH_DAMAGE := 1
@@ -98,6 +106,7 @@ const RUN_LEAN := 0.14    # radians of forward lean while sprinting
 var test_move := Vector2.ZERO
 var test_run := false
 var test_hold_break := false
+var test_swim_up := false
 
 var _knock := Vector3.ZERO   # shove from being hit; fades out
 
@@ -274,7 +283,14 @@ func held_id() -> int:
 
 func _physics_process(delta: float) -> void:
 	_punch_cooldown = maxf(_punch_cooldown - delta, 0.0)
-	if not is_on_floor():
+	_in_water = global_position.y < WATER_SURFACE_Y
+	if _in_water:
+		# Sink gently instead of dropping, and cap the sink speed so
+		# swimming back up always wins — holding jump rises.
+		velocity.y = maxf(velocity.y - WATER_GRAVITY * delta, -SWIM_SPEED)
+		if test_swim_up or (not _no_input and Input.is_action_pressed("jump")):
+			velocity.y = SWIM_RISE_SPEED
+	elif not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif not _no_input and Input.is_action_just_pressed("jump"):
 		velocity.y = JUMP_SPEED
@@ -290,7 +306,7 @@ func _physics_process(delta: float) -> void:
 	dir = dir.normalized()
 	var moving := dir.length() > 0.1
 	var running := run_held and moving
-	var speed := RUN_SPEED if running else WALK_SPEED
+	var speed := SWIM_SPEED if _in_water else (RUN_SPEED if running else WALK_SPEED)
 	velocity.x = dir.x * speed + _knock.x
 	velocity.z = dir.z * speed + _knock.z
 	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
@@ -358,8 +374,15 @@ func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) ->
 # ---------------------------------------------------------------- health
 
 ## Remembers the top of each fall; landing from higher than SAFE_FALL
-## costs one health per extra block.
+## costs one health per extra block. Water cushions a fall completely —
+## it counts as a safe "landing" the moment you enter it, same as touching
+## solid ground, so diving in from a cliff never hurts, and swimming down
+## to touch the seabed afterward doesn't retroactively charge the drop.
 func _check_fall_damage() -> void:
+	if _in_water:
+		_peak_y = global_position.y
+		_was_on_floor = true
+		return
 	var on_floor := is_on_floor()
 	if not on_floor:
 		if _was_on_floor:

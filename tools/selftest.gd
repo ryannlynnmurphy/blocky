@@ -41,6 +41,8 @@ func _physics_process(_delta: float) -> void:
 		1:
 			main.save_path = TEST_SAVE   # never touch the real save file
 			player.set_look(0.0, -1.0)   # look down at the ground just ahead
+			print("selftest: music loop playing: %s (expect true)"
+				% (Sfx.instance != null and Sfx.instance._music.playing))
 		40:
 			print("selftest: inventory before break: %s" % player.inventory.summary())
 			player.test_hold_break = true   # hold the button...

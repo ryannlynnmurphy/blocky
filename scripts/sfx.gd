@@ -15,6 +15,7 @@ const RATE := 22050          # samples per second; low-fi suits the look
 const POOL_3D := 10
 const POOL_2D := 4
 const SFX_DB := -9.0         # overall loudness of effects (ambience is separate)
+const MUSIC_DB := -20.0      # background music: well under SFX, easy to miss on purpose
 
 static var instance: Sfx
 
@@ -23,10 +24,12 @@ var plays := {}               # name -> how many times played (tests)
 
 var _sounds := {}             # name -> AudioStreamWAV
 var _sfx_bus := -1
+var _music_bus := -1
 var _pool_3d: Array[AudioStreamPlayer3D] = []
 var _pool_2d: Array[AudioStreamPlayer] = []
 var _amb_day: AudioStreamPlayer
 var _amb_night: AudioStreamPlayer
+var _music: AudioStreamPlayer
 var _rng := RandomNumberGenerator.new()
 
 
@@ -43,6 +46,11 @@ func _ready() -> void:
 	AudioServer.set_bus_name(_sfx_bus, "SFX")
 	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB)
 
+	_music_bus = AudioServer.bus_count
+	AudioServer.add_bus(_music_bus)
+	AudioServer.set_bus_name(_music_bus, "Music")
+	AudioServer.set_bus_volume_db(_music_bus, MUSIC_DB)
+
 	for i in POOL_3D:
 		var p := AudioStreamPlayer3D.new()
 		p.max_distance = 40.0
@@ -58,6 +66,12 @@ func _ready() -> void:
 	_amb_day = _make_ambient("amb_day")
 	_amb_night = _make_ambient("amb_night")
 
+	_music = AudioStreamPlayer.new()
+	_music.stream = _sounds["music"]
+	_music.bus = "Music"
+	add_child(_music)
+	_music.play()
+
 	# A limiter on the master bus: however many sounds pile up at once
 	# (a landing, a hurt and a bite in the same frame), the output can't
 	# clip into distortion.
@@ -69,14 +83,17 @@ func _ready() -> void:
 		AudioServer.set_bus_mute(0, true)
 
 
-## Player-facing volume, 0..1, on top of the built-in SFX_DB level.
+## Player-facing volume, 0..1, on top of the built-in SFX_DB/MUSIC_DB
+## levels. One slider (the pause screen's "Sound") drives both.
 func set_volume(v: float) -> void:
 	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB + linear_to_db(maxf(v, 0.001)))
+	AudioServer.set_bus_volume_db(_music_bus, MUSIC_DB + linear_to_db(maxf(v, 0.001)))
 
 
 ## Stop the loops before the tree tears down, or the audio thread still
 ## holds them and Godot reports leaked objects at exit.
 func _exit_tree() -> void:
+	_music.stop()
 	_amb_day.stop()
 	_amb_night.stop()
 	for p in _pool_3d:
@@ -167,6 +184,8 @@ func _build_sounds() -> void:
 	# Ambience loops.
 	_sounds["amb_day"] = _wav(_birds(6.0), true)
 	_sounds["amb_night"] = _wav(_wind(5.0), true)
+	# Background music: a single generated loop, quiet and continuous.
+	_sounds["music"] = _wav(_music_loop(), true)
 
 
 ## Turns float samples into a Godot audio stream (16-bit mono).
@@ -289,4 +308,60 @@ func _wind(dur: float) -> PackedFloat32Array:
 		var k := float(i) / fade
 		out[i] *= k
 		out[out.size() - 1 - i] *= k
+	return out
+
+
+## Equal-temperament frequency, `semi` semitones from A4 (440 Hz).
+func _note_freq(semi: int) -> float:
+	return 440.0 * pow(2.0, semi / 12.0)
+
+
+## Background music: a slow, sparse melody wandering a C-major-pentatonic
+## scale (every note in a pentatonic scale sounds fine next to any other,
+## so a simple random walk can't land on anything dissonant) over a
+## gently circling root/fifth bass drone. Both are plain sine tones with
+## an exponential decay — the same "bell" envelope _tone() already gives
+## every percussive sound effect, just held longer and pitched into a
+## scale instead of used for an impact.
+func _music_loop() -> PackedFloat32Array:
+	var scale := [-9, -7, -5, -2, 0, 3, 5, 7]   # C D E G A C D E, two octaves
+	var beat := 0.55   # seconds per step; slow and unhurried
+	var idx := 4        # start on A: not the tonic, so the melody has somewhere to resolve
+
+	# Walk the scale for a phrase, then land back on the tonic so the
+	# loop point feels like a real musical resting place, not a cut.
+	var voice := PackedFloat32Array()
+	for step in 14:
+		var dur := beat * (2.0 if _rng.randf() < 0.25 else 1.0)
+		if _rng.randf() < 0.2:
+			voice.append_array(_silence(dur))
+			continue
+		var f := _note_freq(scale[idx])
+		voice.append_array(_tone(dur * 0.9, f, f, 2.2, 0.22, false))
+		voice.append_array(_silence(dur * 0.1))
+		idx = clampi(idx + _rng.randi_range(-2, 2), 0, scale.size() - 1)
+	voice.append_array(_tone(beat * 2.0 * 0.9, _note_freq(scale[0]), _note_freq(scale[0]), 1.5, 0.22, false))
+	voice.append_array(_silence(beat * 2.0 * 0.1))
+
+	# A slow root/fifth/root/third bass line underneath, a full octave down.
+	var total_dur := voice.size() / float(RATE)
+	var bass := _silence(total_dur)
+	var bass_notes := [-9, -2, -9, -5]   # C, G, C, E
+	var bass_dur := total_dur / bass_notes.size()
+	for i in bass_notes.size():
+		var f := _note_freq(bass_notes[i] - 12)
+		var note := _tone(bass_dur * 0.96, f, f, 0.6, 0.16, false)
+		var start := int(i * bass_dur * RATE)
+		for j in note.size():
+			if start + j < bass.size():
+				bass[start + j] += note[j]
+
+	var out := _mix([voice, bass])
+	# Short fades at both ends hide the loop seam (same trick as _wind()).
+	var fade := int(0.08 * RATE)
+	for i in fade:
+		if i < out.size():
+			var k := float(i) / fade
+			out[i] *= k
+			out[out.size() - 1 - i] *= k
 	return out

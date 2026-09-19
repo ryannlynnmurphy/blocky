@@ -277,6 +277,27 @@ and verified before the next starts. No system gets built "all at once."
       one hit at a time, and both the sword and a pickaxe disappearing
       at 0 durability — plus a screenshot of the durability bar
       rendering (green, lightly worn) under the hotbar sword icon.
+- [x] **M29 — Background music.** `sfx.gd` gains a `"music"` sound
+      alongside every synthesized sound effect — same philosophy, zero
+      audio files, everything built from sine/noise generators at
+      startup. `_music_loop()` walks a C-major-pentatonic scale
+      (every note in a pentatonic scale sounds fine next to any other,
+      so a random walk can't land on anything dissonant) for a slow,
+      sparse melody, resolving back to the tonic at the phrase's end
+      so the loop point feels like a real musical rest instead of a
+      cut, over a gently circling root/fifth/root/third bass drone an
+      octave down — both just plain sine `_tone()` calls with the same
+      exponential-decay "bell" envelope every percussive sound effect
+      already uses, held longer and pitched into a scale instead of
+      used for an impact. Plays continuously and quietly on its own
+      "Music" audio bus (`MUSIC_DB = -20`, well under SFX), through the
+      same volume slider that already controls SFX (`Sfx.set_volume()`
+      now sets both buses) rather than adding a second one.
+      Verified: a new frame-1 selftest check that the music player
+      exists and is actually playing at boot, plus the full existing
+      suite unaffected (nothing asserts exact waveform content, only
+      play counts/booleans, so shifting the shared seeded RNG's call
+      sequence by inserting the new generator doesn't break anything).
 
 ## Next — pick a direction
 
@@ -291,7 +312,6 @@ how much they'd change the feel of the game:
       non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
       duplicate tools wearing independently ever turns out to matter.
-- [ ] A simple generated music loop.
 - [ ] Furnace: smelt iron ore properly (torches already craft from
       coal + sticks — see M27).
 - [ ] Water you can swim in (or the proper GLB water/shoreline system).

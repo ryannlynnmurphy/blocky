@@ -95,6 +95,19 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
+	# A PanelContainer draws nothing on its own without a panel stylebox —
+	# without this the whole screen was just loose text and slot squares
+	# floating directly over the 3D world, no different from a rendering
+	# glitch. Same dark-navy/border palette as the rest of the chunky UI
+	# (hotbar_slot.png's edge tone, etc.), with room to breathe around
+	# the grids.
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.06, 0.055, 0.09, 0.94)
+	panel_style.border_color = Color(0.15, 0.13, 0.2, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(6)
+	panel_style.set_content_margin_all(16)
+	add_theme_stylebox_override("panel", panel_style)
 	_column = VBoxContainer.new()
 	_column.add_theme_constant_override("separation", 10)
 	add_child(_column)

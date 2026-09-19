@@ -102,14 +102,23 @@ var max_props_per_frame := 4   # chunks' worth of props instantiated per frame
 
 # ---- creatures ----
 const MAX_CREATURES := 40
-## Wildlife species that can be picked for a given spawn. Every entry gets
-## an equal shot for now; no per-biome species weighting yet.
+## Wildlife species that can be picked for a given spawn.
 const WILDLIFE_SCENES := [
 	preload("res://scenes/rabbit.tscn"),
 	preload("res://scenes/deer.tscn"),
 	preload("res://scenes/fox.tscn"),
 	preload("res://scenes/boar.tscn"),
 	preload("res://scenes/bird.tscn"),
+]
+## Relative spawn weight per [biome][species], same order as
+## WILDLIFE_SCENES (rabbit, deer, fox, boar, bird); 0 = never shows up
+## there. Overall density per biome is still SPAWN_CHANCE below — this
+## only shapes which of the 5 you see once something does spawn.
+const WILDLIFE_WEIGHTS := [
+	[5, 3, 2, 1, 4],   # Plains: open field — a bit of everything
+	[2, 4, 4, 3, 3],   # Forest: woodland animals, less open-field rabbit
+	[3, 0, 1, 0, 2],   # Desert: only the hardy small ones
+	[2, 1, 3, 0, 1],   # Tundra: foxes fare best in the cold, no boar
 ]
 ## Chance that a freshly built chunk gets a group of animals, per biome.
 const SPAWN_CHANCE := [0.16, 0.12, 0.04, 0.1]   # Plains, Forest, Desert, Tundra
@@ -597,12 +606,28 @@ func spawn_creature(wx: int, wz: int) -> Creature:
 
 ## Puts one animal at an exact position, no questions asked (tests use this).
 func spawn_creature_at(pos: Vector3) -> Creature:
-	var scene: PackedScene = _forced_species if _forced_species != null else WILDLIFE_SCENES[randi() % WILDLIFE_SCENES.size()]
+	var biome := gen.biome_at(int(floor(pos.x)), int(floor(pos.z)))
+	var scene: PackedScene = _forced_species if _forced_species != null else _pick_wildlife(biome)
 	var c: Creature = scene.instantiate()
 	c.world = self
 	_creatures.add_child(c)
 	c.global_position = pos
 	return c
+
+
+## Weighted random pick from WILDLIFE_WEIGHTS[biome].
+func _pick_wildlife(biome: int) -> PackedScene:
+	var weights: Array = WILDLIFE_WEIGHTS[biome]
+	var total := 0
+	for w in weights:
+		total += int(w)
+	var roll := randi_range(1, total)
+	var acc := 0
+	for i in weights.size():
+		acc += int(weights[i])
+		if roll <= acc:
+			return WILDLIFE_SCENES[i]
+	return WILDLIFE_SCENES[0]   # unreachable; keeps the return type honest
 
 
 func creature_count() -> int:

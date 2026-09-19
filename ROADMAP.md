@@ -185,6 +185,21 @@ and verified before the next starts. No system gets built "all at once."
       `print_perf()`'s breakdown (it had been silently folding into
       the "shapes" bucket) — now shows ~1-2 ms worst-case, confirming
       props aren't the dominant load-time cost.
+- [x] **M26 — Wildlife weighting + Bird flight.** `world.WILDLIFE_WEIGHTS`
+      gives each biome its own relative odds across the 5 species
+      instead of a flat 1/5 each (Plains: a bit of everything; Forest:
+      leans deer/fox/boar; Desert/Tundra: only the hardy ones, no
+      boar, no deer in Desert) — picked in `_pick_wildlife()`, rolled
+      from the spawn position's real biome. Bird now actually flies:
+      it overrides `_physics_process()` entirely instead of reusing
+      Creature's gravity/hop/cliff-check version, hovers ~3 blocks
+      above the ground it spawned over (captured lazily on its first
+      physics tick, since `_ready()` runs before world.gd positions a
+      freshly spawned creature), and wanders/flees in the same
+      idle/timer state Creature already tracks. Take_hit's ground-only
+      "hop" (`velocity.y = 4.0`) is harmlessly inherited but never
+      visible, since Bird's own height-correction overwrites velocity.y
+      every frame before `move_and_slide()` runs.
 
 ## Next — pick a direction
 
@@ -197,9 +212,6 @@ how much they'd change the feel of the game:
       (see M24).
 - [ ] GLB pine/broadleaf/crooked trees, if wood-gathering ever gets a
       non-block-mining redesign (see M25) — voxel trees stay for now.
-- [ ] Per-biome wildlife weighting (right now every spawn picks evenly
-      among all 5 species everywhere) and flight behavior for Bird
-      (it currently just walks/hops like everything else).
 - [ ] Shelter matters: Shades can't path through walls but will wait;
       beds to skip the night; torches that keep them away.
 - [ ] Tool durability; give the sword an actual swing/hitbox.

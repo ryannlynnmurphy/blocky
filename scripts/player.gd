@@ -12,6 +12,8 @@ signal hunger_changed(hunger: int, max_hunger: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 signal workbench_used   # right-clicked a Workbench block
 signal sleep_requested   # right-clicked a Bed block
+signal tool_broke(item_name: String)   # a tool/weapon ran out of durability
+signal durability_changed   # any tool/weapon's remaining durability ticked down
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -22,8 +24,15 @@ const REACH := 6.0   # how far you can break/place, in blocks
 const PUNCH_RANGE := 3.0
 const PUNCH_DAMAGE := 1
 const PUNCH_COOLDOWN := 0.35
+const SWORD_DAMAGE := 4
+const SWORD_COOLDOWN := 0.5   # slower but harder-hitting than a bare punch
 
 var _punch_cooldown := 0.0
+
+## Remaining uses for a tool/weapon that's taken damage; a tool not in
+## here is still at full health (Blocks.max_durability(id)). Cleared on
+## a fresh game, but NOT on respawn — dying doesn't repair your tools.
+var tool_durability := {}
 
 const BASE_HEALTH := 10
 const HEALTH_PER_LEVEL := 2
@@ -73,6 +82,7 @@ var _arm_l: Node3D
 var _arm_r: Node3D
 var _leg_l: Node3D
 var _leg_r: Node3D
+var _sword: Node3D   # visible only while Blocks.SWORD is the held item
 
 var _walk_cycle := 0.0    # advances while walking; drives the limb swing
 var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
@@ -149,16 +159,18 @@ func _build_model() -> void:
 
 	# A sword, held loosely at the character's side. Its own local origin
 	# sits at the pommel with the blade pointing up, so flipping it 180
-	# hangs the blade down beside the hand. Not wielded in combat yet.
-	# It's authored at ~1.7 units (nearly our whole 1.3-tall body) because
-	# the asset assumes a real human-scale wearer, so it needs its own
-	# extra scale-down on top of the body's, or the blade drives into
-	# the ground when it hangs.
-	var sword: Node3D = SWORD_GLB.instantiate()
+	# hangs the blade down beside the hand. Only shown while Blocks.SWORD
+	# is actually the held item (see _physics_process). It's authored at
+	# ~1.7 units (nearly our whole 1.3-tall body) because the asset
+	# assumes a real human-scale wearer, so it needs its own extra
+	# scale-down on top of the body's, or the blade drives into the
+	# ground when it hangs.
+	_sword = SWORD_GLB.instantiate()
 	var hand_r: Node = _arm_r.find_child("hand_R", true, false)
-	hand_r.add_child(sword)
-	sword.rotation.x = PI
-	sword.scale = Vector3.ONE * SWORD_SCALE
+	hand_r.add_child(_sword)
+	_sword.rotation.x = PI
+	_sword.scale = Vector3.ONE * SWORD_SCALE
+	_sword.visible = false
 
 
 ## Makes a pivot at the top-centre of `upper_name` (where that limb
@@ -299,6 +311,7 @@ func _physics_process(delta: float) -> void:
 	_animate_limbs(delta, moving and is_on_floor(), speed, running)
 	_tick_hunger(delta, running)
 	_update_highlight()
+	_sword.visible = held_id() == Blocks.SWORD
 
 
 ## The block under your feet decides what a step sounds like.
@@ -437,6 +450,7 @@ func reset_for_new_game() -> void:
 	xp = 0
 	max_health = BASE_HEALTH
 	selected = 0
+	tool_durability.clear()
 	set_look(0.0, -0.3)
 	respawn()
 	xp_changed.emit(xp, xp_needed(), level)
@@ -468,6 +482,7 @@ func get_save_data() -> Dictionary:
 		"xp": xp,
 		"selected": selected,
 		"inventory": inventory.to_dict(),
+		"tool_durability": tool_durability,
 	}
 
 
@@ -485,6 +500,10 @@ func load_save_data(d: Dictionary) -> void:
 	hunger = int(d.get("hunger", MAX_HUNGER))
 	selected = int(d.get("selected", 0))
 	inventory.from_dict(d.get("inventory", {}))
+	# JSON round-trips dict keys as strings; back to int so lookups by id work.
+	tool_durability.clear()
+	for key in (d.get("tool_durability", {}) as Dictionary).keys():
+		tool_durability[int(key)] = int(d["tool_durability"][key])
 	# Tell the HUD.
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, MAX_HUNGER)
@@ -514,16 +533,21 @@ func gain_xp(amount: int) -> void:
 # ---------------------------------------------------------------- combat
 
 ## Left click: punch a creature if one is under the crosshair and close.
-## Blocks aren't broken by a click — you hold the button (see
-## _update_breaking), so a click on a block just starts the swing.
+## A held Sword hits harder (but slower) than a bare fist, and wears
+## down with use like any other tool. Blocks aren't broken by a click —
+## you hold the button (see _update_breaking), so a click on a block
+## just starts the swing.
 func _attack_or_break() -> void:
 	_punch_timer = 0.25   # arm swing, whatever we hit
 	var target := _aim_creature()
 	if target != null:
 		if _punch_cooldown > 0.0:
 			return
-		_punch_cooldown = PUNCH_COOLDOWN
-		target.take_hit(PUNCH_DAMAGE, global_position, self)
+		var wielding_sword := held_id() == Blocks.SWORD
+		_punch_cooldown = SWORD_COOLDOWN if wielding_sword else PUNCH_COOLDOWN
+		target.take_hit(SWORD_DAMAGE if wielding_sword else PUNCH_DAMAGE, global_position, self)
+		if wielding_sword:
+			_use_tool(Blocks.SWORD)
 
 
 ## Called every physics frame with whether the break button is held.
@@ -558,6 +582,7 @@ func _update_breaking(delta: float, holding: bool) -> void:
 		if drops_when_broken(id):
 			# Pops out as an item (ores turn into coal / iron).
 			world.spawn_drop(Vector3(block) + Vector3(0.5, 0.1, 0.5), Blocks.drop_for(id))
+		_use_tool(held_id())   # no-op unless what's held actually wears out
 		_reset_breaking()
 		return
 	break_progress_changed.emit(_break_progress)
@@ -589,6 +614,28 @@ func drops_when_broken(id: int) -> bool:
 		return true
 	var need: Array = Blocks.NEEDS_TOOL[id]
 	return best_tool(need[0])[1] >= need[1]
+
+
+func tool_durability_left(id: int) -> int:
+	return tool_durability.get(id, Blocks.max_durability(id))
+
+
+## One use of a tool/weapon: a completed block break for pickaxes/axes,
+## a landed hit for the sword. Items with no DURABILITY entry (0) never
+## wear out and this is a no-op. Breaks and disappears from the
+## inventory at 0, with a message.
+func _use_tool(id: int) -> void:
+	var max_d := Blocks.max_durability(id)
+	if max_d <= 0:
+		return
+	var left: int = tool_durability_left(id) - 1
+	if left <= 0:
+		tool_durability.erase(id)
+		inventory.take(id, 1)   # also emits inventory.changed, which refreshes the HUD
+		tool_broke.emit(Blocks.NAMES[id])
+	else:
+		tool_durability[id] = left
+		durability_changed.emit()
 
 
 

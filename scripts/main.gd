@@ -98,6 +98,7 @@ func _ready() -> void:
 		if state == State.PLAYING:
 			_enter(State.WORKBENCH))
 	player.sleep_requested.connect(_try_sleep)
+	player.tool_broke.connect(func(item_name: String): hud.show_message("%s broke!" % item_name))
 	_load_settings()
 
 	# We save on close, so ask Godot not to quit on its own.

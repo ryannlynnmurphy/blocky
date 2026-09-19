@@ -15,6 +15,7 @@ extends Node
 ##   frames 850..870   craft and place a Torch; it lights up and keeps hostiles away
 ##   frames 880..890   sleeping in a Bed: no-op by day, skips to dawn at night
 ##   frames 900..1020  shelter: a walled-in player is never bitten by a chasing Shade
+##   frames 1030..1060 sword: hits harder than a fist, only visible while held, wears out
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -397,3 +398,54 @@ func _physics_process(_delta: float) -> void:
 				and _shelter_shade.global_position.distance_to(_shelter_center) <= 2.5
 			print("selftest: after 2 s, shelter breached: %s (expect false), health unchanged: %s (expect true)"
 				% [breached, player.health == _shelter_health])
+		1030:
+			# Sword: craft it, equip it, confirm it hits harder than a bare
+			# fist and only shows up while actually held. _sword.visible is
+			# updated once a physics frame in Player._physics_process, so
+			# it's checked a frame after each select_slot(), not the same
+			# frame — otherwise the check races Player's own update.
+			player.inventory.add(Blocks.PLANKS, 2)
+			player.inventory.add(Blocks.STICK, 1)
+			var sword_recipe := {}
+			for r in Recipes.LIST:
+				if r.get("out", [0])[0] == Blocks.SWORD:
+					sword_recipe = r
+			print("selftest: can craft sword at a workbench: %s (expect true), in a pocket: %s (expect false, 3 rows tall)"
+				% [Recipes.can_craft(player.inventory, sword_recipe, true),
+					Recipes.can_craft(player.inventory, sword_recipe, false)])
+			Recipes.craft(player.inventory, sword_recipe)
+			player.select_slot(player.inventory.find_slot(Blocks.SWORD))
+			var dummy := world.spawn_creature_at(player.global_position + Vector3(0, 0.5, -2))
+			var hp_before := dummy.health
+			dummy.take_hit(Player.SWORD_DAMAGE, player.global_position, player)
+			print("selftest: sword damage: %d -> %d (expect drop of %d, more than a fist's %d)"
+				% [hp_before, dummy.health, Player.SWORD_DAMAGE, Player.PUNCH_DAMAGE])
+		1031:
+			print("selftest: sword equipped: held %s, model visible %s (both expect true)"
+				% [player.held_id() == Blocks.SWORD, player._sword.visible])
+		1040:
+			var full_durability := Blocks.max_durability(Blocks.SWORD)
+			print("selftest: sword durability starts full: %d (expect %d)"
+				% [player.tool_durability_left(Blocks.SWORD), full_durability])
+			player._use_tool(Blocks.SWORD)
+			print("selftest: after one hit: %d (expect %d)"
+				% [player.tool_durability_left(Blocks.SWORD), full_durability - 1])
+			player.select_slot(0)
+		1041:
+			print("selftest: sword hidden once something else is held: held %s, model visible %s (expect false, false)"
+				% [player.held_id() == Blocks.SWORD, player._sword.visible])
+		1050:
+			player.select_slot(player.inventory.find_slot(Blocks.SWORD))
+			player.tool_durability[Blocks.SWORD] = 1
+			var sword_before := player.inventory.count(Blocks.SWORD)
+			player._use_tool(Blocks.SWORD)
+			print("selftest: sword breaks at 0 durability: had %d, now %d (expect 1 -> 0)"
+				% [sword_before, player.inventory.count(Blocks.SWORD)])
+		1060:
+			# Same wear-and-break mechanism, on a mining tool this time.
+			player.inventory.add(Blocks.WOOD_PICKAXE, 1)
+			player.tool_durability[Blocks.WOOD_PICKAXE] = 1
+			var pick_before := player.inventory.count(Blocks.WOOD_PICKAXE)
+			player._use_tool(Blocks.WOOD_PICKAXE)
+			print("selftest: pickaxe breaks at 0 durability too: had %d, now %d (expect 1 -> 0)"
+				% [pick_before, player.inventory.count(Blocks.WOOD_PICKAXE)])

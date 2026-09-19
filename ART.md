@@ -21,7 +21,7 @@ territory, deliberately deferred).
 | Water surface | ✅ (flat plane, textured) |
 | Torch, Bed | ✅ hand-generated (no source art existed — see M27 in ROADMAP.md); `blocks_atlas.png` extended 4x4→4x5 to fit the 4 new tiles |
 
-## 2. Items — 10 ✅ textured
+## 2. Items — 11 ✅ textured
 
 Meat, Stick, Coal, Iron, Wooden/Stone/Iron Pickaxe, Wooden/Stone/Iron
 Axe. `Blocks.icon(id)` (in `blocks.gd`) is the single lookup used by
@@ -29,11 +29,16 @@ the hotbar, inventory grid, cursor stack and dropped-item cubes — for
 blocks it reuses the same world texture already on the block; for
 items it's the item's own 16×16 icon file. No new art was needed.
 
+Sword is the same deal as Torch/Bed (§1): no source art existed, so
+`sword.png` is hand-generated (diagonal blade + hilt, transparent
+background matching how the other item icons are cut out) — see M28
+in ROADMAP.md.
+
 ## 3. Characters — 3, mixed
 
 | Character | Asset | Status |
 |---|---|---|
-| Player | `blocky/models/player.glb` — 21 separate part meshes (leg/boot/torso/belt/buckle/arm/hand ×L,R, head, 8 hair pieces, 2 eyes), each with its own baked texture | ✅ rigged at runtime (`player.gd::_build_model()`); scaled from real-human-scale to our 1.3-tall body; short sword attached to the right hand (cosmetic, no swing yet) |
+| Player | `blocky/models/player.glb` — 21 separate part meshes (leg/boot/torso/belt/buckle/arm/hand ×L,R, head, 8 hair pieces, 2 eyes), each with its own baked texture | ✅ rigged at runtime (`player.gd::_build_model()`); scaled from real-human-scale to our 1.3-tall body; short sword attached to the right hand, visible only while `Blocks.SWORD` is the held item (see M28 in ROADMAP.md — it's a real craftable weapon now, not cosmetic) |
 | Critter | `blocky/textures/skins/critter_{tan,brown,sandy,white}.png` — **skin sheets only, no GLB** | ⬜ still flat-color boxes. Needs custom per-part UVs matching the sheet's box layout (head 8×8×8, torso 8×12×4, limbs 4×12×4 on a 64×32 sheet) — Godot's default BoxMesh UV won't sample the right sub-region per part, so this isn't a quick texture swap like the player was. |
 | Shade | `blocky/textures/skins/shade.png` — same story as Critter | ⬜ same work needed |
 
@@ -132,7 +137,7 @@ the hotbar's frame, it's the inventory grid's.
 3. ~~UI chrome~~ ✅ done (hearts/hunger/hotbar, then crosshair/break
    bar/logo/inventory slots — buttons/slider/message/panel skipped,
    see §6)
-4. ~~Player skin~~ ✅ done (sword is cosmetic-only for now)
+4. ~~Player skin~~ ✅ done (sword is a real weapon now, see M28)
 5. ~~Named wildlife/hostile GLBs~~ ✅ done (rabbit/deer/fox/boar/bird,
    goblin/wisp/witch) — wildlife no longer spawns the old box
    placeholder at all; the box "Shade" is now just one of four hostile

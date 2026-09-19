@@ -11,11 +11,11 @@ extends RefCounted
 ## are always appended at the end so old save files keep meaning the same.
 enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, MEAT,
 	WORKBENCH, STICK, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED }
+	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED, SWORD }
 
 const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks", "Meat",
 	"Workbench", "Stick", "Wooden Pickaxe", "Wooden Axe", "Stone Pickaxe", "Stone Axe",
-	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed"]
+	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed", "Sword"]
 
 ## Everything that can exist in the world as a block.
 const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH, COAL_ORE, IRON_ORE,
@@ -23,7 +23,17 @@ const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH,
 
 ## Items (not blocks) worth listing on the HUD.
 const ITEMS := [MEAT, STICK, COAL, IRON, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	IRON_PICKAXE, IRON_AXE]
+	IRON_PICKAXE, IRON_AXE, SWORD]
+
+## How many uses a tool/weapon survives before it breaks. Missing = never
+## wears out (blocks, raw materials, ...). "Uses" means one completed
+## block break for pickaxes/axes, one landed hit for the sword.
+const DURABILITY := {
+	WOOD_PICKAXE: 60, WOOD_AXE: 60,
+	STONE_PICKAXE: 130, STONE_AXE: 130,
+	IRON_PICKAXE: 250, IRON_AXE: 250,
+	SWORD: 200,
+}
 
 ## Seconds of holding the button it takes to break each block by hand.
 const HARDNESS := {
@@ -65,6 +75,11 @@ const ATLAS_FAMILY := {
 
 static func hardness(id: int) -> float:
 	return HARDNESS.get(id, 1.0)
+
+
+## 0 = doesn't wear out.
+static func max_durability(id: int) -> int:
+	return DURABILITY.get(id, 0)
 
 
 static func tool_class(id: int) -> String:
@@ -114,6 +129,7 @@ const ICON := {
 	IRON_AXE: preload("res://blocky/textures/items/iron_axe.png"),
 	TORCH: preload("res://blocky/textures/blocks/torch_top.png"),
 	BED: preload("res://blocky/textures/blocks/bed_top.png"),
+	SWORD: preload("res://blocky/textures/items/sword.png"),
 }
 
 

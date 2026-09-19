@@ -90,6 +90,7 @@ class HotbarView extends Control:
 	const SELECTED_TEX := preload("res://blocky/textures/ui/slot_selected.png")
 	var ids: Array[int] = []
 	var counts: Array[int] = []
+	var durability: Array[float] = []   # 0..1 remaining; 1.0 = full or doesn't wear out
 	var selected := 0
 
 	func _ready() -> void:
@@ -98,9 +99,13 @@ class HotbarView extends Control:
 	func refresh(player: Player) -> void:
 		ids.clear()
 		counts.clear()
+		durability.clear()
 		for i in Inventory.HOTBAR:
-			ids.append(player.inventory.id_at(i))
+			var id := player.inventory.id_at(i)
+			ids.append(id)
 			counts.append(player.inventory.count_at(i))
+			var max_d := Blocks.max_durability(id)
+			durability.append(float(player.tool_durability_left(id)) / max_d if max_d > 0 else 1.0)
 		selected = player.selected
 		queue_redraw()
 
@@ -115,6 +120,13 @@ class HotbarView extends Control:
 			var id: int = ids[i] if i < ids.size() else Blocks.AIR
 			if id != Blocks.AIR:
 				draw_texture_rect(Blocks.icon(id), r.grow(-8), false)
+			var d: float = durability[i] if i < durability.size() else 1.0
+			if id != Blocks.AIR and d < 1.0:
+				var bar_w := SLOT - 12.0
+				var bar_pos := r.position + Vector2(6, SLOT - 10)
+				draw_rect(Rect2(bar_pos, Vector2(bar_w, 3)), Color(0, 0, 0, 0.6))
+				var fill_col := Color(0.85, 0.2, 0.2).lerp(Color(0.3, 0.85, 0.3), d)
+				draw_rect(Rect2(bar_pos, Vector2(bar_w * d, 3)), fill_col)
 			# hotbar_slot.png already bakes in its own border via edge
 			# shading; slot_selected.png is a separate hollow-centre frame
 			# (transparent middle, opaque gold ring) drawn a bit larger so
@@ -208,6 +220,7 @@ func bind_player(player: Player) -> void:
 	_player = player
 	player.hotbar_changed.connect(func(_i: int): _hotbar.refresh(player))
 	player.inventory.changed.connect(func(): _hotbar.refresh(player))
+	player.durability_changed.connect(func(): _hotbar.refresh(player))
 	player.inventory.added.connect(_show_pickup)
 	player.break_progress_changed.connect(_crosshair.set_progress)
 	player.health_changed.connect(_health_bar.set_value)

@@ -241,6 +241,42 @@ and verified before the next starts. No system gets built "all at once."
       `main` is declared as the generic `Node` type in selftest.gd, so
       the property's type can't be inferred — needed `var x: float =`
       instead (same class of bug noted in project memory before).
+- [x] **M28 — Tool durability, and the sword is a real weapon now.**
+      `Blocks.SWORD` (`2 Planks + 1 Stick`, needs a workbench — 3 rows
+      tall, doesn't fit the pocket grid) is a real inventory item now
+      instead of a permanently-attached cosmetic: `player._sword`
+      (still the same `short_sword.glb`) is only `.visible` while
+      `held_id() == Blocks.SWORD`, checked once a physics frame. Held,
+      it hits for `SWORD_DAMAGE` (4, vs. a fist's 1) on a slower
+      `SWORD_COOLDOWN` (0.5s vs. 0.35s) — genuinely a different, better
+      weapon, not just a reskin.
+      Durability lives on `Player` (`tool_durability: {id: uses left}`),
+      not in `Inventory` itself — the inventory is flat parallel
+      `_ids`/`_counts` arrays with no room for per-slot metadata, and
+      giving it that would mean stacks of the same tool ID could carry
+      *different* wear, breaking `Inventory.add()`'s assumption that
+      same-id stacks are interchangeable. Scope trade-off, stated
+      plainly: two of the same tool share one wear counter instead of
+      wearing independently — doesn't matter much in practice since
+      players rarely carry duplicates of the same tool. `_use_tool(id)`
+      is a no-op for anything without a `Blocks.DURABILITY` entry (raw
+      materials, blocks, ...); pickaxes/axes call it on every completed
+      block break, the sword on every landed hit; a tool that hits 0
+      uses disappears from the inventory with a "X broke!" HUD message.
+      Persists across save/load and respawn (dying doesn't repair your
+      tools) but resets on a new game. Also added a small durability
+      bar under any damaged hotbar item (green → red as it wears down;
+      undamaged/non-wearing items show no bar, matching Minecraft) —
+      without it the whole mechanic would be invisible to a player.
+      Verified: 5 new selftest phases (frames 1030-1060) covering
+      craft-needs-a-bench, sword damage vs. fist damage, model
+      visibility toggling correctly across a slot switch (checked a
+      frame *after* each `select_slot()`, not the same frame — it
+      raced `Player._physics_process`'s own update at first, a real
+      bug the test caught before it shipped), durability ticking down
+      one hit at a time, and both the sword and a pickaxe disappearing
+      at 0 durability — plus a screenshot of the durability bar
+      rendering (green, lightly worn) under the hotbar sword icon.
 
 ## Next — pick a direction
 
@@ -253,7 +289,8 @@ how much they'd change the feel of the game:
       (see M24).
 - [ ] GLB pine/broadleaf/crooked trees, if wood-gathering ever gets a
       non-block-mining redesign (see M25) — voxel trees stay for now.
-- [ ] Tool durability; give the sword an actual swing/hitbox.
+- [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
+      duplicate tools wearing independently ever turns out to matter.
 - [ ] A simple generated music loop.
 - [ ] Furnace: smelt iron ore properly (torches already craft from
       coal + sticks — see M27).

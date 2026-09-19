@@ -20,6 +20,7 @@ const LIST := [
 	{"shape": [[Blocks.IRON, Blocks.IRON], [Blocks.IRON, S], [0, S]], "out": [Blocks.IRON_AXE, 1]},
 	{"shapeless": [Blocks.COAL, S], "out": [Blocks.TORCH, 4]},
 	{"shape": [[P, P, P]], "out": [Blocks.BED, 1]},
+	{"shape": [[P], [P], [S]], "out": [Blocks.SWORD, 1]},
 ]
 
 

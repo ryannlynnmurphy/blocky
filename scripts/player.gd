@@ -99,8 +99,18 @@ var _step_sign := 1.0     # which leg is forward; a footstep sounds when it flip
 var _tick_timer := 0.0    # spacing between digging tick sounds
 
 const BASE_FOV := 70.0
-const RUN_FOV := 80.0     # the camera widens a little while sprinting
-const RUN_LEAN := 0.14    # radians of forward lean while sprinting
+const RUN_FOV := 78.0     # the camera widens a little while sprinting
+const RUN_LEAN := 0.11    # radians of forward lean while sprinting
+
+# ---- jump pose (airborne, not mid-stride) ----
+const AIR_LEG_SWING := 0.65   # legs scissor-kick opposite each other while airborne
+const AIR_CYCLE_SPEED := 7.0  # radians/sec, independent of horizontal speed so
+                               # the legs keep alternating even jumping straight up
+const JUMP_POSE_SPEED := 15.0   # snappier snap into the pose
+
+# ---- run bob (extra vertical bounce while moving; bigger while sprinting) ----
+const WALK_BOB := 0.03
+const RUN_BOB := 0.08
 
 # ---- camera view mode ----
 var first_person := false
@@ -114,6 +124,7 @@ var test_move := Vector2.ZERO
 var test_run := false
 var test_hold_break := false
 var test_swim_up := false
+var test_jump := false   # one-shot: set true for a frame to trigger a jump
 
 var _knock := Vector3.ZERO   # shove from being hit; fades out
 
@@ -320,8 +331,9 @@ func _physics_process(delta: float) -> void:
 			velocity.y = SWIM_RISE_SPEED
 	elif not is_on_floor():
 		velocity.y -= GRAVITY * delta
-	elif not _no_input and Input.is_action_just_pressed("jump"):
+	elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):
 		velocity.y = JUMP_SPEED
+		test_jump = false
 
 	# Movement is relative to where the camera is looking.
 	var input := test_move
@@ -353,7 +365,7 @@ func _physics_process(delta: float) -> void:
 	if not _no_input:
 		holding = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_open
 	_update_breaking(delta, holding)
-	_animate_limbs(delta, moving and is_on_floor(), speed, running)
+	_animate_limbs(delta, moving and is_on_floor(), speed, running, is_on_floor())
 	_tick_hunger(delta, running)
 	_update_highlight()
 	_sword.visible = held_id() == Blocks.SWORD
@@ -372,10 +384,14 @@ func _footstep(running: bool) -> void:
 	Sfx.play(name, null, 0.15, -3.0 if running else -8.0)
 
 
-## Swings arms and legs while walking; throws the right arm on a punch.
-## Limb pivots sit at the shoulder/hip, and a positive X rotation moves
-## the hand or foot forward (toward the model's -Z).
-func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) -> void:
+## Swings arms and legs while walking or sprinting (wider, faster swing plus
+## a vertical bob while running); scissor-kicks the legs opposite each other
+## while airborne, with each arm swinging opposite its own leg (same
+## contralateral pattern as a normal stride) instead of freezing mid-stride;
+## throws the right arm on a punch. Limb pivots sit at the shoulder/hip, and
+## a positive X rotation moves the hand or foot forward (toward the model's -Z).
+func _animate_limbs(delta: float, walking: bool, speed: float, running: bool, on_floor: bool) -> void:
+	var airborne := not on_floor and not _in_water
 	if walking:
 		_walk_cycle += delta * speed * 2.2
 		# Each time the legs cross, a foot lands.
@@ -383,20 +399,45 @@ func _animate_limbs(delta: float, walking: bool, speed: float, running: bool) ->
 		if s != 0.0 and s != _step_sign:
 			_step_sign = s
 			_footstep(running)
-	var amplitude := 1.1 if running else 0.7
-	var swing := sin(_walk_cycle) * amplitude if walking else 0.0
-	var k := 12.0 * delta
-	_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, swing, k)
-	_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, -swing, k)
-	_leg_r.rotation.x = lerp_angle(_leg_r.rotation.x, swing, k)
+	elif airborne:
+		# Keeps alternating even on a straight-up jump with no horizontal speed.
+		_walk_cycle += delta * AIR_CYCLE_SPEED
+
+	var amplitude := 0.75 if running else 0.43
+	var swing := 0.0
+	if walking:
+		swing = sin(_walk_cycle) * amplitude
+	elif airborne:
+		swing = sin(_walk_cycle) * AIR_LEG_SWING
+	var k := (18.0 if running else 12.0) * delta
+
+	if airborne:
+		var jk := JUMP_POSE_SPEED * delta
+		_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, swing, jk)
+		_leg_r.rotation.x = lerp_angle(_leg_r.rotation.x, -swing, jk)
+		# Arms alternate opposite the leg on the same side, same as a normal
+		# stride, just carried on into the air.
+		_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, -swing, jk)
+	else:
+		_arm_l.rotation.x = lerp_angle(_arm_l.rotation.x, swing, k)
+		_leg_l.rotation.x = lerp_angle(_leg_l.rotation.x, -swing, k)
+		_leg_r.rotation.x = lerp_angle(_leg_r.rotation.x, swing, k)
+
 	if _mining:
 		# Repeated chopping swing while holding on a block.
 		_arm_r.rotation.x = 1.0 + sin(Time.get_ticks_msec() / 1000.0 * 18.0) * 0.5
 	elif _punch_timer > 0.0:
 		_punch_timer -= delta
 		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, 1.5, 30.0 * delta)
+	elif airborne:
+		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, swing, JUMP_POSE_SPEED * delta)
 	else:
 		_arm_r.rotation.x = lerp_angle(_arm_r.rotation.x, -swing, k)
+
+	# A little extra bounce on top of the lean while sprinting sells the
+	# "sprint feel" beyond just the faster limb swing.
+	var bob_target := absf(sin(_walk_cycle)) * (RUN_BOB if running else WALK_BOB) if walking else 0.0
+	_model.position.y = lerp(_model.position.y, bob_target, k)
 
 
 # ---------------------------------------------------------------- health

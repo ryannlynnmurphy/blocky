@@ -126,6 +126,14 @@ func _ready() -> void:
 		test.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(test)
 
+	# Testing aid: `-- --animtest` drives a sprint then a jump so the new
+	# limb-animation work can be watched/recorded (see tools/anim_check.gd).
+	if "--animtest" in args:
+		var anim_test: Node = load("res://tools/anim_check.gd").new()
+		anim_test.player = player
+		anim_test.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(anim_test)
+
 	# Start on the title screen, unless a test or recording wants to skip it.
 	if selftest or "--skiptitle" in args:
 		_enter(State.PLAYING)

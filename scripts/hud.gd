@@ -195,7 +195,13 @@ func _ready() -> void:
 	var hint := _make_label()
 	hint.text = "WASD move   Space jump   Shift run   LMB punch / hold to break   RMB place held block   1-9 / wheel pick slot   E eat   V camera view   Tab inventory   Esc pause   F5 save   T fast-forward"
 	hint.add_theme_font_size_override("font_size", 14)
-	hint.position = Vector2(12, 10)
+	# Wraps instead of running under the clock label (top-right, starts
+	# 400px from the right edge) at normal window widths.
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	hint.offset_left = 12
+	hint.offset_top = 10
+	hint.offset_right = -420
 	add_child(hint)
 
 	_clock_label = _make_label()

@@ -377,6 +377,55 @@ and verified before the next starts. No system gets built "all at once."
       screenshot confirming the player visibly swimming at the correct
       depth near a real shoreline.
 
+- [x] **M32 — Jump and sprint limb animation.** `player.gd`'s
+      `_animate_limbs` now takes on_floor/vel_y: airborne, legs/arms lerp
+      to a jump pose (rising vs. falling read off vel_y's sign) instead of
+      freezing mid-stride, and landing resumes the walk/run swing
+      automatically. Added a small vertical model bob while moving (bigger
+      while sprinting) on top of the existing lean/FOV-widen sprint tells,
+      and `player.test_jump` (mirrors `test_swim_up`) since jump is
+      normally unreachable under `--no-input`. Verified with a recorded
+      movie (mid-stride running pose, airborne arms-up/legs-in pose) plus
+      the full `--selftest` suite passing.
+- [x] **M33 — The proper GLB water/shoreline system.** Replaced the flat
+      1000x1000 `PlaneMesh` (`main.tscn`'s old `Water` node) with
+      `blocky/models/water_tile.glb` (basin + surface + foam trim + lily
+      pads) tiled over every underwater column, reusing the exact
+      environment-prop pipeline from M25 (`WorldGen.fill_chunk`'s `props`
+      array, `world.gd`'s budgeted instantiate queue). The tile is a 2x2-
+      block footprint, so it's placed on a checkerboard (every other
+      lx/lz) to tile edge-to-edge with no gaps, and always at a fixed
+      rotation — a random one, like other props get, would break the
+      tile's asymmetric foam trim lining up between neighbors. Its
+      "surface" sub-mesh sits 0.5625 above the tile's own origin (found by
+      parsing the glTF directly), so the origin is offset down by that to
+      land the surface at the old plane's exact height
+      (`WorldGen.SEA_LEVEL + 0.9`) — swim physics (`player.gd`'s
+      `WATER_SURFACE_Y`) already used that same constant independently of
+      the visual mesh, so gameplay didn't need to change at all.
+      Water tiles are excluded from the fragile-prop removal-on-dig path
+      (`world._instantiate_props` skips registering them in `_prop_nodes`)
+      since, unlike a grass tuft, water shouldn't vanish just because you
+      excavate the seafloor under it.
+      Caught a real perf regression with `--perf --radius=8` before
+      calling this done (this project's own established measure-first
+      habit, see M13/M25): a fully-underwater chunk can carry up to 64
+      tile instances vs. a handful of sparse decorative props, and 4 such
+      chunks landing in the same frame at world-load spiked the props
+      budget from M25's documented ~1-2 ms to 10.4 ms (worst frame 35.8 ms
+      vs. the M13 target). Halved `max_props_per_frame` (4 → 2) as the
+      minimal fix — cut props to 4.4 ms and worst frame to 30.6 ms, and
+      confirmed with the perf log that it's a one-time load-in spike (the
+      chunk queue empties and the worst-frame figure never climbs again
+      afterward), not a sustained cost.
+      Verified: full `--selftest` suite unaffected (swim mechanics read
+      the physics constant directly, never the visual mesh), a throwaway
+      `tools/find_water.gd` dev tool (mirrors `find_cave.gd`'s pattern) to
+      locate a real shoreline column for screenshotting, and a recorded
+      movie confirming the tiled water renders with visible foam-ripple
+      texture and lily pads, seamless to the horizon with no gaps or
+      floating geometry.
+
 This closes out every item on the original backlog. See "Next" below
 for what's left — all either blocked on missing inputs (new art/audio
 that doesn't exist yet) or deliberate, stated scope trims from
@@ -396,6 +445,3 @@ milestones above, not gaps that were missed.
       skipped this for scope).
 - [ ] Breath meter/drowning, underwater fog/muffled audio (M31 skipped
       these for scope — the core swim mechanic is there).
-- [ ] The proper GLB water/shoreline system (`blocky/models/water_tile.glb`),
-      instead of the flat plane — a bigger visual project, deliberately
-      deferred since M20.

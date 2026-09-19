@@ -22,8 +22,10 @@ const JUMP_SPEED := 7.5
 const GRAVITY := 22.0
 const MOUSE_SENS := 0.0025
 # ---- swimming ----
-# The Water plane (see main.tscn) sits at y=19.9, just under the top of
-# the sea-level block — matches WorldGen.SEA_LEVEL (19) + 0.9.
+# The visual water surface (water_tile.glb props, see world_gen.gd's
+# WATER_TILE_Y) sits at y=19.9, just under the top of the sea-level block —
+# matches WorldGen.SEA_LEVEL (19) + 0.9. Gameplay uses this constant
+# directly rather than reading it off any placed tile.
 const WATER_SURFACE_Y := WorldGen.SEA_LEVEL + 0.9
 const SWIM_SPEED := 3.0
 const SWIM_RISE_SPEED := 3.0

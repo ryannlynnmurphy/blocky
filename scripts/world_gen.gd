@@ -59,6 +59,15 @@ const REEDS_CHANCE := 6
 const REEDS_SALT := 211
 const REEDS_BIOMES := [PLAINS, FOREST]
 
+## water_tile.glb is a 2x2-block decorative tile (basin + surface + foam
+## trim + lily pads) placed over every underwater column on a checkerboard
+## grid (every other lx/lz) so tiles meet edge-to-edge with no gaps or
+## overlap. Its "surface" sub-mesh sits 0.5625 above the tile's own origin
+## (found by inspecting the glTF), so the origin is offset down by that
+## much to line the surface up with the old flat plane's height exactly
+## (SEA_LEVEL + 0.9).
+const WATER_TILE_Y := SEA_LEVEL + 0.9 - 0.5625
+
 ## Grass colors at the four corners of the temperature/moisture square.
 const GRASS_COLD_DRY := Color(0.58, 0.72, 0.52)   # pale
 const GRASS_HOT_DRY := Color(0.72, 0.72, 0.30)    # yellow, scrubby
@@ -281,6 +290,11 @@ func fill_chunk(cpos: Vector2i) -> Array:
 				if biome_i in REEDS_BIOMES and h == SEA_LEVEL + 1 \
 						and hash(Vector2i(wx + REEDS_SALT, wz)) % REEDS_CHANCE == 0:
 					props.append({"type": "reeds", "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
+				elif h <= SEA_LEVEL and lx % 2 == 0 and lz % 2 == 0:
+					# Fixed rotation (not the random `rot` every other prop
+					# gets) keeps the tile's asymmetric foam trim consistent
+					# from one tile to the next.
+					props.append({"type": "water_tile", "lx": lx, "lz": lz, "y": WATER_TILE_Y, "rot": 0.0})
 				continue
 			for rule in PROPS[biome_i]:
 				if hash(Vector2i(wx + int(rule["salt"]), wz)) % int(rule["chance"]) == 0:

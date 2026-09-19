@@ -103,6 +103,7 @@ const PROP_SCENES := {
 	"flower_patch": preload("res://blocky/models/flower_patch.glb"),
 	"mushroom_cluster": preload("res://blocky/models/mushroom_cluster.glb"),
 	"reeds": preload("res://blocky/models/reeds.glb"),
+	"water_tile": preload("res://blocky/models/water_tile.glb"),
 }
 ## What breaking the block a prop stands on pops out, for the prop types
 ## that are worth picking up. Rocks/boulders/flowers are left alone for
@@ -121,7 +122,13 @@ var _prop_nodes := {}   # Vector3i -> Node3D
 ## (see _process_prop_queue) so a burst of finished chunks at load time
 ## can't spike a frame the way an unthrottled loop over all of them would.
 var _prop_queue: Array[Vector2i] = []
-var max_props_per_frame := 4   # chunks' worth of props instantiated per frame
+## Chunks' worth of props instantiated per frame. Lowered from 4 (was fine
+## when props were a handful of sparse decorations per chunk) after
+## water_tile.glb tiling made a fully-underwater chunk carry up to 64
+## instances — 4 such chunks in one frame measurably spiked load time
+## (see world_gen.gd's WATER_TILE_Y); 2 keeps the same load-time-only
+## spike but roughly halves its worst case.
+var max_props_per_frame := 2
 
 # ---- creatures ----
 const MAX_CREATURES := 40
@@ -341,6 +348,8 @@ func _instantiate_props(chunk: Chunk, props: Array) -> void:
 		chunk.add_child(inst)
 		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
 		inst.rotation.y = p["rot"]
+		if p["type"] == "water_tile":
+			continue   # ambient water — not tied to the block beneath it, unlike fragile props
 		var wpos := Vector3i(chunk.cpos.x * SIZE + int(p["lx"]), int(p["y"]),
 			chunk.cpos.y * SIZE + int(p["lz"]))
 		_prop_nodes[wpos] = inst

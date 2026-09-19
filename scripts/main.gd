@@ -11,7 +11,6 @@ enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
-@onready var water: MeshInstance3D = $Water
 @onready var day_night: DayNight = $DayNight
 @onready var hud := $HUD
 
@@ -150,10 +149,6 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# The water is one big flat plane that follows the player.
-	water.global_position.x = player.global_position.x
-	water.global_position.z = player.global_position.z
-
 	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH, State.FURNACE]:
 		return
 	_autosave_timer += delta

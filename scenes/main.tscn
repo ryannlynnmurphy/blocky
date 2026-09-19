@@ -1,11 +1,10 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/world.gd" id="2_world"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="4_player"]
 [ext_resource type="Script" path="res://scripts/day_night.gd" id="5_daynight"]
-[ext_resource type="Texture2D" path="res://blocky/textures/blocks/water_surface.png" id="6_water_tex"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.29, 0.55, 0.95, 1)
@@ -31,18 +30,6 @@ fog_depth_begin = 80.0
 fog_depth_end = 125.0
 fog_sky_affect = 0.1
 
-[sub_resource type="PlaneMesh" id="water_mesh"]
-size = Vector2(1000, 1000)
-
-[sub_resource type="StandardMaterial3D" id="mat_water"]
-transparency = 1
-cull_mode = 2
-albedo_color = Color(0.75, 0.85, 1, 0.68)
-albedo_texture = ExtResource("6_water_tex")
-texture_filter = 0
-uv1_scale = Vector3(1000, 1000, 1)
-roughness = 0.2
-
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
@@ -64,11 +51,6 @@ visible = false
 
 [node name="World" type="Node3D" parent="."]
 script = ExtResource("2_world")
-
-[node name="Water" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 19.9, 0)
-mesh = SubResource("water_mesh")
-surface_material_override/0 = SubResource("mat_water")
 
 [node name="Player" parent="." instance=ExtResource("4_player")]
 

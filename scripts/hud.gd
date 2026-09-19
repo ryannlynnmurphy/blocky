@@ -236,9 +236,9 @@ func is_inventory_open() -> bool:
 	return _inventory_ui.visible
 
 
-func set_inventory_open(open: bool, at_bench: bool = false) -> void:
+func set_inventory_open(open: bool, mode: String = "pocket") -> void:
 	if open:
-		_inventory_ui.open(at_bench)
+		_inventory_ui.open(mode)
 	else:
 		_inventory_ui.close()
 

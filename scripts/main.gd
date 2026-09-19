@@ -7,7 +7,7 @@ const SAVE_PATH := "user://save.json"
 const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
 
-enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH }
+enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -97,6 +97,9 @@ func _ready() -> void:
 	player.workbench_used.connect(func():
 		if state == State.PLAYING:
 			_enter(State.WORKBENCH))
+	player.furnace_used.connect(func():
+		if state == State.PLAYING:
+			_enter(State.FURNACE))
 	player.sleep_requested.connect(_try_sleep)
 	player.tool_broke.connect(func(item_name: String): hud.show_message("%s broke!" % item_name))
 	_load_settings()
@@ -135,7 +138,7 @@ func _process(delta: float) -> void:
 	water.global_position.x = player.global_position.x
 	water.global_position.z = player.global_position.z
 
-	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH]:
+	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH, State.FURNACE]:
 		return
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_SECONDS:
@@ -165,7 +168,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		State.PAUSED:
 			if key == KEY_ESCAPE:
 				_enter(State.PLAYING)
-		State.INVENTORY, State.WORKBENCH:
+		State.INVENTORY, State.WORKBENCH, State.FURNACE:
 			if key == KEY_ESCAPE or key == KEY_TAB:
 				_enter(State.PLAYING)
 
@@ -195,7 +198,9 @@ func _enter(s: State) -> void:
 		State.INVENTORY:
 			hud.set_inventory_open(true)
 		State.WORKBENCH:
-			hud.set_inventory_open(true, true)
+			hud.set_inventory_open(true, "bench")
+		State.FURNACE:
+			hud.set_inventory_open(true, "furnace")
 	var playing := s == State.PLAYING
 	hud.visible = s != State.TITLE
 	player.ui_open = not playing

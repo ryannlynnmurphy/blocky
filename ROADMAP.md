@@ -298,6 +298,42 @@ and verified before the next starts. No system gets built "all at once."
       suite unaffected (nothing asserts exact waveform content, only
       play counts/booleans, so shifting the shared seeded RNG's call
       sequence by inserting the new generator doesn't break anything).
+- [x] **M30 — Furnace: iron ore actually needs smelting now.** Breaking
+      Iron Ore used to hand you usable Iron directly
+      (`Blocks.DROP_OF[IRON_ORE] = IRON`); that entry is gone, so
+      breaking it now drops raw Iron Ore (reusing the block's own id —
+      `DROP_OF.get(id, id)` already defaults to "drops itself"; no new
+      item or art needed) and only a `Blocks.FURNACE`
+      (`8 Stone in a ring → 1 Furnace`, needs a workbench) turns it into
+      Iron. Generated `furnace_top`/`furnace_side.png` the same way as
+      the torch/bed tiles (M27) and extended the shared atlas again,
+      4x5 → 4x6 (`BlockAtlas.ROWS` 5→6).
+      The furnace screen isn't the shaped crafting grid — smelting
+      isn't a pattern, it's just "the right two ingredients" — so
+      `InventoryUI` gained a `mode: String` ("pocket"/"bench"/"furnace",
+      replacing the old `bench_mode: bool`) and two new layout/result
+      branches (`_build_furnace_section()`, `_can_smelt()`) that swap
+      in two fixed slots (ore, fuel) instead, while reusing the exact
+      same `SlotView` component, inventory grid and hotbar rendering as
+      pocket/bench crafting. Right-clicking a Furnace opens it via the
+      same pattern as Workbench/Bed (`player.furnace_used` →
+      `main.State.FURNACE`).
+      Verified: new selftest phases covering the drop-changed assertion,
+      craft-needs-a-bench, the screen opening, and a full
+      ore+fuel→Iron→consumed smelt — but not with a live third-person
+      raycast the way the Workbench test proves its click detection,
+      after real debugging (not a guess): diagnostics confirmed the
+      furnace block placed and persisted correctly every time, but the
+      very next `_aim_ray()` sometimes landed somewhere else entirely
+      (once on a tree's leaves) — the `SpringArm3D` third-person camera
+      pulls in to avoid clipping when something's placed close to its
+      own arm, silently moving the ray's origin before the "click".
+      Since Furnace's right-click branch is structurally identical to
+      Workbench's already-raycast-tested one (same function, same
+      pattern, different `Blocks` id), that mechanism doesn't need
+      re-proving — this instead calls `player.furnace_used.emit()`
+      directly, the same way the Bed/sleep test already does, and
+      focuses the raycast-dependent proof where it already lives.
 
 ## Next — pick a direction
 
@@ -312,8 +348,6 @@ how much they'd change the feel of the game:
       non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
       duplicate tools wearing independently ever turns out to matter.
-- [ ] Furnace: smelt iron ore properly (torches already craft from
-      coal + sticks — see M27).
 - [ ] Water you can swim in (or the proper GLB water/shoreline system).
 - [ ] Sleeping could block on "monsters nearby" like Minecraft (M27
       skipped this for scope).

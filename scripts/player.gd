@@ -11,6 +11,7 @@ signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 signal workbench_used   # right-clicked a Workbench block
+signal furnace_used   # right-clicked a Furnace block
 signal sleep_requested   # right-clicked a Bed block
 signal tool_broke(item_name: String)   # a tool/weapon ran out of durability
 signal durability_changed   # any tool/weapon's remaining durability ticked down
@@ -711,12 +712,15 @@ func _place_block() -> void:
 	var hit := _aim_ray()
 	if hit.is_empty():
 		return
-	# Right-clicking a Workbench opens it, and a Bed sleeps, instead of
-	# building on top of them.
+	# Right-clicking a Workbench or Furnace opens it, and a Bed sleeps,
+	# instead of building on top of them.
 	var target := Vector3i((hit.position - hit.normal * 0.5).floor())
 	var target_id := world.get_block(target.x, target.y, target.z)
 	if target_id == Blocks.WORKBENCH:
 		workbench_used.emit()
+		return
+	if target_id == Blocks.FURNACE:
+		furnace_used.emit()
 		return
 	if target_id == Blocks.BED:
 		sleep_requested.emit()

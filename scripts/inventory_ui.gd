@@ -4,10 +4,12 @@ extends PanelContainer
 ## pockets, 3x3 at a Workbench) with a result slot, your 27 main slots,
 ## and the 9 hotbar slots. Click to pick up and drop stacks; right-click
 ## to split or place one; shift-click the result to craft into your bag.
+## A Furnace swaps the shaped grid for two fixed slots (ore, fuel) — see
+## open()/_build_layout()/_redraw_slots()/take_result().
 
 var player: Player
-var bench_mode := false
-var grid: Inventory          # the crafting grid, w*w slots
+var mode := "pocket"   # "pocket", "bench" or "furnace"
+var grid: Inventory          # the crafting grid (w*w shaped, or 2 for a furnace)
 var grid_w := 2
 
 var cursor_id := Blocks.AIR   # what you're holding on the mouse
@@ -107,10 +109,13 @@ func bind_player(p: Player) -> void:
 	p.inventory.changed.connect(func(): if visible: _redraw_slots())
 
 
-func open(at_bench: bool = false) -> void:
-	bench_mode = at_bench
-	grid_w = 3 if at_bench else 2
-	grid = Inventory.new(grid_w * grid_w)
+func open(new_mode: String = "pocket") -> void:
+	mode = new_mode
+	if mode == "furnace":
+		grid = Inventory.new(2)   # 0 = ore, 1 = fuel
+	else:
+		grid_w = 3 if mode == "bench" else 2
+		grid = Inventory.new(grid_w * grid_w)
 	grid.changed.connect(_redraw_slots)
 	_build_layout()
 	visible = true
@@ -145,39 +150,10 @@ func _build_layout() -> void:
 		child.queue_free()
 	_slot_views.clear()
 
-	_column.add_child(_heading("Workbench" if bench_mode else "Crafting"))
-
-	# Crafting area: grid -> result.
-	var craft_row := HBoxContainer.new()
-	craft_row.add_theme_constant_override("separation", 12)
-	var grid_box := GridContainer.new()
-	grid_box.columns = grid_w
-	grid_box.add_theme_constant_override("h_separation", 4)
-	grid_box.add_theme_constant_override("v_separation", 4)
-	for i in grid_w * grid_w:
-		grid_box.add_child(_slot(grid, i))
-	craft_row.add_child(grid_box)
-	var arrow := Label.new()
-	arrow.text = "  →  "
-	arrow.add_theme_font_size_override("font_size", 26)
-	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	craft_row.add_child(arrow)
-	_result_view = SlotView.new()
-	_result_view.ui = self
-	_result_view.is_result = true
-	_result_view.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	craft_row.add_child(_result_view)
-	_recipe_label = Label.new()
-	_recipe_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_recipe_label.modulate = Color(1, 1, 1, 0.75)
-	craft_row.add_child(_recipe_label)
-	_column.add_child(craft_row)
-
-	if not bench_mode:
-		var tip := Label.new()
-		tip.text = "Lay items out in a pattern. Tools need a Workbench (right-click one)."
-		tip.modulate = Color(1, 1, 1, 0.6)
-		_column.add_child(tip)
+	if mode == "furnace":
+		_build_furnace_section()
+	else:
+		_build_crafting_section()
 
 	_column.add_child(HSeparator.new())
 	_column.add_child(_heading("Inventory"))
@@ -202,6 +178,68 @@ func _build_layout() -> void:
 	_column.add_child(hint)
 
 
+## The shaped crafting grid (2x2 from your pockets, 3x3 at a Workbench).
+func _build_crafting_section() -> void:
+	_column.add_child(_heading("Workbench" if mode == "bench" else "Crafting"))
+	var craft_row := HBoxContainer.new()
+	craft_row.add_theme_constant_override("separation", 12)
+	var grid_box := GridContainer.new()
+	grid_box.columns = grid_w
+	grid_box.add_theme_constant_override("h_separation", 4)
+	grid_box.add_theme_constant_override("v_separation", 4)
+	for i in grid_w * grid_w:
+		grid_box.add_child(_slot(grid, i))
+	craft_row.add_child(grid_box)
+	craft_row.add_child(_result_arrow())
+	_recipe_label = Label.new()
+	_recipe_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_recipe_label.modulate = Color(1, 1, 1, 0.75)
+	craft_row.add_child(_recipe_label)
+	_column.add_child(craft_row)
+
+	if mode != "bench":
+		var tip := Label.new()
+		tip.text = "Lay items out in a pattern. Tools need a Workbench (right-click one)."
+		tip.modulate = Color(1, 1, 1, 0.6)
+		_column.add_child(tip)
+
+
+## Two fixed slots (ore, fuel) instead of a shaped grid — smelting isn't
+## a pattern, it's just "the right two ingredients".
+func _build_furnace_section() -> void:
+	_column.add_child(_heading("Furnace"))
+	var craft_row := HBoxContainer.new()
+	craft_row.add_theme_constant_override("separation", 12)
+	var input_col := VBoxContainer.new()
+	input_col.add_theme_constant_override("separation", 4)
+	input_col.add_child(_slot(grid, 0))
+	input_col.add_child(_slot(grid, 1))
+	craft_row.add_child(input_col)
+	craft_row.add_child(_result_arrow())
+	_column.add_child(craft_row)
+	var tip := Label.new()
+	tip.text = "Ore, then Fuel (Coal). Iron Ore + Coal → Iron."
+	tip.modulate = Color(1, 1, 1, 0.6)
+	_column.add_child(tip)
+
+
+## The arrow + result slot shared by both crafting and smelting.
+func _result_arrow() -> HBoxContainer:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	var arrow := Label.new()
+	arrow.text = "  →  "
+	arrow.add_theme_font_size_override("font_size", 26)
+	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(arrow)
+	_result_view = SlotView.new()
+	_result_view.ui = self
+	_result_view.is_result = true
+	_result_view.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_child(_result_view)
+	return box
+
+
 func _slot(inv: Inventory, index: int) -> SlotView:
 	var v := SlotView.new()
 	v.inv = inv
@@ -212,18 +250,33 @@ func _slot(inv: Inventory, index: int) -> SlotView:
 
 
 func _redraw_slots() -> void:
-	var recipe := Recipes.match_grid(grid, grid_w)
-	if recipe.is_empty():
-		_result_view.result_id = Blocks.AIR
-		_result_view.result_count = 0
-		_recipe_label.text = ""
+	if mode == "furnace":
+		if _can_smelt():
+			_result_view.result_id = Blocks.IRON
+			_result_view.result_count = 1
+		else:
+			_result_view.result_id = Blocks.AIR
+			_result_view.result_count = 0
 	else:
-		_result_view.result_id = recipe["out"][0]
-		_result_view.result_count = recipe["out"][1]
-		_recipe_label.text = Blocks.NAMES[recipe["out"][0]]
+		var recipe := Recipes.match_grid(grid, grid_w)
+		if recipe.is_empty():
+			_result_view.result_id = Blocks.AIR
+			_result_view.result_count = 0
+			_recipe_label.text = ""
+		else:
+			_result_view.result_id = recipe["out"][0]
+			_result_view.result_count = recipe["out"][1]
+			_recipe_label.text = Blocks.NAMES[recipe["out"][0]]
 	_result_view.queue_redraw()
 	for v in _slot_views:
 		v.queue_redraw()
+
+
+## Furnace grid: slot 0 = ore, slot 1 = fuel. The only recipe right now
+## is Iron Ore + Coal -> Iron (see take_result()'s furnace branch).
+func _can_smelt() -> bool:
+	return grid.id_at(0) == Blocks.IRON_ORE and grid.count_at(0) > 0 \
+		and grid.id_at(1) == Blocks.COAL and grid.count_at(1) > 0
 
 
 # ---------------------------------------------------------------- clicks
@@ -265,9 +318,12 @@ func slot_clicked(view: SlotView, button: int, shift: bool) -> void:
 	_redraw_slots()
 
 
-## Click the result slot: craft once onto the cursor. Shift: craft as
+## Click the result slot: craft/smelt once onto the cursor. Shift: as
 ## many as possible straight into the inventory.
 func take_result(shift: bool) -> void:
+	if mode == "furnace":
+		_take_smelted(shift)
+		return
 	var recipe := Recipes.match_grid(grid, grid_w)
 	if recipe.is_empty():
 		return
@@ -286,6 +342,27 @@ func take_result(shift: bool) -> void:
 		Recipes.consume(grid)
 		cursor_id = out_id
 		cursor_count += out_n
+	_redraw_slots()
+
+
+func _take_smelted(shift: bool) -> void:
+	if not _can_smelt():
+		return
+	if shift:
+		for k in 64:
+			if not _can_smelt():
+				break
+			if player.inventory.add(Blocks.IRON, 1) > 0:
+				break
+			grid.take_from_slot(0, 1)
+			grid.take_from_slot(1, 1)
+	else:
+		if cursor_count > 0 and (cursor_id != Blocks.IRON or cursor_count + 1 > Inventory.MAX_STACK):
+			return
+		grid.take_from_slot(0, 1)
+		grid.take_from_slot(1, 1)
+		cursor_id = Blocks.IRON
+		cursor_count += 1
 	_redraw_slots()
 
 

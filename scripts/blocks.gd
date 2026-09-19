@@ -11,15 +11,15 @@ extends RefCounted
 ## are always appended at the end so old save files keep meaning the same.
 enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, MEAT,
 	WORKBENCH, STICK, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED, SWORD }
+	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED, SWORD, FURNACE }
 
 const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks", "Meat",
 	"Workbench", "Stick", "Wooden Pickaxe", "Wooden Axe", "Stone Pickaxe", "Stone Axe",
-	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed", "Sword"]
+	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed", "Sword", "Furnace"]
 
 ## Everything that can exist in the world as a block.
 const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH, COAL_ORE, IRON_ORE,
-	TORCH, BED]
+	TORCH, BED, FURNACE]
 
 ## Items (not blocks) worth listing on the HUD.
 const ITEMS := [MEAT, STICK, COAL, IRON, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
@@ -39,12 +39,12 @@ const DURABILITY := {
 const HARDNESS := {
 	GRASS: 0.6, DIRT: 0.5, STONE: 3.0, SAND: 0.5,
 	LOG: 1.0, LEAVES: 0.25, SNOW: 0.3, PLANKS: 0.9, WORKBENCH: 1.0,
-	COAL_ORE: 3.5, IRON_ORE: 4.5, TORCH: 0.2, BED: 0.9,
+	COAL_ORE: 3.5, IRON_ORE: 4.5, TORCH: 0.2, BED: 0.9, FURNACE: 3.0,
 }
 
 ## Which kind of tool speeds up which block. "" = hands are as good as anything.
 const TOOL_CLASS := {
-	STONE: "pickaxe", COAL_ORE: "pickaxe", IRON_ORE: "pickaxe",
+	STONE: "pickaxe", COAL_ORE: "pickaxe", IRON_ORE: "pickaxe", FURNACE: "pickaxe",
 	LOG: "axe", PLANKS: "axe", WORKBENCH: "axe",
 }
 
@@ -57,10 +57,13 @@ const TOOLS := {
 ## Blocks that drop nothing unless broken with at least this tool tier.
 const NEEDS_TOOL := {
 	STONE: ["pickaxe", 1], COAL_ORE: ["pickaxe", 1], IRON_ORE: ["pickaxe", 2],
+	FURNACE: ["pickaxe", 1],
 }
 
-## What a block turns into when you break it (default: itself).
-const DROP_OF := {COAL_ORE: COAL, IRON_ORE: IRON}
+## What a block turns into when you break it (default: itself). Iron Ore
+## deliberately has no entry: breaking it gives raw Iron Ore, which only
+## a Furnace (see M30 in ROADMAP.md) turns into usable Iron.
+const DROP_OF := {COAL_ORE: COAL}
 
 ## Which BlockAtlas.FACES family (see blocky/scripts/block_atlas.gd) a
 ## world block's texture comes from. Blocks with no entry aren't drawn
@@ -69,7 +72,7 @@ const ATLAS_FAMILY := {
 	GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand",
 	LOG: "log", LEAVES: "leaves", SNOW: "snow", PLANKS: "planks",
 	WORKBENCH: "workbench", COAL_ORE: "coal_ore", IRON_ORE: "iron_ore",
-	TORCH: "torch", BED: "bed",
+	TORCH: "torch", BED: "bed", FURNACE: "furnace",
 }
 
 
@@ -130,6 +133,7 @@ const ICON := {
 	TORCH: preload("res://blocky/textures/blocks/torch_top.png"),
 	BED: preload("res://blocky/textures/blocks/bed_top.png"),
 	SWORD: preload("res://blocky/textures/items/sword.png"),
+	FURNACE: preload("res://blocky/textures/blocks/furnace_side.png"),
 }
 
 

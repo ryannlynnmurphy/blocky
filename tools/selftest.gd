@@ -16,6 +16,7 @@ extends Node
 ##   frames 880..890   sleeping in a Bed: no-op by day, skips to dawn at night
 ##   frames 900..1020  shelter: a walled-in player is never bitten by a chasing Shade
 ##   frames 1030..1060 sword: hits harder than a fist, only visible while held, wears out
+##   frames 1070..1080 furnace: iron ore only smelts into Iron there, not on breaking it
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -451,3 +452,45 @@ func _physics_process(_delta: float) -> void:
 			player._use_tool(Blocks.WOOD_PICKAXE)
 			print("selftest: pickaxe breaks at 0 durability too: had %d, now %d (expect 1 -> 0)"
 				% [pick_before, player.inventory.count(Blocks.WOOD_PICKAXE)])
+		1070:
+			# Furnace: Iron Ore no longer converts to Iron just by breaking
+			# it — only smelting does that now.
+			print("selftest: iron ore drops %s (expect Iron Ore, not Iron)"
+				% Blocks.NAMES[Blocks.drop_for(Blocks.IRON_ORE)])
+			player.inventory.add(Blocks.STONE, 8)
+			var furnace_recipe := {}
+			for r in Recipes.LIST:
+				if r.get("out", [0])[0] == Blocks.FURNACE:
+					furnace_recipe = r
+			print("selftest: can craft furnace at a workbench: %s (expect true)"
+				% Recipes.can_craft(player.inventory, furnace_recipe, true))
+			# Right-click DETECTION (aim ray -> player._place_block() ->
+			# branch on the aimed block's id) is the exact same mechanism
+			# the Workbench test above already exercises with a real
+			# raycast — Furnace's check is structurally identical, just a
+			# different Blocks id, so it's not worth re-proving with
+			# another raycast (whose geometry, at this point deep into the
+			# test, is a real headache: the shelter test's walls/trees are
+			# nearby, and placing a block close to the player can make the
+			# third-person camera's spring arm pull in to avoid clipping
+			# through it, silently retargeting the very next raycast
+			# somewhere else entirely — confirmed by diagnostics, not
+			# guessed). Test the signal wiring directly instead, the same
+			# way the Bed/sleep test above does.
+			player.furnace_used.emit()
+			print("selftest: furnace_used opens the furnace screen: %s (expect true)"
+				% (main.state == main.State.FURNACE))
+		1080:
+			var ui: InventoryUI = main.hud.inventory_ui()
+			player.inventory.add(Blocks.IRON_ORE, 1)
+			player.inventory.add(Blocks.COAL, 1)
+			ui.grid.set_slot(0, Blocks.IRON_ORE, 1)
+			ui.grid.set_slot(1, Blocks.COAL, 1)
+			player.inventory.take(Blocks.IRON_ORE, 1)
+			player.inventory.take(Blocks.COAL, 1)
+			print("selftest: furnace result with ore + fuel loaded: %s (expect Iron)"
+				% Blocks.NAMES[ui._result_view.result_id])
+			ui.take_result(true)   # shift-click: straight into the bag
+			print("selftest: smelted: %s (expect Iron x1), ore/fuel slots emptied: %s (expect true)"
+				% [player.inventory.summary(), ui.grid.is_empty()])
+			main.set_inventory_open(false)

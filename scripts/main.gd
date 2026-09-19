@@ -97,6 +97,7 @@ func _ready() -> void:
 	player.workbench_used.connect(func():
 		if state == State.PLAYING:
 			_enter(State.WORKBENCH))
+	player.sleep_requested.connect(_try_sleep)
 	_load_settings()
 
 	# We save on close, so ask Godot not to quit on its own.
@@ -209,6 +210,18 @@ func set_inventory_open(open: bool) -> void:
 func respawn_from_death() -> void:
 	player.respawn()
 	_enter(State.PLAYING)
+
+
+## Right-clicked a Bed. Only skips time at night (no "monsters nearby"
+## block yet — that's Minecraft's rule, not implemented here).
+func _try_sleep() -> void:
+	if state != State.PLAYING:
+		return
+	if day_night.is_night():
+		day_night.skip_to_morning()
+		hud.show_message("Slept until morning")
+	else:
+		hud.show_message("Can't sleep now")
 
 
 func _new_game(seed_text: String) -> void:

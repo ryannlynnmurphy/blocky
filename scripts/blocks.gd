@@ -11,14 +11,15 @@ extends RefCounted
 ## are always appended at the end so old save files keep meaning the same.
 enum { AIR, GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, MEAT,
 	WORKBENCH, STICK, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
-	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE }
+	COAL_ORE, IRON_ORE, COAL, IRON, IRON_PICKAXE, IRON_AXE, TORCH, BED }
 
 const NAMES := ["Air", "Grass", "Dirt", "Stone", "Sand", "Log", "Leaves", "Snow", "Planks", "Meat",
 	"Workbench", "Stick", "Wooden Pickaxe", "Wooden Axe", "Stone Pickaxe", "Stone Axe",
-	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe"]
+	"Coal Ore", "Iron Ore", "Coal", "Iron", "Iron Pickaxe", "Iron Axe", "Torch", "Bed"]
 
 ## Everything that can exist in the world as a block.
-const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH, COAL_ORE, IRON_ORE]
+const BLOCKS := [GRASS, DIRT, STONE, SAND, LOG, LEAVES, SNOW, PLANKS, WORKBENCH, COAL_ORE, IRON_ORE,
+	TORCH, BED]
 
 ## Items (not blocks) worth listing on the HUD.
 const ITEMS := [MEAT, STICK, COAL, IRON, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, STONE_AXE,
@@ -28,7 +29,7 @@ const ITEMS := [MEAT, STICK, COAL, IRON, WOOD_PICKAXE, WOOD_AXE, STONE_PICKAXE, 
 const HARDNESS := {
 	GRASS: 0.6, DIRT: 0.5, STONE: 3.0, SAND: 0.5,
 	LOG: 1.0, LEAVES: 0.25, SNOW: 0.3, PLANKS: 0.9, WORKBENCH: 1.0,
-	COAL_ORE: 3.5, IRON_ORE: 4.5,
+	COAL_ORE: 3.5, IRON_ORE: 4.5, TORCH: 0.2, BED: 0.9,
 }
 
 ## Which kind of tool speeds up which block. "" = hands are as good as anything.
@@ -58,6 +59,7 @@ const ATLAS_FAMILY := {
 	GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand",
 	LOG: "log", LEAVES: "leaves", SNOW: "snow", PLANKS: "planks",
 	WORKBENCH: "workbench", COAL_ORE: "coal_ore", IRON_ORE: "iron_ore",
+	TORCH: "torch", BED: "bed",
 }
 
 
@@ -110,6 +112,8 @@ const ICON := {
 	STONE_AXE: preload("res://blocky/textures/items/stone_axe.png"),
 	IRON_PICKAXE: preload("res://blocky/textures/items/iron_pickaxe.png"),
 	IRON_AXE: preload("res://blocky/textures/items/iron_axe.png"),
+	TORCH: preload("res://blocky/textures/blocks/torch_top.png"),
+	BED: preload("res://blocky/textures/blocks/bed_top.png"),
 }
 
 

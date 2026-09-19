@@ -11,6 +11,7 @@ signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 signal workbench_used   # right-clicked a Workbench block
+signal sleep_requested   # right-clicked a Bed block
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -663,10 +664,15 @@ func _place_block() -> void:
 	var hit := _aim_ray()
 	if hit.is_empty():
 		return
-	# Right-clicking a Workbench opens it instead of building on it.
+	# Right-clicking a Workbench opens it, and a Bed sleeps, instead of
+	# building on top of them.
 	var target := Vector3i((hit.position - hit.normal * 0.5).floor())
-	if world.get_block(target.x, target.y, target.z) == Blocks.WORKBENCH:
+	var target_id := world.get_block(target.x, target.y, target.z)
+	if target_id == Blocks.WORKBENCH:
 		workbench_used.emit()
+		return
+	if target_id == Blocks.BED:
+		sleep_requested.emit()
 		return
 	# Step half a block OUT of the face we hit to land in the empty neighbour.
 	var block := Vector3i((hit.position + hit.normal * 0.5).floor())

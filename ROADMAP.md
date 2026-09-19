@@ -200,6 +200,47 @@ and verified before the next starts. No system gets built "all at once."
       "hop" (`velocity.y = 4.0`) is harmlessly inherited but never
       visible, since Bird's own height-correction overwrites velocity.y
       every frame before `move_and_slide()` runs.
+- [x] **M27 — Shelter matters: torches and beds.** Two new real blocks
+      (`Blocks.TORCH`, `Blocks.BED`) reuse the entire existing block
+      pipeline as-is — inventory, hotbar/inventory icons, crafting,
+      placement, breaking, save/load — rather than a parallel prop
+      system, since the chunk mesher has no concept of a non-cube
+      block (every id needs a full [top, side, bottom] atlas entry or
+      it falls back to a stone look). Generated 4 new 16x16 tiles
+      (torch_top/side, bed_top/side) with a small PIL script matching
+      the existing flat-color palette, and extended the shared
+      `blocks_atlas.png` from 4x4 to 4x5 tiles (`BlockAtlas.ROWS` 4→5)
+      to fit them — existing tile UVs keep working unchanged since the
+      math is proportional to the atlas's own (now taller) size.
+      Torch: `Coal + Stick → 4 Torches`. A placed Torch spawns a
+      companion `OmniLight3D` (`world._add_torch_light`, keyed by
+      block position, not tied to chunk streaming so it doesn't need
+      re-creating every time its chunk comes back into view) and
+      pushes night-hunter spawn points away (`_near_a_torch`,
+      `TORCH_HOSTILE_AVOID_RADIUS` = 10 blocks) — breaking it removes
+      the light. Bed: `3 Planks in a row → 1 Bed` (needs a workbench —
+      the 3-wide shape doesn't fit the 2x2 pocket grid). Right-clicking
+      one (same pattern as Workbench's special right-click) emits
+      `player.sleep_requested`; `main._try_sleep()` skips straight to
+      the next dawn (`day_night.skip_to_morning()`) if it's night, or
+      shows "Can't sleep now" by day — no "monsters nearby" block yet.
+      Shades-can't-breach-a-wall turned out to already be true
+      structurally (physics collision blocks them regardless of AI;
+      their only mobility trick is a 1-block hop, not wall-scaling) —
+      verified rather than rebuilt, with a new permanent selftest phase
+      (a walled-in player takes zero damage from a hunter chasing it
+      for 2 real seconds) rather than just asserted.
+      Verified: 4 new selftest phases (frames 850-1020) covering
+      craft→place→light→avoid→break for the torch, craft-needs-bench
+      →place for the bed, sleep at noon (no-op) vs at night (skips to
+      dawn, day count increments), and the shelter-breach check above
+      — plus screenshots confirming the torch/bed icons and the
+      torch's actual light bathing the surroundings in warm color.
+      Hit and fixed a real GDScript gotcha while writing the new phases:
+      `var x := main.day_night.time_of_day` fails to parse because
+      `main` is declared as the generic `Node` type in selftest.gd, so
+      the property's type can't be inferred — needed `var x: float =`
+      instead (same class of bug noted in project memory before).
 
 ## Next — pick a direction
 
@@ -212,9 +253,10 @@ how much they'd change the feel of the game:
       (see M24).
 - [ ] GLB pine/broadleaf/crooked trees, if wood-gathering ever gets a
       non-block-mining redesign (see M25) — voxel trees stay for now.
-- [ ] Shelter matters: Shades can't path through walls but will wait;
-      beds to skip the night; torches that keep them away.
 - [ ] Tool durability; give the sword an actual swing/hitbox.
 - [ ] A simple generated music loop.
-- [ ] Furnace: smelt iron ore properly; torches from coal + sticks.
+- [ ] Furnace: smelt iron ore properly (torches already craft from
+      coal + sticks — see M27).
 - [ ] Water you can swim in (or the proper GLB water/shoreline system).
+- [ ] Sleeping could block on "monsters nearby" like Minecraft (M27
+      skipped this for scope).

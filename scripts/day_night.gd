@@ -115,6 +115,14 @@ func _apply() -> void:
 	_env.ambient_light_energy = lerpf(0.25, 1.0, smoothstep(-0.15, 0.25, e))
 
 
+## Sleeping in a bed: jump straight to the next sunrise.
+func skip_to_morning() -> void:
+	if time_of_day > 0.25:
+		day_count += 1
+	time_of_day = 0.25
+	_apply()
+
+
 func get_save_data() -> Dictionary:
 	return {"time_of_day": time_of_day, "day_count": day_count}
 

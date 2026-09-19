@@ -64,6 +64,17 @@ var chunk_props := {}   # Vector2i -> Array of {type, lx, lz, y, rot} (see World
 ## Every block the player changed: Vector2i chunk -> {block index: id}.
 ## Terrain is regenerated from the seed on load; only this diff is saved.
 var edits := {}
+# ---- torches ----
+## Vector3i (world block pos) -> OmniLight3D, one per placed Torch block.
+## Lives for the whole session once created, same as the torch edit
+## itself — not tied to chunk streaming, so it doesn't need re-creating
+## every time its chunk comes back into view.
+var _torch_lights := {}
+const TORCH_LIGHT_RANGE := 7.0
+const TORCH_LIGHT_ENERGY := 1.4
+const TORCH_LIGHT_COLOR := Color(1.0, 0.65, 0.32)
+## Night hunters won't consider a spawn point this close to a lit torch.
+const TORCH_HOSTILE_AVOID_RADIUS := 10.0
 var chunks := {}        # Vector2i -> Chunk node (only the ones near the player)
 var mesh_queue: Array[Vector2i] = []
 var player: Node3D
@@ -443,6 +454,7 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 		return
 	var d: PackedByteArray = chunk_data[cpos]
 	var i := (wx & 15) + SIZE * ((wz & 15) + SIZE * wy)
+	var old_id := d[i]
 	d[i] = id
 	chunk_data[cpos] = d
 	if id != Blocks.AIR and wy > chunk_max_y[cpos]:
@@ -450,6 +462,12 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 	if not edits.has(cpos):
 		edits[cpos] = {}
 	edits[cpos][i] = id
+
+	var pos := Vector3i(wx, wy, wz)
+	if id == Blocks.TORCH and old_id != Blocks.TORCH:
+		_add_torch_light(pos)
+	elif old_id == Blocks.TORCH and id != Blocks.TORCH:
+		_remove_torch_light(pos)
 
 	_rebuild_now(cpos)
 	# A block on a chunk edge changes which faces the neighbour shows.
@@ -463,6 +481,34 @@ func set_block(wx: int, wy: int, wz: int, id: int) -> void:
 		_rebuild_now(cpos + Vector2i(0, -1))
 	elif lz == 15:
 		_rebuild_now(cpos + Vector2i(0, 1))
+
+
+func _add_torch_light(pos: Vector3i) -> void:
+	if _torch_lights.has(pos):
+		return
+	var light := OmniLight3D.new()
+	light.light_color = TORCH_LIGHT_COLOR
+	light.light_energy = TORCH_LIGHT_ENERGY
+	light.omni_range = TORCH_LIGHT_RANGE
+	add_child(light)
+	light.global_position = Vector3(pos) + Vector3(0.5, 0.5, 0.5)
+	_torch_lights[pos] = light
+
+
+func _remove_torch_light(pos: Vector3i) -> void:
+	var light: Node = _torch_lights.get(pos)
+	if light != null:
+		light.queue_free()
+	_torch_lights.erase(pos)
+
+
+## True if a lit torch is close enough that a night hunter shouldn't
+## spawn here.
+func _near_a_torch(pos: Vector3) -> bool:
+	for p in _torch_lights:
+		if Vector3(p).distance_to(pos) < TORCH_HOSTILE_AVOID_RADIUS:
+			return true
+	return false
 
 
 # ---------------------------------------------------------------- streaming
@@ -489,9 +535,14 @@ func _store_generated(cpos: Vector2i, result: Array) -> void:
 		for i in edits[cpos]:
 			var id: int = edits[cpos][i]
 			d[i] = id
-			var y: int = int(i) / (SIZE * SIZE)
+			var idx := int(i)
+			var y := idx / (SIZE * SIZE)
 			if id != Blocks.AIR and y > max_y:
 				max_y = y
+			if id == Blocks.TORCH:
+				var lx := idx % SIZE
+				var lz := (idx / SIZE) % SIZE
+				_add_torch_light(Vector3i(cpos.x * SIZE + lx, y, cpos.y * SIZE + lz))
 	chunk_data[cpos] = d
 	chunk_max_y[cpos] = max_y
 	chunk_tints[cpos] = result[2]
@@ -653,7 +704,10 @@ func _tick_hostile_spawns(delta: float) -> void:
 		return
 	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
 		return
-	spawn_hostile_at(Vector3(wx + 0.5, h + 1.5, wz + 0.5))
+	var spawn_pos := Vector3(wx + 0.5, h + 1.5, wz + 0.5)
+	if _near_a_torch(spawn_pos):
+		return   # shelter: a lit torch keeps night hunters from spawning this close
+	spawn_hostile_at(spawn_pos)
 
 
 func spawn_hostile_at(pos: Vector3) -> Hostile:
@@ -734,4 +788,7 @@ func reset_chunks() -> void:
 	_collision_queue.clear()
 	_populated.clear()
 	_props_placed.clear()
+	for light in _torch_lights.values():
+		light.queue_free()
+	_torch_lights.clear()
 	_last_player_chunk = Vector2i(1 << 20, 1 << 20)

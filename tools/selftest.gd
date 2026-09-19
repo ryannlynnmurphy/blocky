@@ -11,6 +11,10 @@ extends Node
 ##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
 ##   frames 490..640   midnight: a Shade hunts and bites; noon: it burns (hostiles)
 ##   frame  800        generate a chunk and count caves + ores; tool tier rules (underground)
+##   frames 810..842   pause/title/new-game screen transitions
+##   frames 850..870   craft and place a Torch; it lights up and keeps hostiles away
+##   frames 880..890   sleeping in a Bed: no-op by day, skips to dawn at night
+##   frames 900..1020  shelter: a walled-in player is never bitten by a chasing Shade
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -24,6 +28,10 @@ var _hole := Vector3i.ZERO
 var _move_start := Vector3.ZERO
 var _shade: Hostile
 var _health_before_shade := 0
+var _torch_pos := Vector3i.ZERO
+var _shelter_shade: Hostile
+var _shelter_center := Vector3.ZERO
+var _shelter_health := 0
 
 
 func _physics_process(_delta: float) -> void:
@@ -298,3 +306,94 @@ func _physics_process(_delta: float) -> void:
 			player.select_slot(player.inventory.find_slot(Blocks.STONE_PICKAXE))
 			print("selftest: holding stone pickaxe: iron ore drops %s (expect true), stone speed x%.1f (expect 4.0)"
 				% [player.drops_when_broken(Blocks.IRON_ORE), player.tool_multiplier(Blocks.STONE)])
+		850:
+			# Torch: craft it, place it, confirm it lights up and pushes
+			# hostile spawns away; a broken torch's light goes with it.
+			player.inventory.add(Blocks.COAL, 1)
+			player.inventory.add(Blocks.STICK, 1)
+			var torch_recipe := {}
+			for r in Recipes.LIST:
+				if r.get("out", [0])[0] == Blocks.TORCH:
+					torch_recipe = r
+			print("selftest: can craft torch from 1 coal + 1 stick: %s (expect true)"
+				% Recipes.can_craft(player.inventory, torch_recipe, false))
+			Recipes.craft(player.inventory, torch_recipe)
+			print("selftest: after crafting: %s (expect Torch x4)" % player.inventory.summary())
+			var tp := player.global_position
+			_torch_pos = Vector3i(int(floor(tp.x)) + 3, int(floor(tp.y)), int(floor(tp.z)))
+			world.set_block(_torch_pos.x, _torch_pos.y, _torch_pos.z, Blocks.TORCH)
+			print("selftest: torch placed: block is torch %s, light exists %s (both expect true)"
+				% [world.get_block(_torch_pos.x, _torch_pos.y, _torch_pos.z) == Blocks.TORCH,
+					world._torch_lights.has(_torch_pos)])
+			var near_pt := Vector3(_torch_pos) + Vector3(2, 0, 0)
+			var far_pt := Vector3(_torch_pos) + Vector3(50, 0, 0)
+			print("selftest: keeps hostiles away nearby %s (expect true), far away %s (expect false)"
+				% [world._near_a_torch(near_pt), world._near_a_torch(far_pt)])
+		860:
+			world.set_block(_torch_pos.x, _torch_pos.y, _torch_pos.z, Blocks.AIR)
+			print("selftest: torch broken: light removed %s (expect true)"
+				% (not world._torch_lights.has(_torch_pos)))
+		870:
+			# Bed: needs a workbench (3-wide shape), sleeping is a no-op by
+			# day and skips straight to dawn at night.
+			player.inventory.add(Blocks.PLANKS, 3)
+			var bed_recipe := {}
+			for r in Recipes.LIST:
+				if r.get("out", [0])[0] == Blocks.BED:
+					bed_recipe = r
+			print("selftest: can craft bed at a workbench: %s (expect true), in a pocket: %s (expect false)"
+				% [Recipes.can_craft(player.inventory, bed_recipe, true),
+					Recipes.can_craft(player.inventory, bed_recipe, false)])
+			Recipes.craft(player.inventory, bed_recipe)
+			var bp := player.global_position
+			var bed_pos := Vector3i(int(floor(bp.x)) - 3, int(floor(bp.y)), int(floor(bp.z)))
+			world.set_block(bed_pos.x, bed_pos.y, bed_pos.z, Blocks.BED)
+			print("selftest: bed placed: %s (expect true)"
+				% (world.get_block(bed_pos.x, bed_pos.y, bed_pos.z) == Blocks.BED))
+		880:
+			main.day_night.time_of_day = 0.5   # noon
+			main.day_night._apply()
+			var before: float = main.day_night.time_of_day
+			main._try_sleep()
+			print("selftest: sleep attempt at noon: time unchanged %s (expect true)"
+				% is_equal_approx(main.day_night.time_of_day, before))
+		890:
+			main.day_night.time_of_day = 0.9   # deep night
+			main.day_night._apply()
+			var day_before: int = main.day_night.day_count
+			main._try_sleep()
+			print("selftest: sleep attempt at night: time now %.2f (expect 0.25), day %d -> %d"
+				% [main.day_night.time_of_day, day_before, main.day_night.day_count])
+		900:
+			# Shelter: wall a 3x3 pocket in solid on all six sides, put the
+			# player at its centre, and send a night hunter after them —
+			# it should never make it through the walls.
+			world.day_night.time_of_day = 0.0   # midnight, hostiles are active
+			world.day_night._apply()
+			var c := Vector3i(player.global_position) + Vector3i(20, 0, 20)
+			_shelter_center = Vector3(c) + Vector3(0.5, 0.5, 0.5)
+			for dx in range(-2, 3):
+				for dz in range(-2, 3):
+					for dy in range(0, 4):
+						world.set_block(c.x + dx, c.y + dy, c.z + dz, Blocks.AIR)
+			for dx in range(-2, 3):
+				for dz in range(-2, 3):
+					world.set_block(c.x + dx, c.y - 1, c.z + dz, Blocks.STONE)   # floor
+					world.set_block(c.x + dx, c.y + 3, c.z + dz, Blocks.STONE)  # ceiling
+			for dy in range(0, 3):
+				for i in range(-2, 3):
+					world.set_block(c.x - 2, c.y + dy, c.z + i, Blocks.STONE)
+					world.set_block(c.x + 2, c.y + dy, c.z + i, Blocks.STONE)
+					world.set_block(c.x + i, c.y + dy, c.z - 2, Blocks.STONE)
+					world.set_block(c.x + i, c.y + dy, c.z + 2, Blocks.STONE)
+			player.global_position = _shelter_center
+			player.velocity = Vector3.ZERO
+			_shelter_health = player.health
+			_shelter_shade = world.spawn_hostile_at(_shelter_center + Vector3(6, 0, 0))
+			print("selftest: shelter built, hostile spawned %.1f blocks away"
+				% _shelter_shade.global_position.distance_to(player.global_position))
+		1020:
+			var breached := is_instance_valid(_shelter_shade) \
+				and _shelter_shade.global_position.distance_to(_shelter_center) <= 2.5
+			print("selftest: after 2 s, shelter breached: %s (expect false), health unchanged: %s (expect true)"
+				% [breached, player.health == _shelter_health])

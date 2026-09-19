@@ -6,7 +6,7 @@ vendored at `res://blocky/` (see `blocky/README.md` for its own notes,
 and `PLAN.md` for the full multi-phase integration plan this is
 tracking against). Updated 2026-09-18 evening.
 
-## 1. Blocks — 11 ✅ textured
+## 1. Blocks — 13 ✅ textured
 
 Real 16×16 textures via `BlockAtlas` + `blocky/textures/blocks/` are
 live in the chunk mesher (`chunk.gd`/`blocks.gd`). Grass top and
@@ -19,6 +19,7 @@ territory, deliberately deferred).
 |---|---|
 | Grass, Dirt, Stone, Sand, Log, Leaves, Snow, Planks, Workbench, Coal Ore, Iron Ore | ✅ |
 | Water surface | ✅ (flat plane, textured) |
+| Torch, Bed | ✅ hand-generated (no source art existed — see M27 in ROADMAP.md); `blocks_atlas.png` extended 4x4→4x5 to fit the 4 new tiles |
 
 ## 2. Items — 10 ✅ textured
 

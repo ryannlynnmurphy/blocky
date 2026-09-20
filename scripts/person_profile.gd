@@ -168,6 +168,27 @@ func adjust_need(key: String, delta: int) -> void:
 	_sanitize()
 
 
+## L2: this person's affinity toward `other_id` (their PersonProfile.id()),
+## -100..100, 0 if they've never interacted. One-directional by design --
+## two people's feelings about each other are separate records, not a
+## shared value, so a conversation can (and does, deliberately) move both
+## by the same amount without them needing to already agree on anything.
+func relationship_affinity(other_id: String) -> int:
+	return int(data["relationships"].get(other_id, {}).get("affinity", 0))
+
+
+## Adjusts (not replaces) the affinity record for `other_id`, clamped to
+## -100..100 -- the same range personality axes already use. A no-op for
+## an empty id so a profile with no id() yet (shouldn't happen in practice
+## -- default_data() always assigns one) can never create a garbage key.
+func adjust_relationship(other_id: String, delta: int) -> void:
+	if other_id.is_empty():
+		return
+	var rel: Dictionary = data["relationships"].get(other_id, {"affinity": 0})
+	rel["affinity"] = clampi(int(rel.get("affinity", 0)) + delta, -100, 100)
+	data["relationships"][other_id] = rel
+
+
 ## S3: current value of a routine key ("home", "job" -- CityBlock location
 ## keys; "wake_hour"/"work_start_hour"/"work_end_hour"/"sleep_hour" -- ints
 ## 0-23). Unknown keys read as "" rather than erroring, matching need()'s
@@ -239,3 +260,13 @@ func _sanitize() -> void:
 	for key in ["wake_hour", "work_start_hour", "work_end_hour", "sleep_hour"]:
 		routine_data[key] = posmod(int(routine_data.get(key, 0)), 24)
 	data["routine"] = routine_data
+	# L2: every relationship record's affinity stays in range even after a
+	# raw load from disk (adjust_relationship() already clamps its own
+	# writes, but load_dict() replaces "relationships" wholesale with
+	# whatever the save file had, so a hand-edited or corrupted save could
+	# otherwise smuggle a garbage-typed or out-of-range record past it).
+	for other_id in data["relationships"].keys():
+		var raw: Variant = data["relationships"][other_id]
+		var rel: Dictionary = raw if raw is Dictionary else {}
+		rel["affinity"] = clampi(int(rel.get("affinity", 0)), -100, 100)
+		data["relationships"][other_id] = rel

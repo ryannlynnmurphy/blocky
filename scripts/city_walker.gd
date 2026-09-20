@@ -40,6 +40,17 @@ var near_workbench := false
 ## profile to apply this to, so it's a harmless no-op signal there.
 signal work_requested
 
+## L2: the nearest resident within CityBlock.TALK_RADIUS (polled every
+## physics frame in _check_triggers(), same reasoning as near_workbench),
+## or null. Unlike near_workbench (a fixed point), residents move on their
+## own routine, so this is a live query, not a static trigger zone.
+var near_resident: DebugActor = null
+
+## Fired on F while near_resident is set. Passes the resident so the
+## listener (main.gd) knows which PersonProfile to apply PersonActions.talk()
+## to -- this walker has no PersonProfile of its own to reason about.
+signal talk_requested(resident: DebugActor)
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
@@ -84,6 +95,7 @@ func _check_triggers() -> void:
 			teleport_to(_block.to_global(t["target"]), t["yaw"])
 			return
 	near_workbench = _block.near_workbench_at(global_position)
+	near_resident = _block.nearest_resident_to(global_position)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -97,6 +109,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_tree().change_scene_to_file("res://scenes/main.tscn")
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_E and near_workbench:
 		work_requested.emit()
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_F and near_resident != null:
+		talk_requested.emit(near_resident)
 
 
 func _physics_process(delta: float) -> void:

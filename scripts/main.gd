@@ -279,6 +279,7 @@ func _enter_city() -> void:
 	_city_walker.standalone = false
 	_city_walker.exit_requested.connect(_exit_city)
 	_city_walker.work_requested.connect(_on_city_work_requested)
+	_city_walker.talk_requested.connect(_on_city_talk_requested)
 	# L1: the full 20-resident roster (L0) now appears in the city, each
 	# standing at home, and S5's routine loop drives every one of them from
 	# here on -- real hour boundaries (day_night.hour_changed, S0), not a
@@ -307,6 +308,33 @@ func _enter_city() -> void:
 func _on_city_work_requested() -> void:
 	PersonActions.work(day_night, person_profile)
 	print("Worked a shift: +$%d, needs now %s" % [PersonActions.WORK_PAY, person_profile.data["needs"]])
+
+
+## L2: F pressed near a resident (scripts/city_walker.gd's talk_requested,
+## gated by CityWalker.near_resident -- a live proximity query, not a
+## fixed trigger, since residents move on their own routine). Same "no
+## visible in-city feedback yet, printed instead" reasoning as
+## _on_city_work_requested() -- a real "you talked with X" moment is
+## presentation work, not this card's job.
+func _on_city_talk_requested(resident_actor: DebugActor) -> void:
+	var resident_profile := _profile_for_resident_actor(resident_actor)
+	if resident_profile == null:
+		return
+	PersonActions.talk(day_night, person_profile, resident_profile)
+	print("Talked with %s: your affinity %d, their affinity %d"
+		% [resident_profile.display_name(),
+			person_profile.relationship_affinity(resident_profile.id()),
+			resident_profile.relationship_affinity(person_profile.id())])
+
+
+## Finds which tracked resident (see _city_residents) a given DebugActor
+## is, so a signal that only carries the actor (CityWalker doesn't know
+## about PersonProfiles) can still get to the right one.
+func _profile_for_resident_actor(actor: DebugActor) -> PersonProfile:
+	for entry in _city_residents:
+		if entry["actor"] == actor:
+			return entry["profile"]
+	return null
 
 
 ## S5/L1: day_night.hour_changed while residents are present -- the real

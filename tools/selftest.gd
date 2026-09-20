@@ -47,6 +47,9 @@ extends Node
 ##                      exactly, and holding T measurably speeds up time
 ##   frame  2010        L0: 20 deterministic resident records validate and
 ##                      rebuild identically (name/appearance), no id reuse
+##   frame  2020        L2: PersonActions.talk() moves both people's
+##                      affinity by the same fixed amount, cumulatively,
+##                      and it survives a save/load round trip
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1136,6 +1139,31 @@ func _physics_process(_delta: float) -> void:
 				if roster[i].display_name() != roster2[i].display_name() or roster[i].appearance("skin") != roster2[i].appearance("skin"):
 					deterministic = false
 			print("selftest: L0 roster is deterministic across builds: %s" % [deterministic])
+		2020:
+			# L2: PersonActions.talk() -- a conversation deterministically
+			# moves BOTH people's affinity toward each other by the same
+			# fixed amount (this card's own "done when"), not a dice roll.
+			var alice := PersonProfile.new_resident("Alice Ghent", "apartment", "workplace")
+			var bob := PersonProfile.new_resident("Bob Ilič", "apartment", "cafe")
+			print("selftest: L2 before talking: alice->bob=%d, bob->alice=%d (expect 0, 0 -- strangers)"
+				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id())])
+			var talk_minutes_before: float = main.day_night.total_minutes()
+			PersonActions.talk(main.day_night, alice, bob)
+			print("selftest: L2 after one conversation: alice->bob=%d, bob->alice=%d (expect both %d), clock advanced %.1f min (expect %.1f)"
+				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id()), PersonActions.TALK_AFFINITY_GAIN,
+					main.day_night.total_minutes() - talk_minutes_before, PersonActions.TALK_MINUTES])
+			# Deterministic and cumulative: a second conversation adds the
+			# same fixed amount again, not a fresh random roll.
+			PersonActions.talk(main.day_night, alice, bob)
+			print("selftest: L2 after a second conversation: alice->bob=%d, bob->alice=%d (expect both %d)"
+				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id()), PersonActions.TALK_AFFINITY_GAIN * 2])
+			# Relationships round-trip through the real save format
+			# (to_dict()/load_dict(), same as routine at S3) -- not just
+			# held in memory for as long as the process happens to run.
+			var alice_loaded := PersonProfile.new()
+			alice_loaded.load_dict(alice.to_dict())
+			print("selftest: L2 relationship survives a save/load round trip: %s (loaded affinity=%d)"
+				% [alice_loaded.relationship_affinity(bob.id()) == PersonActions.TALK_AFFINITY_GAIN * 2, alice_loaded.relationship_affinity(bob.id())])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

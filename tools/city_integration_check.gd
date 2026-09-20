@@ -17,6 +17,7 @@ var player: Player
 var _frame := 0
 var _player_pos_before_city := Vector3.ZERO
 var _work_minutes_before := 0.0
+var _talked_to_actor: DebugActor = null
 
 
 func _physics_process(_delta: float) -> void:
@@ -95,13 +96,47 @@ func _physics_process(_delta: float) -> void:
 			# L1: all 20 residents (not just Priya) exist and are being
 			# driven -- confirm the population, not just one representative.
 			print("citytest: L1 resident population=%d (expect 20)" % [main._city_residents.size()])
-		90:
+		100:
 			var on_floor: bool = main._city_walker.is_on_floor() if main._city_walker else false
 			print("citytest: walker settled on_floor=%s (expect true -- real ground collision inside the embedded instance)" % [on_floor])
 			var drift_while_visiting := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: player position while paused in the city: %.3f m drift from pre-visit baseline (expect ~0.0 -- get_tree().paused genuinely freezes the player)"
 				% [drift_while_visiting])
-		92:
+		104:
+			# L2: teleport the walker next to Priya's (roster index 0)
+			# current position (wherever her S5 routine actually put her --
+			# read her real position, don't assume). At this point in the
+			# test several residents share similar staggered sleep hours
+			# (L0) and have all converged on the same home, so the actor
+			# CityWalker's live proximity query finds isn't guaranteed to
+			# be Priya specifically -- deliberately NOT assumed below;
+			# whichever resident is genuinely closest is who a real player
+			# would end up talking to, and that's what's checked.
+			var priya: DebugActor = main._city_residents[0]["actor"]
+			main._city_walker.global_position = priya.global_position + Vector3(1.0, 0, 0)
+			main._city_walker.velocity = Vector3.ZERO
+		108:
+			_talked_to_actor = main._city_walker.near_resident
+			print("citytest: near_resident after standing near the crowd: found=%s" % [_talked_to_actor != null])
+			for entry in main._city_residents:
+				entry["profile"].data["relationships"].clear()
+			main.person_profile.data["relationships"].clear()
+			# A real F keypress, not a direct signal.emit() -- exercises
+			# CityWalker._unhandled_input()'s own near_resident gate, not a
+			# re-implementation of it.
+			var f_press := InputEventKey.new()
+			f_press.keycode = KEY_F
+			f_press.pressed = true
+			Input.parse_input_event(f_press)
+		112:
+			var talked_to: PersonProfile = main._profile_for_resident_actor(_talked_to_actor)
+			print("citytest: real F keypress near %s triggered PersonActions.talk(): player->them=%d, them->player=%d (expect both %d)"
+				% [talked_to.display_name() if talked_to else "??", main.person_profile.relationship_affinity(talked_to.id()) if talked_to else -1,
+					talked_to.relationship_affinity(main.person_profile.id()) if talked_to else -1, PersonActions.TALK_AFFINITY_GAIN])
+			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the crowd, clear of talk range
+		116:
+			print("citytest: near_resident after walking away: %s (expect null/none)" % [main._city_walker.near_resident])
+		120:
 			# S2: teleport to the floor in front of the workplace workbench
 			# (exposed as CityBlock.workbench_position, in CityBlock's own
 			# LOCAL space -- main._city itself is offset by
@@ -120,7 +155,7 @@ func _physics_process(_delta: float) -> void:
 			var target: Vector3 = main._city.to_global(stand_local) + Vector3(0, 0.0, 1.0)
 			main._city_walker.global_position = target
 			main._city_walker.velocity = Vector3.ZERO
-		98:
+		126:
 			# 6 physics frames of settle/overlap-detection budget, matching
 			# tools/city_block_check.gd's own entrance-trigger checks
 			# (_entrance_frame == 3, at 60fps -- this project runs
@@ -136,15 +171,15 @@ func _physics_process(_delta: float) -> void:
 			e_press.keycode = KEY_E
 			e_press.pressed = true
 			Input.parse_input_event(e_press)
-		102:
+		130:
 			print("citytest: real E keypress near the workbench triggered PersonActions.work(): money %d (expect %d), clock advanced %.1f min (expect %.1f = %dh)"
 				% [main.person_profile.need("money"), PersonActions.WORK_PAY,
 					main.day_night.total_minutes() - _work_minutes_before,
 					PersonActions.WORK_SHIFT_HOURS * 60.0, PersonActions.WORK_SHIFT_HOURS])
 			main._city_walker.global_position = Vector3(0, -499.9, 0)   # back onto the open street floor, clear of the trigger
-		108:
+		136:
 			print("citytest: near_workbench after leaving the trigger: %s (expect false)" % [main._city_walker.near_workbench])
-		112:
+		140:
 			# Door transitions were the actual bug this card's work-trigger
 			# testing surfaced (see the CORRECTION comment on
 			# CityBlock._add_transition()): confirm walking through a real
@@ -155,17 +190,17 @@ func _physics_process(_delta: float) -> void:
 			var door_target: Vector3 = main._city.to_global(door_local) + Vector3(0, 1.0, 0.1)
 			main._city_walker.global_position = door_target
 			main._city_walker.velocity = Vector3.ZERO
-		116:
+		144:
 			var walker_y: float = main._city_walker.global_position.y
 			print("citytest: apartment door transition while embedded+paused: walker y=%.1f (expect near %.1f -- INTERIOR_Y teleport fired, not the ~%.1f street/door level it started at)"
 				% [walker_y, main._city.position.y + main._city.INTERIOR_Y, main._city.position.y])
 			# Simulate Esc the same way a real keypress does: city_walker.gd's
 			# _unhandled_input emits this exact signal.
 			main._city_walker.exit_requested.emit()
-		119:
+		147:
 			print("citytest: after exit signal: state=%d (expect 2 = PLAYING), tree paused=%s (expect false)"
 				% [main.state, get_tree().paused])
-		126:
+		154:
 			var city_freed := main._city == null or not is_instance_valid(main._city)
 			print("citytest: city instance actually freed=%s (expect true -- queue_free() had a full frame budget to run)" % [city_freed])
 			var drift := player.global_position.distance_to(_player_pos_before_city)
@@ -174,7 +209,7 @@ func _physics_process(_delta: float) -> void:
 			# just that the state label says PLAYING -- same test_move
 			# technique tools/anim_check.gd and tools/selftest.gd both use.
 			player.test_move = Vector2(0, -1)
-		180:
+		210:
 			var moved := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: walked %.2f m after returning from the city (expect > 1.0 -- normal play resumed for real)" % [moved])
 			player.test_move = Vector2.ZERO

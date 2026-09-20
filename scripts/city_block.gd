@@ -519,6 +519,7 @@ const TRANSITION_RADIUS := 1.3   # generous: covers the real ~1.0 vertical
 	## gap between city_block_check.gd's own exit-check position and this
 	## trigger's nominal point, not just the zero-distance entry case.
 const WORK_TRIGGER_RADIUS := 2.0   # horizontal only -- see near_workbench_at()
+const TALK_RADIUS := 1.8   # horizontal only, same reasoning as WORK_TRIGGER_RADIUS
 
 ## Ordered door/interior transition points: each {"pos": Vector3 (world/local
 ## trigger point), "target": Vector3, "yaw": float}. Populated by
@@ -540,6 +541,24 @@ func _add_transition(pos: Vector3, target: Vector3, target_yaw: float = 0.0) -> 
 func near_workbench_at(global_pos: Vector3) -> bool:
 	var wb: Vector3 = to_global(workbench_position)
 	return Vector2(global_pos.x - wb.x, global_pos.z - wb.z).length() < WORK_TRIGGER_RADIUS
+
+
+## L2: the closest resident (any DebugActor child -- not the walker itself,
+## which is a CityWalker, a different class) within TALK_RADIUS of
+## `global_pos`, or null if none are close enough. Queried live every
+## physics frame rather than a fixed trigger zone the way doors/the
+## workbench use, since residents move around on their own routine (S5) --
+## there is no single fixed point to build a static trigger around.
+func nearest_resident_to(global_pos: Vector3, max_dist: float = TALK_RADIUS) -> DebugActor:
+	var nearest: DebugActor = null
+	var nearest_dist := max_dist
+	for c in get_children():
+		if c is DebugActor:
+			var d: float = Vector2(c.global_position.x - global_pos.x, c.global_position.z - global_pos.z).length()
+			if d <= nearest_dist:
+				nearest = c
+				nearest_dist = d
+	return nearest
 
 
 func _build_apartment_interior() -> void:

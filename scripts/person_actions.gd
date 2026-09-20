@@ -9,19 +9,21 @@ class_name PersonActions
 ## primitive; sleep()/eat()/work() below are named wrappers with the
 ## specific numbers for those three actions.
 ##
-## "Talk" is deliberately NOT included yet -- it needs another person to
-## talk to, which doesn't exist until S3 (the first resident, the very next
-## card). Inventing a "talk to nobody" stub here would be content with
-## nothing real behind it; see the board's S2 handoff for the full
-## reasoning. Work is a v1 placeholder too -- a flat, honest stand-in for
-## the real job/payday/employer system Layer 6's L4 owns, just enough to
-## prove this pipeline works end-to-end for a paid action, not a job
-## system of its own.
+## "Talk" (L2, Work Orders Layer 6) needed another person to talk to before
+## it could be real content instead of a "talk to nobody" stub -- S2
+## deliberately deferred it until residents existed (S3+); L0/L1 now put a
+## full roster of them in the live city, so it's added below. Work is a v1
+## placeholder too -- a flat, honest stand-in for the real job/payday/
+## employer system Layer 6's L4 owns, just enough to prove this pipeline
+## works end-to-end for a paid action, not a job system of its own.
 
 const MINUTES_PER_HOUR := 60.0
 
 const WORK_SHIFT_HOURS := 4.0
 const WORK_PAY := 40
+
+const TALK_MINUTES := 10.0
+const TALK_AFFINITY_GAIN := 5
 
 
 ## The one real primitive: advances `clock` by `hours`, then applies every
@@ -61,3 +63,19 @@ static func work(clock: DayNight, profile: PersonProfile) -> void:
 		"social": -10,
 		"stress": 10,
 	})
+
+
+## L2: a conversation between `a` and `b`, moving both people's affinity
+## toward each other by the same fixed, deterministic amount -- this
+## card's own "done when: conversation changes a relationship
+## deterministically," not a randomized outcome. One-directional records
+## (PersonProfile.adjust_relationship()) mean they don't need to already
+## agree on anything for both to come away liking each other a little more.
+## `a` also gets the small social boost/time cost every real conversation
+## costs; `b` doesn't (a resident going about their own routine isn't
+## "spending" anything by being talked to -- only the initiator's clock and
+## needs move, matching how eat()/work() only ever touch the one caller).
+static func talk(clock: DayNight, a: PersonProfile, b: PersonProfile) -> void:
+	apply_action(clock, a, TALK_MINUTES / MINUTES_PER_HOUR, {"social": 8, "stress": -3})
+	a.adjust_relationship(b.id(), TALK_AFFINITY_GAIN)
+	b.adjust_relationship(a.id(), TALK_AFFINITY_GAIN)

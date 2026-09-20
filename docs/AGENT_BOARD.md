@@ -55,3 +55,10 @@ Changed: `scripts/player.gd`, `tools/selftest.gd`
 Verified: Godot 4.7.2 fresh-save self-test: normal swimming 3.0, Shift + direction underwater 4.9–5.0, water tiles 0/868 dry-land overlaps.
 Next: C1 — inventory the city/creator draft before the next planned implementation card.
 Notes: Shift + a direction is now active, camera-directed underwater swimming. Space remains the safe rise-to-surface control.
+
+### 2026-09-19 — WATER-02 — done
+Owner: Codex (T3)
+Changed: water rendering/generation, player physics, breath HUD, audio filters, saves, and `tools/selftest.gd`
+Verified: Godot 4.7.2 fresh-save self-test completed after removal.
+Next: C1 — inventory the city/creator draft before the next planned implementation card.
+Notes: Water and swimming were intentionally removed. Former sea-level terrain is now walkable sandy lowland; water assets remain in the repository but are unused.

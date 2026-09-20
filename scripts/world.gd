@@ -95,15 +95,13 @@ var _worst_frame_note := ""
 var _perf_frames := 0
 
 # ---- environment props ----
-## GLB decoration named in WorldGen.PROPS/REEDS_* by these same keys.
+## GLB decoration named in WorldGen.PROPS by these same keys.
 const PROP_SCENES := {
 	"rock_small": preload("res://blocky/models/rock_small.glb"),
 	"boulder": preload("res://blocky/models/boulder.glb"),
 	"grass_tuft": preload("res://blocky/models/grass_tuft.glb"),
 	"flower_patch": preload("res://blocky/models/flower_patch.glb"),
 	"mushroom_cluster": preload("res://blocky/models/mushroom_cluster.glb"),
-	"reeds": preload("res://blocky/models/reeds.glb"),
-	"water_tile": preload("res://blocky/models/water_tile.glb"),
 }
 ## What breaking the block a prop stands on pops out, for the prop types
 ## that are worth picking up. Rocks/boulders/flowers are left alone for
@@ -122,13 +120,8 @@ var _prop_nodes := {}   # Vector3i -> Node3D
 ## (see _process_prop_queue) so a burst of finished chunks at load time
 ## can't spike a frame the way an unthrottled loop over all of them would.
 var _prop_queue: Array[Vector2i] = []
-## Chunks' worth of props instantiated per frame. Lowered from 4 (was fine
-## when props were a handful of sparse decorations per chunk) after
-## water_tile.glb tiling made a fully-underwater chunk carry up to 64
-## instances — 4 such chunks in one frame measurably spiked load time
-## (see world_gen.gd's WATER_TILE_Y); 2 keeps the same load-time-only
-## spike but roughly halves its worst case.
-var max_props_per_frame := 2
+## Chunks' worth of props instantiated per frame.
+var max_props_per_frame := 4
 
 # ---- creatures ----
 const MAX_CREATURES := 40
@@ -346,31 +339,9 @@ func _instantiate_props(chunk: Chunk, props: Array) -> void:
 			continue
 		var inst: Node3D = scene.instantiate()
 		chunk.add_child(inst)
-		# Every other prop is 1 block wide, so +0.5 centers it on its own
-		# column. water_tile.glb is a 2x2-block footprint anchored at
-		# (lx, lz) and meant to cover world columns [lx, lx+2) — its
-		# center needs +1.0, or the tile lands half a block off the grid
-		# and its edge cuts across a shoreline block instead of stopping
-		# at the block face.
-		var center_offset := 1.0 if p["type"] == "water_tile" else 0.5
-		inst.position = Vector3(p["lx"] + center_offset, p["y"], p["lz"] + center_offset)
+		# Each environment prop is one block wide, so +0.5 centers it.
+		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
 		inst.rotation.y = p["rot"]
-		if p["type"] == "water_tile":
-			# foam_n/foam_s repeat identically on every tile (rot is fixed
-			# at 0 on all of them so they can't vary) and read as a
-			# distracting grid of lines rather than water motion — drop
-			# them. Lily pads stay only on the sparse subset WorldGen
-			# actually marked (see fill_chunk's show_lily).
-			for foam_name in ["foam_n", "foam_s"]:
-				var foam := inst.find_child(foam_name, true, false)
-				if foam != null:
-					foam.free()   # immediate, so it never renders even one frame
-			if not p.get("lily", false):
-				for lily_name in ["lily", "lily_small"]:
-					var lily := inst.find_child(lily_name, true, false)
-					if lily != null:
-						lily.free()
-			continue   # ambient water — not tied to the block beneath it, unlike fragile props
 		var wpos := Vector3i(chunk.cpos.x * SIZE + int(p["lx"]), int(p["y"]),
 			chunk.cpos.y * SIZE + int(p["lz"]))
 		_prop_nodes[wpos] = inst
@@ -727,8 +698,6 @@ func spawn_creature(wx: int, wz: int) -> Creature:
 	if _creatures.get_child_count() >= MAX_CREATURES:
 		return null
 	var h := gen.height_at(wx, wz)
-	if h <= WorldGen.SEA_LEVEL + 1:
-		return null   # beach or under water
 	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
 		return null   # something (a tree?) is in the way
 	return spawn_creature_at(Vector3(wx + 0.5, h + 1.5, wz + 0.5))
@@ -779,8 +748,6 @@ func _tick_hostile_spawns(delta: float) -> void:
 	var wx := int(floor(player.global_position.x + cos(angle) * dist))
 	var wz := int(floor(player.global_position.z + sin(angle) * dist))
 	var h := gen.height_at(wx, wz)
-	if h <= WorldGen.SEA_LEVEL + 1:
-		return
 	if get_block(wx, h + 1, wz) != Blocks.AIR or get_block(wx, h + 2, wz) != Blocks.AIR:
 		return
 	var spawn_pos := Vector3(wx + 0.5, h + 1.5, wz + 0.5)

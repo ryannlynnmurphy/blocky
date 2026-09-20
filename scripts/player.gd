@@ -9,7 +9,6 @@ signal died
 signal xp_changed(xp: int, xp_needed: int, level: int)
 signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
-signal breath_changed(breath: int, max_breath: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 signal workbench_used   # right-clicked a Workbench block
 signal furnace_used   # right-clicked a Furnace block
@@ -22,41 +21,6 @@ const RUN_SPEED := 7.5
 const JUMP_SPEED := 7.5
 const GRAVITY := 22.0
 const MOUSE_SENS := 0.0025
-# ---- swimming ----
-# The visual water surface (water_tile.glb props, see world_gen.gd's
-# WATER_TILE_Y) sits at y=19.9, just under the top of the sea-level block —
-# matches WorldGen.SEA_LEVEL (19) + 0.9. Gameplay uses this constant
-# directly rather than reading it off any placed tile.
-const WATER_SURFACE_Y := WorldGen.SEA_LEVEL + 0.9
-const SWIM_SPEED := 3.0
-## Holding Shift plus a direction while fully underwater is an active swim:
-## faster than wading, and follows the camera's up/down angle so looking down
-## lets the player dive and looking up lets them climb without surface-walking.
-const SWIM_SPRINT_SPEED := 5.0
-const SWIM_RISE_SPEED := 3.0
-const WATER_GRAVITY := 4.0   # much gentler than GRAVITY — you sink slowly, not drop
-# Swim-up caps just under WATER_SURFACE_Y (not AT it — resting exactly on
-# the strict "<" threshold would itself read as "not in water" next frame).
-const WATER_SURFACE_CEILING := WATER_SURFACE_Y - 0.05
-var _in_water := false
-# ---- breath / drowning ----
-# Separate from _in_water (feet-in-water, drives swim physics): this is
-# "is your HEAD under the surface", checked at the camera pivot's height
-# (CameraPivot sits at local y=1.54, our best stand-in for eye level)
-# rather than the feet, so wading in shin-deep water never costs breath.
-const MAX_BREATH := 10
-const BREATH_DRAIN_SECONDS := 1.4   # seconds per breath point lost, submerged
-const BREATH_REGEN_SECONDS := 0.4   # seconds per breath point regained, surfaced
-const DROWN_SECONDS := 2.0          # seconds per health point lost at 0 breath
-var breath := MAX_BREATH
-var head_submerged := false   # public: main.gd reads this to drive Sfx.set_underwater
-# Separate drain/regen timers (not one shared one) — same reason
-# _tick_hunger keeps _hunger_timer/_regen_timer/_starve_timer apart: a
-# shared timer would carry leftover time from one phase into the other
-# the instant you surface or dive, causing a burst of bogus extra ticks.
-var _breath_drain_timer := 0.0
-var _breath_regen_timer := 0.0
-var _drown_timer := 0.0
 const REACH := 6.0   # how far you can break/place, in blocks
 const PUNCH_RANGE := 3.0
 const PUNCH_DAMAGE := 1
@@ -154,7 +118,6 @@ const FP_SPRING_LENGTH := 0.0
 var test_move := Vector2.ZERO
 var test_run := false
 var test_hold_break := false
-var test_swim_up := false
 var test_jump := false   # one-shot: set true for a frame to trigger a jump
 
 var _knock := Vector3.ZERO   # shove from being hit; fades out
@@ -360,25 +323,7 @@ func held_id() -> int:
 
 func _physics_process(delta: float) -> void:
 	_punch_cooldown = maxf(_punch_cooldown - delta, 0.0)
-	_in_water = global_position.y < WATER_SURFACE_Y
-	if _in_water:
-		# Sink gently instead of dropping, and cap the sink speed so
-		# swimming back up always wins — holding jump rises.
-		velocity.y = maxf(velocity.y - WATER_GRAVITY * delta, -SWIM_SPEED)
-		if test_swim_up or (not _no_input and Input.is_action_pressed("jump")):
-			velocity.y = SWIM_RISE_SPEED
-			# Swim-up alone must never carry you ABOVE the surface. Left
-			# uncapped, holding jump set velocity.y to the same constant
-			# rise speed every single frame (not a one-time impulse), so
-			# each frame's climb popped just past WATER_SURFACE_Y, flipped
-			# _in_water off for an instant, and handed back real gravity
-			# and full walk/run speed for that instant — repeated every
-			# frame while holding jump + a move key, that reads as smooth
-			# walking across the surface instead of swimming. Now it caps
-			# right at the surface instead of crossing it.
-			if global_position.y + velocity.y * delta > WATER_SURFACE_CEILING:
-				velocity.y = (WATER_SURFACE_CEILING - global_position.y) / delta
-	elif not is_on_floor():
+	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):
 		velocity.y = JUMP_SPEED
@@ -395,20 +340,9 @@ func _physics_process(delta: float) -> void:
 	horizontal_dir = horizontal_dir.normalized()
 	var moving := input.length() > 0.1
 	var running := run_held and moving
-	# The camera's basis includes pitch; use it only for deliberate underwater
-	# sprint-swimming. Normal water movement stays horizontal so shallow water
-	# remains easy to navigate and Space remains the reliable surface control.
-	var fully_submerged := _pivot.global_position.y < WATER_SURFACE_Y
-	var actively_swimming := _in_water and fully_submerged and running
-	var swim_dir := (_camera.global_basis.x * input.x + _camera.global_basis.z * input.y).normalized()
-	var speed := SWIM_SPRINT_SPEED if actively_swimming else (SWIM_SPEED if _in_water else (RUN_SPEED if running else WALK_SPEED))
-	if actively_swimming:
-		velocity.x = swim_dir.x * speed + _knock.x
-		velocity.y = swim_dir.y * speed
-		velocity.z = swim_dir.z * speed + _knock.z
-	else:
-		velocity.x = horizontal_dir.x * speed + _knock.x
-		velocity.z = horizontal_dir.z * speed + _knock.z
+	var speed := RUN_SPEED if running else WALK_SPEED
+	velocity.x = horizontal_dir.x * speed + _knock.x
+	velocity.z = horizontal_dir.z * speed + _knock.z
 	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
 
 	move_and_slide()
@@ -427,7 +361,6 @@ func _physics_process(delta: float) -> void:
 	_update_breaking(delta, holding)
 	_animate_limbs(delta, moving and is_on_floor(), speed, running, is_on_floor())
 	_tick_hunger(delta, running)
-	_tick_breath(delta)
 	_update_highlight()
 	_sword.visible = held_id() == Blocks.SWORD
 
@@ -452,7 +385,7 @@ func _footstep(running: bool) -> void:
 ## throws the right arm on a punch. Limb pivots sit at the shoulder/hip, and
 ## a positive X rotation moves the hand or foot forward (toward the model's -Z).
 func _animate_limbs(delta: float, walking: bool, speed: float, running: bool, on_floor: bool) -> void:
-	var airborne := not on_floor and not _in_water
+	var airborne := not on_floor
 	if walking:
 		_walk_cycle += delta * speed * 2.2
 		# Each time the legs cross, a foot lands.
@@ -504,15 +437,8 @@ func _animate_limbs(delta: float, walking: bool, speed: float, running: bool, on
 # ---------------------------------------------------------------- health
 
 ## Remembers the top of each fall; landing from higher than SAFE_FALL
-## costs one health per extra block. Water cushions a fall completely —
-## it counts as a safe "landing" the moment you enter it, same as touching
-## solid ground, so diving in from a cliff never hurts, and swimming down
-## to touch the seabed afterward doesn't retroactively charge the drop.
+## costs one health per extra block.
 func _check_fall_damage() -> void:
-	if _in_water:
-		_peak_y = global_position.y
-		_was_on_floor = true
-		return
 	var on_floor := is_on_floor()
 	if not on_floor:
 		if _was_on_floor:
@@ -590,39 +516,6 @@ func _tick_hunger(delta: float, running: bool) -> void:
 		_starve_timer = 0.0
 
 
-## Breath drains while the head is underwater and refills once it isn't;
-## out of breath and still under costs health every DROWN_SECONDS, same
-## shape as _tick_hunger's starve timer.
-func _tick_breath(delta: float) -> void:
-	head_submerged = _pivot.global_position.y < WATER_SURFACE_Y
-	if head_submerged:
-		_breath_regen_timer = 0.0
-		_breath_drain_timer += delta
-		if _breath_drain_timer >= BREATH_DRAIN_SECONDS:
-			_breath_drain_timer -= BREATH_DRAIN_SECONDS
-			if breath > 0:
-				breath -= 1
-				breath_changed.emit(breath, MAX_BREATH)
-		if breath == 0:
-			_drown_timer += delta
-			if _drown_timer >= DROWN_SECONDS:
-				_drown_timer -= DROWN_SECONDS
-				take_damage(1)
-		else:
-			_drown_timer = 0.0
-	else:
-		_drown_timer = 0.0
-		_breath_drain_timer = 0.0
-		if breath < MAX_BREATH:
-			_breath_regen_timer += delta
-			if _breath_regen_timer >= BREATH_REGEN_SECONDS:
-				_breath_regen_timer -= BREATH_REGEN_SECONDS
-				breath += 1
-				breath_changed.emit(breath, MAX_BREATH)
-		else:
-			_breath_regen_timer = 0.0
-
-
 ## Announces the death; main.gd shows the death screen and calls
 ## respawn() when the player chooses to.
 func _die() -> void:
@@ -653,8 +546,6 @@ func respawn() -> void:
 	health_changed.emit(health, max_health)
 	hunger = MAX_HUNGER
 	hunger_changed.emit(hunger, MAX_HUNGER)
-	breath = MAX_BREATH
-	breath_changed.emit(breath, MAX_BREATH)
 
 
 # ---------------------------------------------------------------- saving
@@ -667,7 +558,6 @@ func get_save_data() -> Dictionary:
 		"health": health,
 		"max_health": max_health,
 		"hunger": hunger,
-		"breath": breath,
 		"level": level,
 		"xp": xp,
 		"selected": selected,
@@ -688,7 +578,6 @@ func load_save_data(d: Dictionary) -> void:
 	max_health = int(d.get("max_health", BASE_HEALTH))
 	health = int(d.get("health", max_health))
 	hunger = int(d.get("hunger", MAX_HUNGER))
-	breath = int(d.get("breath", MAX_BREATH))
 	selected = int(d.get("selected", 0))
 	inventory.from_dict(d.get("inventory", {}))
 	# JSON round-trips dict keys as strings; back to int so lookups by id work.
@@ -698,7 +587,6 @@ func load_save_data(d: Dictionary) -> void:
 	# Tell the HUD.
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, MAX_HUNGER)
-	breath_changed.emit(breath, MAX_BREATH)
 	xp_changed.emit(xp, xp_needed(), level)
 	hotbar_changed.emit(selected)
 

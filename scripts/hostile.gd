@@ -1,7 +1,7 @@
 class_name Hostile
 extends Creature
 ## The Shade: comes out at night, hunts the player, burns away at dawn.
-## It reuses the critter's body plumbing (gravity, hopping, cliff/water
+## It reuses the critter's body plumbing (gravity, hopping, cliff
 ## checks, hit flash, knockback) and replaces the brain.
 
 const SIGHT := 18.0        # blocks; closer than this and it comes for you

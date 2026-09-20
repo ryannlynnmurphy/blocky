@@ -17,7 +17,6 @@ extends Node
 ##   frames 900..1020  shelter: a walled-in player is never bitten by a chasing Shade
 ##   frames 1030..1060 sword: hits harder than a fist, only visible while held, wears out
 ##   frames 1070..1080 furnace: iron ore only smelts into Iron there, not on breaking it
-##   frames 1090..1100 swimming: gentle sink, swim-up, slower move speed, no fall damage
 ##   frames 1110..1200 a carved 2-tall corridor doesn't snag the player's head
 ##   frame  1210       breaking the ground under a prop removes it and drops an item
 
@@ -38,14 +37,7 @@ var _shelter_shade: Hostile
 var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
 var _sleep_test_hostile: Hostile
-var _swim_health_before := 0
-var _swim_wx := 0
-var _swim_wz := 0
-var _drown_health_before := 0
-var _breath_before := 0
 var _corridor_start := Vector3.ZERO
-var _water_walk_ever_surfaced := false
-var _water_walk_max_speed := 0.0
 
 
 func _physics_process(_delta: float) -> void:
@@ -572,42 +564,6 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: smelted: %s (expect Iron x1), ore/fuel slots emptied: %s (expect true)"
 				% [player.inventory.summary(), ui.grid.is_empty()])
 			main.set_inventory_open(false)
-		1090:
-			# Swimming: find real deep water and dive in from a height.
-			var wp := player.global_position
-			var wx := int(floor(wp.x))
-			var wz := int(floor(wp.z))
-			var tries := 0
-			while world.height_at(wx, wz) > WorldGen.SEA_LEVEL - 1 and tries < 400:
-				wx += 4
-				tries += 1
-			print("selftest: found water near column (%d, %d): ground height %d (expect <= %d)"
-				% [wx, wz, world.height_at(wx, wz), WorldGen.SEA_LEVEL - 1])
-			_swim_wx = wx
-			_swim_wz = wz
-			_swim_health_before = player.health
-			player.global_position = Vector3(wx + 0.5, WorldGen.SEA_LEVEL - 1.0, wz + 0.5)
-			player.velocity = Vector3(0, -20.0, 0)   # as if just diving in from a height
-			player.test_move = Vector2(0, -1)   # swim forward
-		1091:
-			print("selftest: in water: %s (expect true), gentle sink velocity.y %.2f (expect > -%.1f, nowhere near the -20 dive speed)"
-				% [player._in_water, player.velocity.y, Player.SWIM_SPEED + 0.5])
-			print("selftest: swim speed while moving: %.1f (expect %.1f, slower than walking)"
-				% [Vector2(player.velocity.x, player.velocity.z).length(), Player.SWIM_SPEED])
-			player.test_run = true
-		1092:
-			print("selftest: Shift + direction underwater actively swims: %.1f (expect %.1f)"
-				% [Vector2(player.velocity.x, player.velocity.z).length(), Player.SWIM_SPRINT_SPEED])
-			player.test_run = false
-			player.test_move = Vector2.ZERO
-			player.test_swim_up = true
-		1093:
-			print("selftest: holding jump swims up: velocity.y %.1f (expect %.1f)"
-				% [player.velocity.y, Player.SWIM_RISE_SPEED])
-			player.test_swim_up = false
-		1100:
-			print("selftest: no fall damage from diving into water: health %d (expect %d, unchanged)"
-				% [player.health, _swim_health_before])
 		1110:
 			# Carve a straight 2-tall, 1-wide corridor and walk it end to end.
 			# A capsule that exactly fills a 2-tall gap catches on the ceiling
@@ -650,105 +606,6 @@ func _physics_process(_delta: float) -> void:
 			world.set_block(bx, by - 1, bz, Blocks.AIR)   # break the ground it stands on
 			print("selftest: after breaking ground under it: prop gone %s (expect true), item dropped %s (expect true)"
 				% [not world._prop_nodes.has(wpos), world.drop_count() > before_drops])
-		1220:
-			# Breath: dive to the same water column as the swim test and
-			# force breath low, instead of waiting out the full ~14 s
-			# real-time drain (BREATH_DRAIN_SECONDS * MAX_BREATH).
-			player.global_position = Vector3(_swim_wx + 0.5, WorldGen.SEA_LEVEL - 2.0, _swim_wz + 0.5)
-			player.velocity = Vector3.ZERO
-		1221:
-			# head_submerged updates in _physics_process, a frame behind a
-			# same-frame position change — check it a frame later, same
-			# reason the M28 sword-visibility test checks a frame after
-			# select_slot().
-			print("selftest: head submerged at depth: %s (expect true)" % player.head_submerged)
-			player.breath = 2
-			player.breath_changed.emit(2, Player.MAX_BREATH)
-			_breath_before = player.breath
-		1310:
-			# 90 frames (1.5 s) at 60 Hz physics — over BREATH_DRAIN_SECONDS
-			# (1.4 s), so at least one point should have drained.
-			print("selftest: breath draining while submerged: %d -> %d (expect it dropped)"
-				% [_breath_before, player.breath])
-			print("selftest: audio muffled while submerged: %s (expect true)" % Sfx.instance._underwater)
-			player.breath = 0
-			player.breath_changed.emit(0, Player.MAX_BREATH)
-			_drown_health_before = player.health
-		1470:
-			# 160 frames (2.67 s) — over DROWN_SECONDS (2.0 s).
-			print("selftest: drowning at 0 breath: health %d -> %d (expect it dropped)"
-				% [_drown_health_before, player.health])
-			# Back to the (dry, grounded) spawn point — same reposition
-			# respawn() itself uses, so this doesn't register as a fall.
-			player.global_position = player.spawn_point
-			player.velocity = Vector3.ZERO
-		1471:
-			print("selftest: head submerged after surfacing: %s (expect false)" % player.head_submerged)
-			_breath_before = player.breath
-		1520:
-			# 50 frames (0.83 s) — over BREATH_REGEN_SECONDS (0.4 s).
-			print("selftest: breath regenerating after surfacing: %d -> %d (expect it rose)"
-				% [_breath_before, player.breath])
-			print("selftest: audio unmuffled after surfacing: %s (expect false)" % Sfx.instance._underwater)
-		1530:
-			# Regression check for a real reported bug: a water_tile is a
-			# 2x2-block footprint, but WorldGen.fill_chunk used to decide
-			# whether to place one by checking only its anchor column's
-			# height. Near an irregular coastline the other 3 columns a
-			# tile visually covers could be dry land, so the tile still
-			# rendered there — you could stand on the real (dry) ground
-			# and it looked exactly like walking on water. Scans a chunk
-			# grid around the origin with a fresh WorldGen (same seed
-			# world.gd itself uses) and fails loudly if any placed tile's
-			# 2x2 footprint has a dry corner.
-			var gen := WorldGen.new(world.world_seed)
-			var bad := 0
-			var checked := 0
-			for cx in range(-4, 5):
-				for cz in range(-4, 5):
-					var cpos := Vector2i(cx, cz)
-					var chunk_props: Array = gen.fill_chunk(cpos)[3]
-					for p in chunk_props:
-						if p["type"] != "water_tile":
-							continue
-						checked += 1
-						var lx: int = p["lx"]
-						var lz: int = p["lz"]
-						var wx := cx * VoxelWorld.SIZE + lx
-						var wz := cz * VoxelWorld.SIZE + lz
-						for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
-							if gen.height_at(wx + d.x, wz + d.y) > WorldGen.SEA_LEVEL - 1:
-								bad += 1
-								break
-			print("selftest: water tiles never cover dry ground: checked %d tiles, %d bad (expect 0 bad)"
-				% [checked, bad])
-		1540:
-			# Regression check for a real reported bug: holding jump (swim
-			# up) while moving forward in water used to let the player
-			# "walk on water" — each frame's uncapped swim-up rise popped
-			# just past WATER_SURFACE_Y, flipping _in_water off for an
-			# instant and handing back real gravity + full walk/run speed,
-			# over and over. Dive into deep water and hold both forward
-			# and swim-up continuously. Shift now intentionally makes the
-			# swimmer faster, but must still never let them break the surface.
-			player.global_position = Vector3(_swim_wx + 0.5, WorldGen.SEA_LEVEL - 2.0, _swim_wz + 0.5)
-			player.velocity = Vector3.ZERO
-			player.test_move = Vector2(0, -1)
-			player.test_run = true
-			player.test_swim_up = true
-			_water_walk_ever_surfaced = false
-			_water_walk_max_speed = 0.0
-		1550, 1560, 1570, 1580, 1590, 1600, 1610, 1620, 1630, 1640:
-			if not player._in_water:
-				_water_walk_ever_surfaced = true
-			var speed := Vector2(player.velocity.x, player.velocity.z).length()
-			_water_walk_max_speed = maxf(_water_walk_max_speed, speed)
-		1650:
-			player.test_move = Vector2.ZERO
-			player.test_run = false
-			player.test_swim_up = false
-			print("selftest: holding jump+forward+run in water never breaks the surface: ever left water %s (expect false), max horizontal speed %.1f (expect %.1f, not run's %.1f)"
-				% [_water_walk_ever_surfaced, _water_walk_max_speed, Player.SWIM_SPRINT_SPEED, Player.RUN_SPEED])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

@@ -31,9 +31,6 @@ var _amb_day: AudioStreamPlayer
 var _amb_night: AudioStreamPlayer
 var _music: AudioStreamPlayer
 var _rng := RandomNumberGenerator.new()
-var _sfx_lowpass_idx := -1
-var _music_lowpass_idx := -1
-var _underwater := false
 
 
 func _ready() -> void:
@@ -53,20 +50,6 @@ func _ready() -> void:
 	AudioServer.add_bus(_music_bus)
 	AudioServer.set_bus_name(_music_bus, "Music")
 	AudioServer.set_bus_volume_db(_music_bus, MUSIC_DB)
-
-	# A low-pass filter on each bus, added disabled — toggled on while the
-	# player's head is underwater (see set_underwater) for a muffled sound.
-	var sfx_lp := AudioEffectLowPassFilter.new()
-	sfx_lp.cutoff_hz = 700.0
-	AudioServer.add_bus_effect(_sfx_bus, sfx_lp)
-	_sfx_lowpass_idx = AudioServer.get_bus_effect_count(_sfx_bus) - 1
-	AudioServer.set_bus_effect_enabled(_sfx_bus, _sfx_lowpass_idx, false)
-
-	var music_lp := AudioEffectLowPassFilter.new()
-	music_lp.cutoff_hz = 700.0
-	AudioServer.add_bus_effect(_music_bus, music_lp)
-	_music_lowpass_idx = AudioServer.get_bus_effect_count(_music_bus) - 1
-	AudioServer.set_bus_effect_enabled(_music_bus, _music_lowpass_idx, false)
 
 	for i in POOL_3D:
 		var p := AudioStreamPlayer3D.new()
@@ -105,21 +88,6 @@ func _ready() -> void:
 func set_volume(v: float) -> void:
 	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB + linear_to_db(maxf(v, 0.001)))
 	AudioServer.set_bus_volume_db(_music_bus, MUSIC_DB + linear_to_db(maxf(v, 0.001)))
-
-
-## Muffles SFX and music (a low-pass filter) while the player's head is
-## underwater, called every frame from main.gd with player.head_submerged.
-static func set_underwater(under: bool) -> void:
-	if instance != null:
-		instance._set_underwater(under)
-
-
-func _set_underwater(under: bool) -> void:
-	if under == _underwater:
-		return
-	_underwater = under
-	AudioServer.set_bus_effect_enabled(_sfx_bus, _sfx_lowpass_idx, under)
-	AudioServer.set_bus_effect_enabled(_music_bus, _music_lowpass_idx, under)
 
 
 ## Stop the loops before the tree tears down, or the audio thread still

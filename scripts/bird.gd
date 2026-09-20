@@ -4,7 +4,7 @@ extends Creature
 ## wildlife, it actually flies: no gravity, hovers at a height above the
 ## ground it spawned over, and wanders/flees in full 3D. Overrides
 ## _physics_process entirely rather than reusing Creature's (which is all
-## about gravity, hopping and ground cliff/water checks), but still shares
+## about gravity, hopping and ground-cliff checks), but still shares
 ## its idle/wander timer state and take_hit/_die/flash machinery.
 
 const BIRD_GLB := preload("res://blocky/models/bird.glb")

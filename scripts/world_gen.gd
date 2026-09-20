@@ -15,7 +15,7 @@ extends RefCounted
 const SIZE := Chunk.SIZE
 const HEIGHT := Chunk.HEIGHT
 
-const SEA_LEVEL := 19    # columns at/under this get sand + water
+const LOWLAND_LEVEL := 19    # low terrain gets sand instead of biome ground
 const SNOW_LINE := 44    # columns at/over this get snow, whatever the biome
 
 enum { PLAINS, FOREST, DESERT, TUNDRA }
@@ -53,21 +53,6 @@ const PROPS := [
 	[{"type": "rock_small", "chance": 150, "salt": 107},
 	 {"type": "boulder", "chance": 600, "salt": 109}],
 ]
-## Reeds grow right at the waterline instead of by biome, and only on
-## the two temperate biomes (not desert sand or tundra snow).
-const REEDS_CHANCE := 6
-const REEDS_SALT := 211
-const REEDS_BIOMES := [PLAINS, FOREST]
-
-## water_tile.glb is a 2x2-block decorative tile (basin + surface + foam
-## trim + lily pads) placed over every underwater column on a checkerboard
-## grid (every other lx/lz) so tiles meet edge-to-edge with no gaps or
-## overlap. Its "surface" sub-mesh sits 0.5625 above the tile's own origin
-## (found by inspecting the glTF), so the origin is offset down by that
-## much to line the surface up with the old flat plane's height exactly
-## (SEA_LEVEL + 0.9).
-const WATER_TILE_Y := SEA_LEVEL + 0.9 - 0.5625
-
 ## Grass colors at the four corners of the temperature/moisture square.
 const GRASS_COLD_DRY := Color(0.58, 0.72, 0.52)   # pale
 const GRASS_HOT_DRY := Color(0.72, 0.72, 0.30)    # yellow, scrubby
@@ -213,7 +198,7 @@ func fill_chunk(cpos: Vector2i) -> Array:
 
 			var surface: int = biome["surface"]
 			var under: int = biome["under"]
-			if h <= SEA_LEVEL + 1:
+			if h <= LOWLAND_LEVEL + 1:
 				surface = Blocks.SAND
 				under = Blocks.SAND
 			elif h >= SNOW_LINE:
@@ -253,7 +238,7 @@ func fill_chunk(cpos: Vector2i) -> Array:
 			var bi := bx + w * bz
 			var h := heights[bi]
 			var chance: int = BIOMES[biomes[bi]]["tree_chance"]
-			if chance == 0 or h <= SEA_LEVEL + 1 or h >= SNOW_LINE:
+			if chance == 0 or h <= LOWLAND_LEVEL + 1 or h >= SNOW_LINE:
 				continue
 			var wx := cpos.x * SIZE + bx - TREE_MARGIN
 			var wz := cpos.y * SIZE + bz - TREE_MARGIN
@@ -285,38 +270,7 @@ func fill_chunk(cpos: Vector2i) -> Array:
 			var wz := cpos.y * SIZE + lz
 			var biome_i := biomes[bi]
 			var rot := (hash(Vector2i(wx, wz) + Vector2i(777, 777)) % 360) * TAU / 360.0
-			if h <= SEA_LEVEL + 1:
-				# Only reeds grow in the shallows, only on temperate ground.
-				if biome_i in REEDS_BIOMES and h == SEA_LEVEL + 1 \
-						and hash(Vector2i(wx + REEDS_SALT, wz)) % REEDS_CHANCE == 0:
-					props.append({"type": "reeds", "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
-				elif h <= SEA_LEVEL - 1 and lx % 2 == 0 and lz % 2 == 0 \
-						and heights[bi + 1] <= SEA_LEVEL - 1 \
-						and heights[bi + w] <= SEA_LEVEL - 1 \
-						and heights[bi + w + 1] <= SEA_LEVEL - 1:
-					# The tile is a 2x2 footprint but this check only looked
-					# at its own anchor column — near an irregular coastline
-					# the other 3 columns it visually covers could be dry,
-					# so the tile still rendered over real walkable ground
-					# (the same "walk on water" symptom, one level up: not
-					# because in_water's threshold was wrong, but because
-					# the tile lied about what was underneath it). All 4
-					# covered columns must now qualify, or the tile is
-					# skipped and that little scalloped gap at the
-					# coastline just shows plain terrain instead.
-					# h == SEA_LEVEL itself stands at y = h+1 = SEA_LEVEL+1 =
-					# 20, ABOVE the water surface (SEA_LEVEL+0.9 = 19.9) — a
-					# dry sandbar, not real water, so it doesn't get a tile;
-					# skipping it also keeps this aligned with player.gd's
-					# own _in_water threshold (walking on an h == SEA_LEVEL
-					# column used to read as walking on water because that
-					# column was decorated but never actually "in water").
-					# Fixed rotation (not the random `rot` every other prop
-					# gets) keeps the tile's asymmetric foam trim consistent
-					# from one tile to the next. Lily pads are sparse, not
-					# every tile — real ones don't carpet the whole surface.
-					var show_lily := hash(Vector2i(wx + 911, wz)) % 6 == 0
-					props.append({"type": "water_tile", "lx": lx, "lz": lz, "y": WATER_TILE_Y, "rot": 0.0, "lily": show_lily})
+			if h <= LOWLAND_LEVEL + 1:
 				continue
 			for rule in PROPS[biome_i]:
 				if hash(Vector2i(wx + int(rule["salt"]), wz)) % int(rule["chance"]) == 0:

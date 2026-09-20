@@ -4,7 +4,7 @@ extends CharacterBody3D
 ##   idle   - stand still for a moment
 ##   wander - walk in a random direction for a moment
 ## and a timer that flips between them. It hops up 1-block steps and
-## refuses to walk off cliffs or into water.
+## refuses to walk off cliffs.
 
 const GRAVITY := 22.0
 const WALK_SPEED := 2.0
@@ -188,7 +188,7 @@ func _go_wander() -> void:
 	_timer = _rng.randf_range(1.5, 4.0)
 
 
-## Peeks one block ahead: is there ground there that's not under water?
+## Peeks one block ahead for solid ground instead of a cliff.
 func _path_blocked() -> bool:
 	if world == null:
 		return false
@@ -199,5 +199,5 @@ func _path_blocked() -> bool:
 	# Accept ground from one block up (a step) down to two blocks below.
 	for y in range(y0 + 1, y0 - 3, -1):
 		if Blocks.is_solid(world.get_block(x, y, z)):
-			return y < WorldGen.SEA_LEVEL   # found ground; blocked only if it's under water
+			return false
 	return true   # no ground at all = a cliff

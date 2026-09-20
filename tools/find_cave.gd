@@ -17,7 +17,7 @@ func _init() -> void:
 					var wx := cx * 16 + lx
 					var wz := cz * 16 + lz
 					var h := gen.height_at(wx, wz)
-					if h <= WorldGen.SEA_LEVEL + 1:
+				if h <= WorldGen.LOWLAND_LEVEL + 1:
 						continue
 					# Surface block carved away = a hole you can see from above.
 					if data[lx + 16 * (lz + 16 * h)] == Blocks.AIR:

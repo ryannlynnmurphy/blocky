@@ -167,7 +167,7 @@ godot --headless --path . --script tools/biome_survey.gd   print a biome map
 
 ```
 project.godot        engine settings (window size, main scene, crisp-pixel rendering)
-scenes/main.tscn     the level: sky, sun, world, water, player, HUD
+scenes/main.tscn     the level: sky, sun, world, player, HUD
 scenes/player.tscn   the character's body, collision capsule and camera rig
 scenes/creature.tscn a critter's body and collision box
 scripts/main.gd      wires everything together, picks a spawn point, saves/loads
@@ -178,7 +178,7 @@ tools/               headless dev scripts (not part of the game)
 scripts/chunk.gd     turns one chunk's block IDs into a mesh (visible faces only)
 scripts/world.gd     owns all chunks, streams them around the player, get/set block,
                      spawns/despawns creatures
-scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs + water
+scripts/creature.gd  critter brain: idle / wander / flee, health, hop steps, avoid cliffs
 scripts/hostile.gd   the Shade: night hunter (extends creature.gd), bites, burns at dawn
 scenes/hostile.tscn  the Shade's body: tall, dark, glowing eyes
 scripts/drop.gd      a dropped item on the ground; walk into it to pick it up

@@ -153,8 +153,6 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	Sfx.set_underwater(player.head_submerged)
-
 	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH, State.FURNACE]:
 		return
 	_autosave_timer += delta
@@ -283,12 +281,10 @@ func _finish_new_game() -> void:
 
 # ---------------------------------------------------------------- spawning
 
-## Finds dry land near the spawn column and puts the player there.
+## Puts the player on terrain near the spawn column.
 func _place_player_at_spawn() -> void:
 	var sx := _spawn_col.x
 	var sz := _spawn_col.y
-	while world.height_at(sx, sz) <= WorldGen.SEA_LEVEL + 2 and sx < 400:
-		sx += 4
 	var spawn := Vector3(sx + 0.5, world.height_at(sx, sz) + 2.0, sz + 0.5)
 	player.global_position = spawn
 	player.spawn_point = spawn

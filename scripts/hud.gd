@@ -12,8 +12,10 @@ var _crosshair: Crosshair
 var _inventory_ui: InventoryUI
 var _health_bar: IconBar
 var _hunger_bar: IconBar
+var _breath_bar: IconBar
 var _hotbar: HotbarView
 var _damage_flash: ColorRect
+var _underwater_tint: ColorRect
 var _day_night: DayNight
 var _world: VoxelWorld
 var _player: Player
@@ -149,6 +151,16 @@ func _ready() -> void:
 	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_damage_flash)
 
+	# A translucent blue wash while the player's head is underwater — the
+	# "underwater fog" ask, done as a screen tint (same technique as the
+	# hurt flash above) rather than fighting day_night.gd's own per-frame
+	# fog updates on the shared WorldEnvironment.
+	_underwater_tint = ColorRect.new()
+	_underwater_tint.color = Color(0.1, 0.35, 0.6, 0.0)
+	_underwater_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_underwater_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_underwater_tint)
+
 	_crosshair = Crosshair.new()
 	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -180,6 +192,16 @@ func _ready() -> void:
 	_hunger_bar.half_tex = preload("res://blocky/textures/ui/drumstick_half.png")
 	_hunger_bar.empty_tex = preload("res://blocky/textures/ui/drumstick_empty.png")
 	_add_bottom_wide(_hunger_bar, -86, -66)
+
+	# Bubbles, above the hunger row — only shown once you've actually lost
+	# some breath (see _on_breath_changed), same as Minecraft's meter.
+	_breath_bar = IconBar.new()
+	_breath_bar.side = 1
+	_breath_bar.full_tex = preload("res://blocky/textures/ui/bubble_full.png")
+	_breath_bar.half_tex = preload("res://blocky/textures/ui/bubble_half.png")
+	_breath_bar.empty_tex = preload("res://blocky/textures/ui/bubble_empty.png")
+	_add_bottom_wide(_breath_bar, -108, -88)
+	_breath_bar.visible = false
 
 	_message_label = _make_label()
 	_message_label.add_theme_font_size_override("font_size", 48)
@@ -231,11 +253,18 @@ func bind_player(player: Player) -> void:
 	player.break_progress_changed.connect(_crosshair.set_progress)
 	player.health_changed.connect(_health_bar.set_value)
 	player.hunger_changed.connect(_hunger_bar.set_value)
+	player.breath_changed.connect(_on_breath_changed)
 	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
 	_health_bar.set_value(player.health, player.max_health)
 	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
+	_on_breath_changed(player.breath, Player.MAX_BREATH)
 	_hotbar.refresh(player)
 	_inventory_ui.bind_player(player)
+
+
+func _on_breath_changed(breath: int, max_breath: int) -> void:
+	_breath_bar.visible = breath < max_breath
+	_breath_bar.set_value(breath, max_breath)
 
 
 func is_inventory_open() -> bool:
@@ -277,8 +306,10 @@ func bind_world(world: VoxelWorld, player: Player) -> void:
 
 
 func _process(delta: float) -> void:
-	# Fade the hurt flash and the message.
+	# Fade the hurt flash, the underwater tint, and the message.
 	_damage_flash.color.a = move_toward(_damage_flash.color.a, 0.0, 1.2 * delta)
+	var target_tint := 0.3 if (_player != null and _player.head_submerged) else 0.0
+	_underwater_tint.color.a = move_toward(_underwater_tint.color.a, target_tint, 0.8 * delta)
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0:

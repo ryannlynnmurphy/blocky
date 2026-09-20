@@ -39,6 +39,10 @@ var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
 var _sleep_test_hostile: Hostile
 var _swim_health_before := 0
+var _swim_wx := 0
+var _swim_wz := 0
+var _drown_health_before := 0
+var _breath_before := 0
 var _corridor_start := Vector3.ZERO
 
 
@@ -577,6 +581,8 @@ func _physics_process(_delta: float) -> void:
 				tries += 1
 			print("selftest: found water near column (%d, %d): ground height %d (expect <= %d)"
 				% [wx, wz, world.height_at(wx, wz), WorldGen.SEA_LEVEL - 1])
+			_swim_wx = wx
+			_swim_wz = wz
 			_swim_health_before = player.health
 			player.global_position = Vector3(wx + 0.5, WorldGen.SEA_LEVEL - 1.0, wz + 0.5)
 			player.velocity = Vector3(0, -20.0, 0)   # as if just diving in from a height
@@ -637,6 +643,46 @@ func _physics_process(_delta: float) -> void:
 			world.set_block(bx, by - 1, bz, Blocks.AIR)   # break the ground it stands on
 			print("selftest: after breaking ground under it: prop gone %s (expect true), item dropped %s (expect true)"
 				% [not world._prop_nodes.has(wpos), world.drop_count() > before_drops])
+		1220:
+			# Breath: dive to the same water column as the swim test and
+			# force breath low, instead of waiting out the full ~14 s
+			# real-time drain (BREATH_DRAIN_SECONDS * MAX_BREATH).
+			player.global_position = Vector3(_swim_wx + 0.5, WorldGen.SEA_LEVEL - 2.0, _swim_wz + 0.5)
+			player.velocity = Vector3.ZERO
+		1221:
+			# head_submerged updates in _physics_process, a frame behind a
+			# same-frame position change — check it a frame later, same
+			# reason the M28 sword-visibility test checks a frame after
+			# select_slot().
+			print("selftest: head submerged at depth: %s (expect true)" % player.head_submerged)
+			player.breath = 2
+			player.breath_changed.emit(2, Player.MAX_BREATH)
+			_breath_before = player.breath
+		1310:
+			# 90 frames (1.5 s) at 60 Hz physics — over BREATH_DRAIN_SECONDS
+			# (1.4 s), so at least one point should have drained.
+			print("selftest: breath draining while submerged: %d -> %d (expect it dropped)"
+				% [_breath_before, player.breath])
+			print("selftest: audio muffled while submerged: %s (expect true)" % Sfx.instance._underwater)
+			player.breath = 0
+			player.breath_changed.emit(0, Player.MAX_BREATH)
+			_drown_health_before = player.health
+		1470:
+			# 160 frames (2.67 s) — over DROWN_SECONDS (2.0 s).
+			print("selftest: drowning at 0 breath: health %d -> %d (expect it dropped)"
+				% [_drown_health_before, player.health])
+			# Back to the (dry, grounded) spawn point — same reposition
+			# respawn() itself uses, so this doesn't register as a fall.
+			player.global_position = player.spawn_point
+			player.velocity = Vector3.ZERO
+		1471:
+			print("selftest: head submerged after surfacing: %s (expect false)" % player.head_submerged)
+			_breath_before = player.breath
+		1520:
+			# 50 frames (0.83 s) — over BREATH_REGEN_SECONDS (0.4 s).
+			print("selftest: breath regenerating after surfacing: %d -> %d (expect it rose)"
+				% [_breath_before, player.breath])
+			print("selftest: audio unmuffled after surfacing: %s (expect false)" % Sfx.instance._underwater)
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

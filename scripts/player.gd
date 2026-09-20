@@ -9,6 +9,7 @@ signal died
 signal xp_changed(xp: int, xp_needed: int, level: int)
 signal leveled_up(level: int)
 signal hunger_changed(hunger: int, max_hunger: int)
+signal breath_changed(breath: int, max_breath: int)
 signal break_progress_changed(progress: float)   # 0..1 while holding on a block
 signal workbench_used   # right-clicked a Workbench block
 signal furnace_used   # right-clicked a Furnace block
@@ -31,6 +32,24 @@ const SWIM_SPEED := 3.0
 const SWIM_RISE_SPEED := 3.0
 const WATER_GRAVITY := 4.0   # much gentler than GRAVITY — you sink slowly, not drop
 var _in_water := false
+# ---- breath / drowning ----
+# Separate from _in_water (feet-in-water, drives swim physics): this is
+# "is your HEAD under the surface", checked at the camera pivot's height
+# (CameraPivot sits at local y=1.54, our best stand-in for eye level)
+# rather than the feet, so wading in shin-deep water never costs breath.
+const MAX_BREATH := 10
+const BREATH_DRAIN_SECONDS := 1.4   # seconds per breath point lost, submerged
+const BREATH_REGEN_SECONDS := 0.4   # seconds per breath point regained, surfaced
+const DROWN_SECONDS := 2.0          # seconds per health point lost at 0 breath
+var breath := MAX_BREATH
+var head_submerged := false   # public: main.gd reads this to drive Sfx.set_underwater
+# Separate drain/regen timers (not one shared one) — same reason
+# _tick_hunger keeps _hunger_timer/_regen_timer/_starve_timer apart: a
+# shared timer would carry leftover time from one phase into the other
+# the instant you surface or dive, causing a burst of bogus extra ticks.
+var _breath_drain_timer := 0.0
+var _breath_regen_timer := 0.0
+var _drown_timer := 0.0
 const REACH := 6.0   # how far you can break/place, in blocks
 const PUNCH_RANGE := 3.0
 const PUNCH_DAMAGE := 1
@@ -369,6 +388,7 @@ func _physics_process(delta: float) -> void:
 	_update_breaking(delta, holding)
 	_animate_limbs(delta, moving and is_on_floor(), speed, running, is_on_floor())
 	_tick_hunger(delta, running)
+	_tick_breath(delta)
 	_update_highlight()
 	_sword.visible = held_id() == Blocks.SWORD
 
@@ -531,6 +551,39 @@ func _tick_hunger(delta: float, running: bool) -> void:
 		_starve_timer = 0.0
 
 
+## Breath drains while the head is underwater and refills once it isn't;
+## out of breath and still under costs health every DROWN_SECONDS, same
+## shape as _tick_hunger's starve timer.
+func _tick_breath(delta: float) -> void:
+	head_submerged = _pivot.global_position.y < WATER_SURFACE_Y
+	if head_submerged:
+		_breath_regen_timer = 0.0
+		_breath_drain_timer += delta
+		if _breath_drain_timer >= BREATH_DRAIN_SECONDS:
+			_breath_drain_timer -= BREATH_DRAIN_SECONDS
+			if breath > 0:
+				breath -= 1
+				breath_changed.emit(breath, MAX_BREATH)
+		if breath == 0:
+			_drown_timer += delta
+			if _drown_timer >= DROWN_SECONDS:
+				_drown_timer -= DROWN_SECONDS
+				take_damage(1)
+		else:
+			_drown_timer = 0.0
+	else:
+		_drown_timer = 0.0
+		_breath_drain_timer = 0.0
+		if breath < MAX_BREATH:
+			_breath_regen_timer += delta
+			if _breath_regen_timer >= BREATH_REGEN_SECONDS:
+				_breath_regen_timer -= BREATH_REGEN_SECONDS
+				breath += 1
+				breath_changed.emit(breath, MAX_BREATH)
+		else:
+			_breath_regen_timer = 0.0
+
+
 ## Announces the death; main.gd shows the death screen and calls
 ## respawn() when the player chooses to.
 func _die() -> void:
@@ -561,6 +614,8 @@ func respawn() -> void:
 	health_changed.emit(health, max_health)
 	hunger = MAX_HUNGER
 	hunger_changed.emit(hunger, MAX_HUNGER)
+	breath = MAX_BREATH
+	breath_changed.emit(breath, MAX_BREATH)
 
 
 # ---------------------------------------------------------------- saving
@@ -573,6 +628,7 @@ func get_save_data() -> Dictionary:
 		"health": health,
 		"max_health": max_health,
 		"hunger": hunger,
+		"breath": breath,
 		"level": level,
 		"xp": xp,
 		"selected": selected,
@@ -593,6 +649,7 @@ func load_save_data(d: Dictionary) -> void:
 	max_health = int(d.get("max_health", BASE_HEALTH))
 	health = int(d.get("health", max_health))
 	hunger = int(d.get("hunger", MAX_HUNGER))
+	breath = int(d.get("breath", MAX_BREATH))
 	selected = int(d.get("selected", 0))
 	inventory.from_dict(d.get("inventory", {}))
 	# JSON round-trips dict keys as strings; back to int so lookups by id work.
@@ -602,6 +659,7 @@ func load_save_data(d: Dictionary) -> void:
 	# Tell the HUD.
 	health_changed.emit(health, max_health)
 	hunger_changed.emit(hunger, MAX_HUNGER)
+	breath_changed.emit(breath, MAX_BREATH)
 	xp_changed.emit(xp, xp_needed(), level)
 	hotbar_changed.emit(selected)
 

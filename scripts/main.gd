@@ -149,6 +149,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	Sfx.set_underwater(player.head_submerged)
+
 	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH, State.FURNACE]:
 		return
 	_autosave_timer += delta

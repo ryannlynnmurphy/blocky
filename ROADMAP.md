@@ -443,6 +443,57 @@ and verified before the next starts. No system gets built "all at once."
       "sleep works with nothing nearby" in the same physics frame still
       saw the just-freed nearby hostile and failed; switched that one
       cleanup call to immediate `.free()`.
+- [x] **M36 — Breath meter, drowning, underwater fog/muffled audio.**
+      Closes the M31 scope trim. A new `player.head_submerged` (public,
+      distinct from the private `_in_water` that drives swim physics)
+      checks the CAMERA PIVOT's height against `WATER_SURFACE_Y`, not the
+      feet — wading in shin-deep water shouldn't cost breath the way it
+      already doesn't block movement. `_tick_breath()` mirrors
+      `_tick_hunger()`'s shape exactly: breath drains every
+      `BREATH_DRAIN_SECONDS` while submerged, regenerates every
+      `BREATH_REGEN_SECONDS` once it isn't, and at 0 breath still
+      submerged, `take_damage(1)` fires every `DROWN_SECONDS` — same
+      "timer accumulates, subtract and fire on threshold" shape as the
+      existing starve timer. Breath persists in the save file like health/
+      hunger.
+      HUD: a third `IconBar` (`hud.gd`'s existing class, already shared by
+      hearts and hunger) using three new hand-generated 9x9 bubble icons
+      (`blocky/textures/ui/bubble_*.png` — no such art existed in the
+      vendored asset pack; generated with a one-off PIL script matching
+      the existing icon style pixel-for-pixel: same silhouette-with-
+      outline/mid/highlight construction as `heart_*`, same "drained"
+      grey palette `heart_empty`/`drumstick_empty` already share, script
+      itself not committed, matching the M27 torch/bed tile precedent).
+      Sits above the hunger row and only shows once breath has actually
+      dropped, same as Minecraft's bubble meter.
+      Underwater fog: a translucent blue `ColorRect` on the HUD canvas
+      that fades in/out with `head_submerged`, the same screen-tint
+      technique `_damage_flash` already uses for the hurt flash — chosen
+      over touching the shared `WorldEnvironment` fog properties, which
+      `day_night.gd` already drives every frame; a second system fighting
+      over the same resource would have been real coupling for no
+      visual gain a screen tint doesn't already give.
+      Muffled audio: `sfx.gd` gets an `AudioEffectLowPassFilter` on both
+      the SFX and Music buses (added disabled, alongside the existing
+      master-bus limiter), toggled by `Sfx.set_underwater()` — called
+      once a frame from `main._process` with `player.head_submerged`.
+      Caught and fixed a real bug before it shipped, the same way M23's
+      `slot_frame.png` mistake was caught: breath drain and regen
+      originally shared one timer variable, so surfacing right after a
+      drain tick carried that tick's leftover fractional time straight
+      into the regen accumulator, firing a burst of bogus extra regen
+      points in the first couple of frames after surfacing — a selftest
+      assertion showing breath jump by 4 instead of the expected ~2
+      caught it; split into independent `_breath_drain_timer` /
+      `_breath_regen_timer`, the same reason `_tick_hunger` already keeps
+      its own drain/regen/starve timers apart.
+      Verified: full `--selftest` suite plus new phases covering
+      submerging (checked a frame after the position change, not the
+      same frame — the same race M28's sword-visibility test hit),
+      draining, drowning damage, surfacing, regen, and the audio-muffle
+      toggle in both directions; screenshots confirming the bubble row
+      renders correctly above the hunger row (only when breath is below
+      max) and the underwater tint visibly washes the screen blue.
 
 This closes out every item on the original backlog. See "Next" below
 for what's left — all either blocked on missing inputs (new art/audio
@@ -459,5 +510,3 @@ milestones above, not gaps that were missed.
       non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
       duplicate tools wearing independently ever turns out to matter.
-- [ ] Breath meter/drowning, underwater fog/muffled audio (M31 skipped
-      these for scope — the core swim mechanic is there).

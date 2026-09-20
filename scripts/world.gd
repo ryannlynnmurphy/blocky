@@ -349,6 +349,20 @@ func _instantiate_props(chunk: Chunk, props: Array) -> void:
 		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
 		inst.rotation.y = p["rot"]
 		if p["type"] == "water_tile":
+			# foam_n/foam_s repeat identically on every tile (rot is fixed
+			# at 0 on all of them so they can't vary) and read as a
+			# distracting grid of lines rather than water motion — drop
+			# them. Lily pads stay only on the sparse subset WorldGen
+			# actually marked (see fill_chunk's show_lily).
+			for foam_name in ["foam_n", "foam_s"]:
+				var foam := inst.find_child(foam_name, true, false)
+				if foam != null:
+					foam.free()   # immediate, so it never renders even one frame
+			if not p.get("lily", false):
+				for lily_name in ["lily", "lily_small"]:
+					var lily := inst.find_child(lily_name, true, false)
+					if lily != null:
+						lily.free()
 			continue   # ambient water — not tied to the block beneath it, unlike fragile props
 		var wpos := Vector3i(chunk.cpos.x * SIZE + int(p["lx"]), int(p["y"]),
 			chunk.cpos.y * SIZE + int(p["lz"]))

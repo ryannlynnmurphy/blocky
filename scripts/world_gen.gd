@@ -290,11 +290,20 @@ func fill_chunk(cpos: Vector2i) -> Array:
 				if biome_i in REEDS_BIOMES and h == SEA_LEVEL + 1 \
 						and hash(Vector2i(wx + REEDS_SALT, wz)) % REEDS_CHANCE == 0:
 					props.append({"type": "reeds", "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
-				elif h <= SEA_LEVEL and lx % 2 == 0 and lz % 2 == 0:
+				elif h <= SEA_LEVEL - 1 and lx % 2 == 0 and lz % 2 == 0:
+					# h == SEA_LEVEL itself stands at y = h+1 = SEA_LEVEL+1 =
+					# 20, ABOVE the water surface (SEA_LEVEL+0.9 = 19.9) — a
+					# dry sandbar, not real water, so it doesn't get a tile;
+					# skipping it also keeps this aligned with player.gd's
+					# own _in_water threshold (walking on an h == SEA_LEVEL
+					# column used to read as walking on water because that
+					# column was decorated but never actually "in water").
 					# Fixed rotation (not the random `rot` every other prop
 					# gets) keeps the tile's asymmetric foam trim consistent
-					# from one tile to the next.
-					props.append({"type": "water_tile", "lx": lx, "lz": lz, "y": WATER_TILE_Y, "rot": 0.0})
+					# from one tile to the next. Lily pads are sparse, not
+					# every tile — real ones don't carpet the whole surface.
+					var show_lily := hash(Vector2i(wx + 911, wz)) % 6 == 0
+					props.append({"type": "water_tile", "lx": lx, "lz": lz, "y": WATER_TILE_Y, "rot": 0.0, "lily": show_lily})
 				continue
 			for rule in PROPS[biome_i]:
 				if hash(Vector2i(wx + int(rule["salt"]), wz)) % int(rule["chance"]) == 0:

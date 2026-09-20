@@ -13,7 +13,7 @@ func _init() -> void:
 			var wx: int = d.x
 			var wz: int = d.y
 			var h := gen.height_at(wx, wz)
-			if h > WorldGen.SEA_LEVEL:
+			if h > WorldGen.SEA_LEVEL - 1:   # real water tiles start here now
 				continue
 			var land_near := false
 			for n in [Vector2i(4, 0), Vector2i(-4, 0), Vector2i(0, 4), Vector2i(0, -4)]:

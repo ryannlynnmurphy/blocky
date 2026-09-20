@@ -30,6 +30,7 @@ var _creator_selects: Dictionary = {}
 var _creator_axes: Dictionary = {}
 var _preview_stage: Node3D
 var _preview_avatar: Node3D
+var _preview_spin_boost := 0.0   # extra rad/s, decays after Randomize is pressed
 
 
 func _ready() -> void:
@@ -98,7 +99,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _creator != null and _creator.visible and _preview_avatar != null:
-		_preview_avatar.rotation.y += delta * 0.35
+		# A little spin boost after Randomize makes the new look feel shown
+		# off rather than just silently swapped in; decays back to the
+		# normal slow idle turn over about two seconds.
+		_preview_spin_boost = maxf(_preview_spin_boost - delta * 3.0, 0.0)
+		_preview_avatar.rotation.y += delta * (0.35 + _preview_spin_boost)
 
 
 # ---------------------------------------------------------------- create a person
@@ -107,6 +112,7 @@ func _build_creator() -> void:
 	_creator = Control.new()
 	_creator.name = "CreateAPerson"
 	_creator.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_creator.theme = _build_creator_theme()
 	add_child(_creator)
 	var background := ColorRect.new()
 	# Creator is intentionally a calm, light workspace: the game can be messy,
@@ -200,10 +206,12 @@ func _build_creator() -> void:
 	_creator_summary.custom_minimum_size = Vector2(0, 100)
 	right.add_child(_creator_summary)
 	var randomize := Button.new()
-	randomize.text = "Randomize appearance"
+	randomize.text = "🎲  Randomize appearance"
 	randomize.pressed.connect(func():
 		_creator_profile.randomize_visuals()
-		_sync_creator())
+		_sync_creator()
+		_bounce(randomize)
+		_preview_spin_boost = 6.0)
 	right.add_child(randomize)
 
 	var actions := HBoxContainer.new()
@@ -216,11 +224,32 @@ func _build_creator() -> void:
 	back.pressed.connect(func(): creator_cancelled.emit())
 	actions.add_child(back)
 	var begin := Button.new()
-	begin.text = "Enter Hollowmark"
+	begin.text = "Enter Hollowmark  →"
 	begin.custom_minimum_size = Vector2(240, 42)
 	begin.add_theme_font_size_override("font_size", 18)
+	# The one action that actually starts the game deserves to look like it,
+	# instead of matching every secondary button on the screen.
+	var begin_normal := _flat_style(Color("c9a14a"), Color("a3812f"), 10)
+	var begin_hover := _flat_style(Color("d6b360"), Color("a3812f"), 10)
+	var begin_pressed := _flat_style(Color("a3812f"), Color("876a26"), 10)
+	begin.add_theme_stylebox_override("normal", begin_normal)
+	begin.add_theme_stylebox_override("hover", begin_hover)
+	begin.add_theme_stylebox_override("pressed", begin_pressed)
+	begin.add_theme_color_override("font_color", Color("2b2308"))
+	begin.add_theme_color_override("font_hover_color", Color("2b2308"))
+	begin.add_theme_color_override("font_pressed_color", Color("2b2308"))
 	begin.pressed.connect(func(): person_confirmed.emit())
 	actions.add_child(begin)
+	# A slow, gentle breathing pulse marks it as the primary action without
+	# being distracting -- starts once layout has actually sized the button,
+	# since Control.pivot_offset needs a real size to centre on.
+	begin.resized.connect(func():
+		if begin.pivot_offset == Vector2.ZERO:
+			begin.pivot_offset = begin.size / 2.0
+			var pulse := create_tween().set_loops()
+			pulse.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			pulse.tween_property(begin, "scale", Vector2(1.035, 1.035), 1.1)
+			pulse.tween_property(begin, "scale", Vector2.ONE, 1.1))
 
 
 func _build_preview(parent: Control) -> void:
@@ -277,6 +306,28 @@ func show_creator(profile: PersonProfile) -> void:
 	_creator_profile = profile
 	_sync_creator()
 	_creator.visible = true
+	# A quick pop-in instead of just appearing -- the screen already has a
+	# real size at this point (hide_all() never removed it from the tree),
+	# so pivot_offset can center on it immediately.
+	_creator.pivot_offset = _creator.size / 2.0
+	_creator.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_creator.scale = Vector2(0.97, 0.97)
+	var tween := create_tween().set_parallel(true)
+	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_creator, "modulate:a", 1.0, 0.22)
+	tween.tween_property(_creator, "scale", Vector2.ONE, 0.22)
+
+
+## A quick, springy scale-up-then-settle -- used for one-off "something just
+## happened" feedback (Randomize) rather than the CTA's slow ambient pulse.
+func _bounce(control: Control) -> void:
+	if control.pivot_offset == Vector2.ZERO:
+		control.pivot_offset = control.size / 2.0
+	var tween := create_tween()
+	tween.tween_property(control, "scale", Vector2(1.12, 1.12), 0.08) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _add_identity_select(parent: Container, title: String, key: String, values: Array) -> void:
@@ -353,12 +404,20 @@ func _labelled_select(parent: Container, title: String, values: Array) -> Option
 
 
 func _section(parent: Container, text: String) -> void:
+	parent.add_child(_spacer(6))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var bar := ColorRect.new()
+	bar.color = Color("c9a14a")
+	bar.custom_minimum_size = Vector2(4, 18)
+	row.add_child(bar)
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", Color("75602d"))
 	label.add_theme_constant_override("outline_size", 2)
-	parent.add_child(label)
+	row.add_child(label)
+	parent.add_child(row)
 
 
 func _sync_creator() -> void:
@@ -432,6 +491,69 @@ func _card_style(background: Color, border: Color) -> StyleBoxFlat:
 	style.content_margin_top = 14
 	style.content_margin_bottom = 14
 	return style
+
+
+## Rounded, warm-accented replacement for the engine default flat-gray
+## controls, scoped to the Create a Person screen only (assigned as
+## `_creator.theme`, which cascades to every child) -- title/pause/death
+## keep their own dark dimmed look, a deliberate different register (see
+## the "the game can be messy, but making a person should be legible and
+## welcoming" comment above). Distinct hover/pressed/focus styleboxes are
+## what actually make buttons and dropdowns feel interactive: Godot swaps
+## between them automatically on mouse-over/press, no signal wiring needed.
+func _flat_style(bg: Color, border: Color, radius: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(radius)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	return style
+
+
+func _build_creator_theme() -> Theme:
+	var theme := Theme.new()
+	var accent := Color("c9a14a")      # brass, matches belt_brass / section headings
+	var accent_dark := Color("a3812f")
+	var ink := Color("292d33")
+
+	var normal := _flat_style(Color("fbfaf7"), Color("c9c9c6"), 10)
+	var hover := _flat_style(Color("fffdf8"), accent, 10)
+	var pressed := _flat_style(Color("f0ead9"), accent_dark, 10)
+	var focus := _flat_style(Color(0, 0, 0, 0), accent, 10)
+	for control_type in ["Button", "OptionButton"]:
+		theme.set_stylebox("normal", control_type, normal)
+		theme.set_stylebox("hover", control_type, hover)
+		theme.set_stylebox("pressed", control_type, pressed)
+		theme.set_stylebox("focus", control_type, focus)
+		theme.set_color("font_color", control_type, ink)
+		theme.set_color("font_hover_color", control_type, ink)
+		theme.set_color("font_pressed_color", control_type, ink)
+		theme.set_color("font_focus_color", control_type, ink)
+
+	var line_edit_normal := _flat_style(Color("fbfaf7"), Color("c9c9c6"), 8)
+	var line_edit_focus := _flat_style(Color("fffdf8"), accent, 8)
+	theme.set_stylebox("normal", "LineEdit", line_edit_normal)
+	theme.set_stylebox("focus", "LineEdit", line_edit_focus)
+	theme.set_color("font_color", "LineEdit", ink)
+
+	# Sliders: a warm filled track instead of the flat engine gray, so a
+	# personality axis or the sound slider reads at a glance without
+	# looking at the number.
+	var track := _flat_style(Color("e7e3da"), Color("d3cfc4"), 8)
+	track.content_margin_top = 4
+	track.content_margin_bottom = 4
+	var fill := _flat_style(accent, accent_dark, 8)
+	fill.content_margin_top = 4
+	fill.content_margin_bottom = 4
+	theme.set_stylebox("slider", "HSlider", track)
+	theme.set_stylebox("grabber_area", "HSlider", fill)
+	theme.set_stylebox("grabber_area_highlight", "HSlider", fill)
+
+	return theme
 
 
 func show_title(has_save: bool) -> void:

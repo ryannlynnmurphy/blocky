@@ -9,3 +9,6 @@ export/
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Claude Code agent worktrees/session state (created locally, per-machine)
+.claude/

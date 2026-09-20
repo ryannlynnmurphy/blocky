@@ -35,6 +35,13 @@ extends Node3D
 ## a minimal first-person controller, deliberately not the survival Player
 ## class) so the scene has someone to look through; Esc returns to
 ## scenes/main.tscn.
+##
+## B4 (route markers): `route_markers` is a named waypoint graph (the five
+## locations plus a few street/park connector points) and `get_route()`
+## returns an ordered path between any two of them via a small BFS. This is
+## for scripts/debug_actor.gd (a non-player-controlled walker) and, later,
+## Layer 5's resident home/work/food routines -- not for the player, who
+## just walks freely on the open ground.
 
 const TEX_DIR := "res://blocky/city/textures/blocks/"
 
@@ -51,6 +58,12 @@ var _entrances := {}
 
 var _rng := RandomNumberGenerator.new()
 
+## B4: named waypoints (the five locations plus street/park connector
+## points) a debug/resident actor can walk between. Built in
+## _build_route_markers() once every location's outside point is known.
+var route_markers := {}
+var _route_edges := {}
+
 
 func _ready() -> void:
 	_rng.seed = 20260920
@@ -62,6 +75,7 @@ func _ready() -> void:
 	_build_workplace()
 	_build_street_furniture()
 	_build_interiors()
+	_build_route_markers()
 	_build_overview_camera()
 	_spawn_walker()
 
@@ -480,3 +494,75 @@ func _build_workplace_interior() -> void:
 
 	_add_transition(door + Vector3(0, 1.0, 0.1), center + Vector3(0, 0, -0.8), 0.0)
 	_add_transition(center + Vector3(0, 1.0, size.y * 0.5 - 0.4), out, PI)
+
+
+# ---------------------------------------------------------------- routes (B4)
+
+## Apartment/cafe/workplace each connect to the open street (the z=0 band
+## `_spawn_walker()`'s own comment already documents as "clear of every
+## building and prop") via a short straight hop from their door-out point to
+## a spine marker at their own X; the spine markers connect to each other and
+## to the park entry along that same clear band. The park entry then runs
+## north along `ParkPath` (the visual strip `_build_park()` lays down
+## specifically as a walkway) to the park itself. Every segment here follows
+## ground already built clear of props/buildings -- checked against
+## `_build_street_furniture()`'s and each location's own prop placements,
+## not just assumed.
+func _build_route_markers() -> void:
+	route_markers["apartment"] = location_positions["apartment"]
+	route_markers["apartment_spine"] = Vector3(-16.0, 0.0, 0.0)
+	route_markers["street"] = location_positions["street"]
+	route_markers["cafe"] = location_positions["cafe"]
+	route_markers["workplace_spine"] = Vector3(16.0, 0.0, 0.0)
+	route_markers["workplace"] = location_positions["workplace"]
+	route_markers["park_entry"] = Vector3(0.0, 0.0, 5.5)
+	route_markers["park"] = location_positions["park"]
+
+	_route_edges = {
+		"apartment": ["apartment_spine"],
+		"apartment_spine": ["apartment", "street"],
+		"street": ["apartment_spine", "cafe", "workplace_spine", "park_entry"],
+		"cafe": ["street"],
+		"workplace_spine": ["street", "workplace"],
+		"workplace": ["workplace_spine"],
+		"park_entry": ["street", "park"],
+		"park": ["park_entry"],
+	}
+
+
+## Returns an ordered list of world positions from one named location
+## ("apartment", "street", "cafe", "workplace", "park") to another, walking
+## the route-marker graph with a breadth-first search (the graph is small
+## and tree-shaped, so BFS always finds the unique path). Returns an empty
+## array for an unknown key; a single-point array if `from_key == to_key`.
+func get_route(from_key: String, to_key: String) -> Array:
+	if not (route_markers.has(from_key) and route_markers.has(to_key)):
+		return []
+	if from_key == to_key:
+		return [route_markers[from_key]]
+
+	var came_from := {from_key: from_key}   # self-maps the start; walking parents stops when we hit it
+	var frontier := [from_key]
+	var reached := false
+	while frontier.size() > 0:
+		var current: String = frontier.pop_front()
+		if current == to_key:
+			reached = true
+			break
+		for neighbor in _route_edges.get(current, []):
+			if not came_from.has(neighbor):
+				came_from[neighbor] = current
+				frontier.append(neighbor)
+	if not reached:
+		return []
+
+	var keys: Array[String] = [to_key]
+	var node: String = to_key
+	while node != from_key:
+		node = came_from[node]
+		keys.push_front(node)
+
+	var path: Array[Vector3] = []
+	for k in keys:
+		path.append(route_markers[k])
+	return path

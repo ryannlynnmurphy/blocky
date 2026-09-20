@@ -43,7 +43,7 @@ push. A failed or unavailable push does not discard local work.
 
 | Batch | Commits | Regression | Push state |
 | --- | --- | --- | --- |
-| Next | 3 / 5 | Godot headless boot completes; pre-existing expectation mismatches logged on board | local development |
+| Next | 0 / 5 | Godot headless boot completes; pre-existing expectation mismatches logged on board | Batch through `5ccd633` pushed to GitHub; next local batch started. |
 
 ## Definition of a usable game increment
 

@@ -8,14 +8,14 @@ listed in **Needs** are done. The tier is the minimum recommended capability.
 | Card | Tier | Task | Needs | Done when |
 | --- | --- | --- | --- | --- |
 | C0 | T3 | Establish the Godot baseline: import, run, record version and existing self-test result. | — | A reproducible run command and baseline note are on the board. |
-| C1 | T1 | Inventory current uncommitted city/creator files without changing code. | C0 | Board lists each draft file and whether it is source, generated asset, or unknown. |
-| C2 | T3 | Decide which existing draft files are retained, replaced, or parked. | C1 | Decision is recorded; no accidental rewrite follows. |
+| C1 | T1 | Inventory the existing committed city/creator foundation without changing code. | C0 | Board lists each relevant file and whether it is source, generated asset, or unknown. |
+| C2 | T3 | Retain the integrated creator foundation, then record exactly which parts are replaced to meet the light-gray modular-wardrobe direction. | C1 | Decision is recorded; no accidental rewrite follows. |
 
 ## Layer 1 — Create a Person visual slice
 
 | Card | Tier | Task | Needs | Done when |
 | --- | --- | --- | --- | --- |
-| C3 | T2 | Create an isolated creator scene with the light canvas and light-gray panels. | C2 | It opens without altering normal gameplay. |
+| C3 | T2 | Restyle the existing creator with a light canvas and light-gray panels. | C2 | It opens without altering normal gameplay. |
 | C4 | T2 | Put the current blocky player model in a live 3D preview with reset camera. | C3 | Preview renders and reset works. |
 | C5 | T2 | Add name and pronoun controls with temporary in-memory values. | C3 | Inputs are readable and survive creator navigation. |
 | C6 | T1 | Define wardrobe catalog data for shirts, pants, belts, bracelets, and shoes. | C2 | Every item has stable ID, display name, slot, and asset reference. |
@@ -23,6 +23,22 @@ listed in **Needs** are done. The tier is the minimum recommended capability.
 | C8 | T2 | Add pants, belt, bracelet, shoes, and one-per-slot selection. | C7 | One coherent outfit is previewed; changing a slot replaces only that slot. |
 | C9 | T2 | Add skin/hair controls, cosmetic randomize, Back, and Continue. | C5, C8 | All controls work; no persistence yet. |
 | C10 | T3 | Review the creator against the approved light-theme visual and protect existing game flows. | C9 | Review note and visual capture are posted. |
+
+## Water rebuild — designed from scratch
+
+Water returns only through this sequence. It does not revive old code or make
+water a normal opaque block. The precise contract lives in
+`lab/WATER_AND_SWIMMING_SPEC.md`.
+
+| Card | Tier | Task | Needs | Done when |
+| --- | --- | --- | --- | --- |
+| WATER-03 | T3 | Approve the data/query contract and special-swim specification. | — | API, scope, controls, and test gates are recorded; no runtime code is changed. |
+| WATER-04 | T2 | Add deterministic water-table queries to terrain/world data. | WATER-03 | Dry, wading, surface, and submerged positions classify deterministically. |
+| WATER-05 | T2 | Render chunk-aligned transparent water visuals with no collision. | WATER-04 | Water never renders over solid terrain and remains correct across streamed chunks. |
+| WATER-06 | T3 | Integrate player water state, normal swim, and special Shift-propel mechanics. | WATER-04, WATER-05 | Land behavior remains intact; transitions, speeds, and fall rules pass tests. |
+| WATER-07 | T2 | Add water presentation: HUD, underwater treatment, splash/stroke audio. | WATER-06 | Presentation follows the single player water-state API and clears on exit. |
+| WATER-08 | T3 | Review edges, persistence decision, creature policy, and performance. | WATER-07 | Save/migration decision is recorded and streaming/spawn edge cases pass. |
+| WATER-09 | T3 | Complete water regression suite and release review. | WATER-08 | Headless and manual shore/chunk/save checks are recorded. |
 
 ## Layer 2 — person data and persistence
 
@@ -87,7 +103,7 @@ listed in **Needs** are done. The tier is the minimum recommended capability.
 
 ## What smaller agents can take immediately
 
-After C0 is complete, T1/OpenCode agents can safely take **C1** or **C6**.
-After B0, they can take **B2**. After S5, they can take **L0**. They should
+After C2 is complete, T1/OpenCode agents can safely take **C6**. After B0,
+they can take **B2**. After S5, they can take **L0**. They should
 not be assigned creator integration, save changes, routine logic, or core
 scene changes without a T2/T3 owner.

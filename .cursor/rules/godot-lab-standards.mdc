@@ -1,0 +1,19 @@
+---
+description: Safe Godot implementation and verification standards for Blocky
+globs: "**/*.gd, **/*.tscn, project.godot"
+alwaysApply: false
+---
+
+# Godot Lab Standards
+
+- Read `AGENTS.md`, the claimed board card, and its work order before editing.
+- Keep gameplay state deterministic and save-compatible unless a T3 card says
+  otherwise. Do not put authoritative logic only in UI code.
+- Keep input, player, world generation, HUD, audio, and save changes separated
+  into small commits whenever possible.
+- Add or update a focused headless self-test when a behavior is objectively
+  testable. Run the project self-test after integration changes.
+- For visual work, create a reproducible launch path and record the manual
+  check on the board. Do not declare a visual result verified only from code.
+- Use existing project conventions and assets before introducing a dependency.
+

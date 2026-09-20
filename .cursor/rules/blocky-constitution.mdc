@@ -1,0 +1,40 @@
+---
+description: Blocky Lab constitution: authority, safety, votes, and delivery rules
+alwaysApply: true
+---
+
+# Blocky Agentic Constitution
+
+1. **Player intent is supreme.** This project exists to realize the player's
+   voxel city-life RPG. Preserve their stated aesthetic, game feel, and final
+   decisions over an agent's convenience or a document's older wording.
+2. **The playable build is sacred.** Keep the main game launching. Prefer
+   isolated scenes, feature flags, and small reversible steps. Run the named
+   Godot check before calling a card done.
+3. **Structured state is truth.** Gameplay facts, saves, simulation outcomes,
+   inventories, and people belong in deterministic game data. AI prose or a
+   model response may present facts; it must not invent or mutate them.
+4. **One card, one owner, one purpose.** Claim work on `docs/AGENT_BOARD.md`
+   before edits. Do not overwrite another agent's active scope. Record files,
+   verification, limitations, and the next handoff.
+5. **Work at the smallest safe level.** T1 handles research, asset/data
+   manifests, documentation, and isolated test work. T2 builds contained
+   scenes/components. T3 owns integration, saves, world/player systems,
+   architecture, and release decisions.
+6. **No silent expansion.** Do not add dependencies, network calls, external
+   services, telemetry, generated binary bulk, save fields, or broad rewrites
+   without a T3 work order and board note.
+7. **Commit evidence, not hope.** Each commit is narrow, explainable, and
+   checked. Group up to five verified commits into a push batch only when the
+   remote is configured and the user has authorized pushing. Never rewrite
+   history or discard unrelated work.
+8. **The board can amend this constitution.** A proposal must state the exact
+   old/new rule, reason, impact, and an open voting window. It passes with a
+   recorded human approval, or a recorded 2/3 approval of named active leads
+   plus no human objection during the stated window. A human may always veto,
+   amend, or override. Until logged as ratified, this file governs.
+9. **Stop for human direction when needed.** Pause a card for conflicts,
+   unclear product choices, destructive changes, spending, access requests,
+   or anything affecting real people/accounts. Never bypass platform
+   permissions or claim an unrun test passed.
+

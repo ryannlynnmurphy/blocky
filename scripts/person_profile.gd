@@ -23,6 +23,7 @@ var data: Dictionary = default_data()
 
 static func default_data() -> Dictionary:
 	return {
+		"id": _new_id(),
 		"identity": {
 			"name": "Alex Rivera",
 			"pronouns": "they/them",
@@ -53,6 +54,12 @@ static func default_data() -> Dictionary:
 
 func load_dict(source: Dictionary) -> void:
 	data = default_data()
+	# A person's id must survive save/load unchanged -- it's how Layer 6+
+	# (relationships, memories naming other people) will refer to them.
+	# Only accept one already on disk; a fresh default_data() id is correct
+	# for a save written before this field existed.
+	if source.get("id") is String and not str(source["id"]).is_empty():
+		data["id"] = source["id"]
 	for section in ["identity", "appearance", "personality", "needs"]:
 		if source.get(section) is Dictionary:
 			for key in source[section]:
@@ -96,6 +103,14 @@ func set_wardrobe(slot: String, item_id: String) -> void:
 		data["appearance"]["wardrobe"][slot] = item_id
 
 
+static func _new_id() -> String:
+	return "person_%d_%d" % [Time.get_unix_time_from_system(), randi() % 1000000]
+
+
+func id() -> String:
+	return str(data.get("id", ""))
+
+
 func axis(key: String) -> int:
 	return int(data["personality"].get(key, 0))
 
@@ -133,3 +148,8 @@ func _sanitize() -> void:
 	while data["values"].size() < 3:
 		data["values"].append("Community")
 	data["values"] = data["values"].slice(0, 3)
+	# 0-100 meters, same convention the HUD already uses for player hunger;
+	# money is a real currency count, unbounded above but never negative.
+	for key in ["hunger", "energy", "social", "stress"]:
+		data["needs"][key] = clampi(int(data["needs"].get(key, 0)), 0, 100)
+	data["needs"]["money"] = maxi(int(data["needs"].get("money", 0)), 0)

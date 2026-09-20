@@ -6,7 +6,10 @@ extends Node
 ##   frames 120..200   spawn a critter, punch it dead, pick up its drop (combat)
 ##   frames 210..290   fall from 8 blocks, eat meat, die and respawn (health)
 ##   frames 300..320   kill two critters, reach level 2 (progression)
-##   frames 330..360   save, wreck the state, load it back (saving)
+##   frames 330..360   save, wreck the state, load it back (saving); also
+##                     round-trips the person profile (id/name/wardrobe)
+##                     through the same save file, and checks a save with
+##                     no "person" key (pre-D0) still migrates safely
 ##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
 ##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
 ##   frames 490..640   midnight: a Shade hunts and bites; noon: it burns (hostiles)
@@ -38,6 +41,7 @@ var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
 var _sleep_test_hostile: Hostile
 var _corridor_start := Vector3.ZERO
+var _person_test_id := ""
 
 
 func _physics_process(_delta: float) -> void:
@@ -212,11 +216,16 @@ func _physics_process(_delta: float) -> void:
 		345:
 			print("selftest: health after a 3.6-block drop: %d (expect 11)" % player.health)
 		330:
-			# Dig a hole and remember where, then save.
+			# Dig a hole and remember where, then save. Also customize the
+			# person profile (D0-D4: it should round-trip through the same
+			# save file, id included, exactly like level/xp/inventory do).
 			player.set_look(0.0, -0.8)
 			var hit := player._aim_ray()
 			_hole = Vector3i((hit.position - hit.normal * 0.5).floor())
 			player._break_block()
+			main.person_profile.data["identity"]["name"] = "Selftest Person"
+			main.person_profile.set_wardrobe("bracelet", "bracelet_silver")
+			_person_test_id = main.person_profile.id()
 			var ok: bool = main.save_game(TEST_SAVE)
 			print("selftest: saved to %s: %s (hole at %s, block there now %d)"
 				% [TEST_SAVE, ok, _hole, world.get_block(_hole.x, _hole.y, _hole.z)])
@@ -229,6 +238,7 @@ func _physics_process(_delta: float) -> void:
 			world.edits.clear()
 			world.reset_chunks()
 			world.ensure_data(Vector2i(_hole.x >> 4, _hole.z >> 4))   # regenerate now, not next frame
+			main.person_profile = PersonProfile.new()   # a different id, wiped identity
 			print("selftest: wrecked: level %d, %s, block at hole after regen: %d (expect 1 = grass back)"
 				% [player.level, player.inventory.summary(), world.get_block(_hole.x, _hole.y, _hole.z)])
 		350:
@@ -238,6 +248,17 @@ func _physics_process(_delta: float) -> void:
 				% [ok, player.level, player.xp, player.inventory.summary(),
 					world.get_block(_hole.x, _hole.y, _hole.z),
 					player.global_position.distance_to(Vector3(_hole) + Vector3(0.5, 0, 0.5)) < 6.0])
+			print("selftest: person round-trip: id kept %s (expect true), name %s (expect Selftest Person), bracelet %s (expect bracelet_silver)"
+				% [main.person_profile.id() == _person_test_id, main.person_profile.data["identity"]["name"],
+					main.person_profile.wardrobe_id("bracelet")])
+			var migrated := PersonProfile.new()
+			migrated.load_dict({})   # simulates main.load_game() on a pre-D0 save with no "person" key
+			print("selftest: old save missing 'person' key still loads safely: id %s (expect non-empty), name %s (expect Alex Rivera)"
+				% [not migrated.id().is_empty(), migrated.data["identity"]["name"]])
+			var clamped := PersonProfile.new()
+			clamped.load_dict({"needs": {"hunger": 999, "energy": -50, "money": -20}})
+			print("selftest: need clamping: hunger %d (expect 100), energy %d (expect 0), money %d (expect 0)"
+				% [clamped.data["needs"]["hunger"], clamped.data["needs"]["energy"], clamped.data["needs"]["money"]])
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 		370:
 			player.set_look(0.0, -0.2)

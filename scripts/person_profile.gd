@@ -189,6 +189,56 @@ func adjust_relationship(other_id: String, delta: int) -> void:
 	data["relationships"][other_id] = rel
 
 
+## L3: appends an event to this person's memory (the schema's own
+## "memories": [] slot, empty since the very first version of this file).
+## `record` should include an "at_minutes" key (DayNight.total_minutes() at
+## the time it happened) so it stays meaningfully inspectable long after --
+## "important event is inspectable after time advances" is this card's own
+## acceptance check. Capped at MAX_MEMORIES, oldest first out, so a long
+## save can't grow this section without bound; L4+ (jobs, consequence
+## chains) will have real reasons to prune more deliberately than FIFO, but
+## a hard cap is the honest v1 boundary, not a promise this is final.
+const MAX_MEMORIES := 50
+
+func add_memory(record: Dictionary) -> void:
+	data["memories"].append(record)
+	while data["memories"].size() > MAX_MEMORIES:
+		data["memories"].pop_front()
+
+
+## Read-only copy of this person's memories, oldest first.
+func memories() -> Array:
+	return data["memories"].duplicate(true)
+
+
+## L3's "resident debug inspector": a readable summary of this person's
+## full simulation-facing state (identity, needs, routine, relationships,
+## memories) -- not a graphical panel (nothing in this project's "debug"
+## requirements so far has needed one; every prior card's "debug"/"proof"
+## bar has been met with inspectable data plus a real trigger, e.g. S2's
+## work/L2's talk print their own outcome the same way), but a real,
+## reachable, gameplay-triggered inspection (CityWalker's Inspect key)
+## rather than only a test calling this directly.
+func debug_summary() -> String:
+	var lines: Array[String] = []
+	lines.append("%s  (id=%s)" % [display_name(), id()])
+	lines.append("  needs: %s" % [data["needs"]])
+	lines.append("  routine: home=%s job=%s wake=%d work=%d-%d sleep=%d"
+		% [routine("home"), routine("job"), routine("wake_hour"), routine("work_start_hour"),
+			routine("work_end_hour"), routine("sleep_hour")])
+	if data["relationships"].is_empty():
+		lines.append("  relationships: none yet")
+	else:
+		for other_id in data["relationships"]:
+			lines.append("  relationship[%s]: affinity %d" % [other_id, relationship_affinity(other_id)])
+	if data["memories"].is_empty():
+		lines.append("  memories: none yet")
+	else:
+		for m in data["memories"]:
+			lines.append("  memory: %s" % [m])
+	return "\n".join(lines)
+
+
 ## S3: current value of a routine key ("home", "job" -- CityBlock location
 ## keys; "wake_hour"/"work_start_hour"/"work_end_hour"/"sleep_hour" -- ints
 ## 0-23). Unknown keys read as "" rather than erroring, matching need()'s

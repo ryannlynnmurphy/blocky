@@ -280,6 +280,7 @@ func _enter_city() -> void:
 	_city_walker.exit_requested.connect(_exit_city)
 	_city_walker.work_requested.connect(_on_city_work_requested)
 	_city_walker.talk_requested.connect(_on_city_talk_requested)
+	_city_walker.inspect_requested.connect(_on_city_inspect_requested)
 	# L1: the full 20-resident roster (L0) now appears in the city, each
 	# standing at home, and S5's routine loop drives every one of them from
 	# here on -- real hour boundaries (day_night.hour_changed, S0), not a
@@ -325,6 +326,18 @@ func _on_city_talk_requested(resident_actor: DebugActor) -> void:
 		% [resident_profile.display_name(),
 			person_profile.relationship_affinity(resident_profile.id()),
 			resident_profile.relationship_affinity(person_profile.id())])
+
+
+## L3: I pressed near a resident (scripts/city_walker.gd's
+## inspect_requested, reusing near_resident's same live proximity query as
+## talk). The "resident debug inspector" this card asks for -- prints the
+## full PersonProfile.debug_summary(), inspectable however long after any
+## of it happened, not just the instant it occurred.
+func _on_city_inspect_requested(resident_actor: DebugActor) -> void:
+	var resident_profile := _profile_for_resident_actor(resident_actor)
+	if resident_profile == null:
+		return
+	print(resident_profile.debug_summary())
 
 
 ## Finds which tracked resident (see _city_residents) a given DebugActor

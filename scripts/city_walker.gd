@@ -51,6 +51,11 @@ var near_resident: DebugActor = null
 ## to -- this walker has no PersonProfile of its own to reason about.
 signal talk_requested(resident: DebugActor)
 
+## L3: fired on I while near_resident is set -- the "resident debug
+## inspector" this card asks for, reusing near_resident's same live
+## proximity query rather than building a second one just for this.
+signal inspect_requested(resident: DebugActor)
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
@@ -111,6 +116,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		work_requested.emit()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_F and near_resident != null:
 		talk_requested.emit(near_resident)
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_I and near_resident != null:
+		inspect_requested.emit(near_resident)
 
 
 func _physics_process(delta: float) -> void:

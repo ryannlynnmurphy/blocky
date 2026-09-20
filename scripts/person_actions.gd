@@ -79,3 +79,9 @@ static func talk(clock: DayNight, a: PersonProfile, b: PersonProfile) -> void:
 	apply_action(clock, a, TALK_MINUTES / MINUTES_PER_HOUR, {"social": 8, "stress": -3})
 	a.adjust_relationship(b.id(), TALK_AFFINITY_GAIN)
 	b.adjust_relationship(a.id(), TALK_AFFINITY_GAIN)
+	# L3: both sides remember it happened -- "at_minutes" is what makes an
+	# event still meaningfully inspectable long after (this card's own
+	# acceptance), not just at the instant it occurred.
+	var at: float = clock.total_minutes()
+	a.add_memory({"type": "conversation", "with": b.id(), "with_name": b.display_name(), "at_minutes": at})
+	b.add_memory({"type": "conversation", "with": a.id(), "with_name": a.display_name(), "at_minutes": at})

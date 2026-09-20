@@ -133,8 +133,24 @@ func _physics_process(_delta: float) -> void:
 			print("citytest: real F keypress near %s triggered PersonActions.talk(): player->them=%d, them->player=%d (expect both %d)"
 				% [talked_to.display_name() if talked_to else "??", main.person_profile.relationship_affinity(talked_to.id()) if talked_to else -1,
 					talked_to.relationship_affinity(main.person_profile.id()) if talked_to else -1, PersonActions.TALK_AFFINITY_GAIN])
-			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the crowd, clear of talk range
-		116:
+			# L3: the same real conversation also left both parties a memory
+			# of it, not just a relationship number.
+			print("citytest: L3 memories after that conversation: player=%d, them=%d (expect both >= 1)"
+				% [main.person_profile.memories().size(), talked_to.memories().size() if talked_to else -1])
+			# A real I keypress (the "resident debug inspector" trigger),
+			# not a direct call to debug_summary() -- proves the wiring
+			# (CityWalker.inspect_requested -> main._on_city_inspect_requested())
+			# doesn't crash and reaches the real profile, same reasoning as
+			# the E/F keypress tests above. Printed output isn't captured
+			# here (main.gd just print()s it, same as work/talk), but a
+			# crash would show up as a SCRIPT ERROR in this run's own output.
+			var i_press := InputEventKey.new()
+			i_press.keycode = KEY_I
+			i_press.pressed = true
+			Input.parse_input_event(i_press)
+		114:
+			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the crowd, clear of talk/inspect range
+		118:
 			print("citytest: near_resident after walking away: %s (expect null/none)" % [main._city_walker.near_resident])
 		120:
 			# S2: teleport to the floor in front of the workplace workbench

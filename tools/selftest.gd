@@ -50,6 +50,9 @@ extends Node
 ##   frame  2020        L2: PersonActions.talk() moves both people's
 ##                      affinity by the same fixed amount, cumulatively,
 ##                      and it survives a save/load round trip
+##   frame  2030        L3: a conversation leaves a real, correctly-
+##                      timestamped memory, still inspectable (debug_summary())
+##                      after the clock advances days later; memory cap holds
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1164,6 +1167,50 @@ func _physics_process(_delta: float) -> void:
 			alice_loaded.load_dict(alice.to_dict())
 			print("selftest: L2 relationship survives a save/load round trip: %s (loaded affinity=%d)"
 				% [alice_loaded.relationship_affinity(bob.id()) == PersonActions.TALK_AFFINITY_GAIN * 2, alice_loaded.relationship_affinity(bob.id())])
+		2030:
+			# L3: memory records -- a conversation leaves both parties with
+			# a real, inspectable memory of it, not just a relationship number.
+			var carol := PersonProfile.new_resident("Carol Nkemelu", "apartment", "workplace")
+			var dan := PersonProfile.new_resident("Dan Osei", "apartment", "cafe")
+			main.day_night.time_of_day = 0.3
+			main.day_night.day_count = 1
+			main.day_night._apply()
+			PersonActions.talk(main.day_night, carol, dan)
+			# talk_at is read back from the memory itself, not predicted
+			# from a before-the-call snapshot -- apply_action() advances
+			# the clock by TALK_MINUTES *before* talk() records the memory,
+			# so the correct timestamp is ~10 minutes after time_of_day was
+			# set above, not equal to it (observed directly: an earlier
+			# draft of this test assumed equal-to and was wrong).
+			print("selftest: L3 memories after one conversation: carol=%d, dan=%d (expect both 1)"
+				% [carol.memories().size(), dan.memories().size()])
+			var carol_memory: Dictionary = carol.memories()[0]
+			var talk_at: float = float(carol_memory.get("at_minutes", -1.0))
+			var content_ok: bool = carol_memory.get("type") == "conversation" and carol_memory.get("with") == dan.id() \
+				and talk_at > 432.0 and talk_at < 443.0   # day 1, time_of_day 0.3 = minute 432, plus the ~10 min talk() itself costs
+			print("selftest: L3 memory content correct: %s (%s)" % [content_ok, carol_memory])
+			# "Inspectable after time advances" -- this card's own literal
+			# acceptance check: jump the clock forward several days after
+			# the conversation happened, then confirm the memory is still
+			# there, unchanged, still correctly timestamped in the past.
+			main.day_night.time_of_day = 0.5
+			main.day_night.day_count = 5
+			main.day_night._apply()
+			var still_there: bool = carol.memories().size() == 1 and is_equal_approx(float(carol.memories()[0].get("at_minutes", -1.0)), talk_at) \
+				and carol.memories()[0]["at_minutes"] < main.day_night.total_minutes()
+			print("selftest: L3 memory still inspectable after time advances (now day %d vs conversation at day 1): %s"
+				% [main.day_night.day_count, still_there])
+			# debug_summary() -- the "resident debug inspector" itself --
+			# includes the relationship and memory, not just identity/needs.
+			var summary := carol.debug_summary()
+			var summary_ok: bool = summary.find(dan.id()) != -1 and summary.find("conversation") != -1
+			print("selftest: L3 debug_summary() includes the relationship and memory: %s" % [summary_ok])
+			# Cap: MAX_MEMORIES stays bounded even after many events, oldest
+			# evicted first (FIFO), not unbounded growth.
+			for i in PersonProfile.MAX_MEMORIES + 10:
+				carol.add_memory({"type": "test", "n": i})
+			print("selftest: L3 memory cap holds: size=%d (expect %d), oldest kept is n=%d (expect 10 -- FIFO, not unbounded)"
+				% [carol.memories().size(), PersonProfile.MAX_MEMORIES, carol.memories()[0].get("n", -1)])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

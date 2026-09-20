@@ -43,11 +43,10 @@ push. A failed or unavailable push does not discard local work.
 
 | Batch | Commits | Regression | Push state |
 | --- | --- | --- | --- |
-| Next | 0 / 5 | pending | local development |
+| Next | 3 / 5 | Godot headless boot completes; pre-existing expectation mismatches logged on board | local development |
 
 ## Definition of a usable game increment
 
 An increment lets a player see, do, or reliably test one more meaningful thing.
 Documentation, asset manifests, and probes are valuable enabling work, but they
 do not replace a runnable slice.
-

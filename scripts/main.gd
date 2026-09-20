@@ -151,6 +151,11 @@ func _ready() -> void:
 			player.inventory.add(id, 8)
 		set_inventory_open(true)
 
+	# Testing aid: `-- --show-creator` opens Create a Person directly, for
+	# wardrobe/preview screenshots without clicking through the title screen.
+	if "--show-creator" in args:
+		_enter(State.CREATOR)
+
 
 func _process(delta: float) -> void:
 	if state not in [State.PLAYING, State.INVENTORY, State.WORKBENCH, State.FURNACE]:

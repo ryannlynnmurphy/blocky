@@ -70,6 +70,7 @@ static func apply_to(root: Node, profile: Dictionary) -> void:
 			_tint(mesh, shoes_color)
 		elif part == "belt" or part == "buckle":
 			_tint(mesh, belt_color)
+	_apply_bracelet(root, wardrobe, accent)
 	_apply_body_shape(root, str(look.get("body", "Balanced")))
 
 
@@ -91,6 +92,43 @@ static func _apply_body_shape(root: Node, body: String) -> void:
 		var part := root.find_child(part_name, true, false) as Node3D
 		if part != null:
 			part.scale = body_scale
+
+
+## Bracelets have no dedicated art yet (see docs/lab/WARDROBE_CATALOG.md), so
+## this hangs a plain ring off the left hand's own wrist joint instead of
+## claiming a mesh that doesn't exist. Sized from the hand's own AABB (the
+## established pattern in this codebase, e.g. player.gd's limb pivots and
+## sword scale) rather than a hand-copied number, so it fits any future
+## rescale of the shared rig. Idempotent: reuses the same child node across
+## repeated apply_to() calls (player.gd calls this on the live player model,
+## not just the one-shot creator preview) instead of stacking duplicates.
+static func _apply_bracelet(root: Node, wardrobe: Dictionary, fallback: Color) -> void:
+	var hand := root.find_child("hand_L", true, false) as MeshInstance3D
+	if hand == null:
+		return
+	var bracelet := hand.get_node_or_null("bracelet_wrist") as MeshInstance3D
+	if bracelet == null:
+		# hand_L's own local origin sits at the wrist joint -- the same
+		# convention `_sword` already relies on (player.gd attaches it to
+		# hand_R with no position offset at all) -- so this needs no AABB
+		# placement math, only a size reference. Three torus copies cover
+		# all three axis orientations since a rigged part's local basis
+		# isn't guaranteed to have any particular axis point "up the arm"
+		# (joint rotation is baked into the glTF node matrix); exactly one
+		# will actually ring the wrist, the other two are degenerate
+		# (edge-on or off to the side) and cost nothing extra to leave in.
+		var size := hand.get_aabb().size
+		var wrist_radius: float = (size.x + size.y + size.z) / 3.0 * 0.55
+		bracelet = MeshInstance3D.new()
+		bracelet.name = "bracelet_wrist"
+		var torus := TorusMesh.new()
+		torus.inner_radius = wrist_radius * 0.65
+		torus.outer_radius = wrist_radius
+		torus.rings = 16
+		torus.ring_segments = 10
+		bracelet.mesh = torus
+		hand.add_child(bracelet)
+	_tint(bracelet, _wardrobe_color(wardrobe.get("bracelet", ""), fallback))
 
 
 static func _tint(mesh: MeshInstance3D, color: Color) -> void:

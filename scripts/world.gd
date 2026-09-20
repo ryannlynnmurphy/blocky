@@ -346,7 +346,14 @@ func _instantiate_props(chunk: Chunk, props: Array) -> void:
 			continue
 		var inst: Node3D = scene.instantiate()
 		chunk.add_child(inst)
-		inst.position = Vector3(p["lx"] + 0.5, p["y"], p["lz"] + 0.5)
+		# Every other prop is 1 block wide, so +0.5 centers it on its own
+		# column. water_tile.glb is a 2x2-block footprint anchored at
+		# (lx, lz) and meant to cover world columns [lx, lx+2) — its
+		# center needs +1.0, or the tile lands half a block off the grid
+		# and its edge cuts across a shoreline block instead of stopping
+		# at the block face.
+		var center_offset := 1.0 if p["type"] == "water_tile" else 0.5
+		inst.position = Vector3(p["lx"] + center_offset, p["y"], p["lz"] + center_offset)
 		inst.rotation.y = p["rot"]
 		if p["type"] == "water_tile":
 			# foam_n/foam_s repeat identically on every tile (rot is fixed

@@ -18,6 +18,14 @@ const VALUE_OPTIONS := ["Freedom", "Money", "Status", "Family", "Community",
 	"Knowledge", "Art", "Faith", "Power", "Security"]
 const AXES := ["ambition", "sociability", "risk", "cooperation", "convention", "empathy"]
 
+## S3: valid "routine" home/job values -- CityBlock's own named locations
+## (scripts/city_block.gd's location_positions/route_markers keys), not a
+## separate ID space, so Layer 5+ code can hand a routine's "home"/"job"
+## straight to CityBlock.get_route() with no translation step.
+const ROUTINE_LOCATIONS := ["apartment", "street", "cafe", "workplace", "park"]
+const DEFAULT_ROUTINE_HOME := "apartment"
+const DEFAULT_ROUTINE_JOB := "workplace"
+
 var data: Dictionary = default_data()
 
 
@@ -49,6 +57,21 @@ static func default_data() -> Dictionary:
 		"relationships": {},
 		"memories": [],
 		"needs": {"hunger": 70, "energy": 80, "social": 60, "stress": 20, "money": 120},
+		# S3: a routine is data, not behavior -- Layer 5's S5 (goal
+		# priority/routine loop) and Layer 7's residents read these hours
+		# and CityBlock location keys to decide what a person should be
+		# doing right now. The player has one too (unused by any code yet,
+		# but the same shape means S5 doesn't need a player-vs-resident
+		# branch later): a default 9-5 at the Workplace, home at the
+		# Apartment, matching this slice's only home/job locations.
+		"routine": {
+			"home": DEFAULT_ROUTINE_HOME,
+			"job": DEFAULT_ROUTINE_JOB,
+			"wake_hour": 7,
+			"work_start_hour": 9,
+			"work_end_hour": 17,
+			"sleep_hour": 22,
+		},
 	}
 
 
@@ -60,7 +83,7 @@ func load_dict(source: Dictionary) -> void:
 	# for a save written before this field existed.
 	if source.get("id") is String and not str(source["id"]).is_empty():
 		data["id"] = source["id"]
-	for section in ["identity", "appearance", "personality", "needs"]:
+	for section in ["identity", "appearance", "personality", "needs", "routine"]:
 		if source.get(section) is Dictionary:
 			for key in source[section]:
 				if data[section].has(key):
@@ -145,6 +168,30 @@ func adjust_need(key: String, delta: int) -> void:
 	_sanitize()
 
 
+## S3: current value of a routine key ("home", "job" -- CityBlock location
+## keys; "wake_hour"/"work_start_hour"/"work_end_hour"/"sleep_hour" -- ints
+## 0-23). Unknown keys read as "" rather than erroring, matching need()'s
+## same "typo-safe read" reasoning.
+func routine(key: String) -> Variant:
+	return data["routine"].get(key, "")
+
+
+## S3: builds one resident's PersonProfile -- the same shape the player
+## uses (see the class doc comment), just with a name/home/job appropriate
+## to an NPC instead of the player's own default_data() ("New arrival",
+## "Looking for work"). Layer 6's L0 ("prepare deterministic data for 20
+## residents") is the real content-authoring card; this is the one-record
+## proof S3 asks for, not a preview of L0's own scope.
+static func new_resident(display_name: String, home: String, job: String) -> PersonProfile:
+	var p := PersonProfile.new()
+	p.data["identity"]["name"] = display_name
+	p.data["identity"]["job"] = job.capitalize()
+	p.data["routine"]["home"] = home
+	p.data["routine"]["job"] = job
+	p._sanitize()
+	return p
+
+
 func randomize_visuals() -> void:
 	for key in APPEARANCE_OPTIONS:
 		var options: Array = APPEARANCE_OPTIONS[key]
@@ -171,3 +218,15 @@ func _sanitize() -> void:
 	for key in ["hunger", "energy", "social", "stress"]:
 		data["needs"][key] = clampi(int(data["needs"].get(key, 0)), 0, 100)
 	data["needs"]["money"] = maxi(int(data["needs"].get("money", 0)), 0)
+	# S3: home/job must be one of CityBlock's own named locations (an
+	# invalid or missing one would silently break any Layer 5+ code that
+	# hands it straight to CityBlock.get_route()); hours are wrapped into
+	# a real 0-23 day rather than clamped, so e.g. -1 sanely means 23.
+	var routine_data: Dictionary = data.get("routine", {})
+	if routine_data.get("home") not in ROUTINE_LOCATIONS:
+		routine_data["home"] = DEFAULT_ROUTINE_HOME
+	if routine_data.get("job") not in ROUTINE_LOCATIONS:
+		routine_data["job"] = DEFAULT_ROUTINE_JOB
+	for key in ["wake_hour", "work_start_hour", "work_end_hour", "sleep_hour"]:
+		routine_data[key] = posmod(int(routine_data.get(key, 0)), 24)
+	data["routine"] = routine_data

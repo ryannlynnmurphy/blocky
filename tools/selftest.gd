@@ -38,6 +38,9 @@ extends Node
 ##   frames 1850..1870 S2: PersonActions.eat()/work() math, then the real
 ##                      main._try_sleep() integration (clock + needs move
 ##                      together through one actual player action)
+##   frame  1890        S3: one resident PersonProfile record (home/job/
+##                      routine/appearance), sanitizing bad home/job, and a
+##                      save/load round trip preserving the routine
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -999,6 +1002,32 @@ func _physics_process(_delta: float) -> void:
 			var slept_hours: float = (main.day_night.total_minutes() - sleep_minutes_before) / 60.0
 			print("selftest: S2 main._try_sleep(): slept %.2f h (expect > 0), energy %d (expect > 20), stress %d (expect < 50), time_of_day %.2f (expect ~0.25 = sunrise)"
 				% [slept_hours, main.person_profile.need("energy"), main.person_profile.need("stress"), main.day_night.time_of_day])
+		1890:
+			# S3: one resident data record, the same PersonProfile shape the
+			# player uses (see that class's own doc comment) -- a real,
+			# distinct person, not just schema support nothing constructs.
+			var resident: PersonProfile = PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
+			var resident_valid: bool = resident.display_name() == "Priya Nair" \
+				and resident.id() != main.person_profile.id() and not resident.id().is_empty() \
+				and resident.routine("home") == "apartment" and resident.routine("job") == "workplace" \
+				and resident.routine("work_start_hour") == 9 and resident.appearance("body") in PersonProfile.APPEARANCE_OPTIONS["body"] \
+				and resident.need("hunger") >= 0 and resident.need("hunger") <= 100
+			print("selftest: S3 resident record valid=%s (name=%s, id=%s, home=%s, job=%s, work_start_hour=%d, body=%s, hunger=%d)"
+				% [resident_valid, resident.display_name(), resident.id(), resident.routine("home"), resident.routine("job"),
+					resident.routine("work_start_hour"), resident.appearance("body"), resident.need("hunger")])
+			# An invalid home/job must sanitize to a real location, not stick
+			# around as garbage a route lookup would silently fail on.
+			var bad_resident: PersonProfile = PersonProfile.new_resident("Test Ghost", "nowhere", "void")
+			print("selftest: S3 an invalid home/job sanitizes to real locations: home=%s job=%s (expect both in %s)"
+				% [bad_resident.routine("home"), bad_resident.routine("job"), PersonProfile.ROUTINE_LOCATIONS])
+			# A round trip through the real save format (to_dict()/load_dict(),
+			# the same calls save_game()/load_game() use) must preserve the
+			# routine too, not just identity/needs (already proven at D3).
+			var round_trip := PersonProfile.new()
+			round_trip.load_dict(resident.to_dict())
+			var routine_survived: bool = round_trip.routine("home") == "apartment" and round_trip.routine("job") == "workplace" \
+				and round_trip.display_name() == "Priya Nair"
+			print("selftest: S3 routine survives a save/load round trip: %s" % [routine_survived])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

@@ -20,10 +20,14 @@ agents can all use it. The detailed requirements live in `WORK_ORDERS.md`.
 | C1 | DONE | Codex | T1 | C0 | board/docs only | Inventoried committed creator/city foundation. |
 | C2 | DONE | Codex | T3 | C1 | decision docs only | Retain functional creator flow; replace dark presentation and color-preset wardrobe layer. |
 | C3 | REVIEW | Codex | T2 | C2 | `scripts/screens.gd`, visual test evidence | Light/light-gray styling is implemented; needs an in-game visual review. |
+| C4 | DONE | Codex | T2 | C3 | existing preview scene/script | Existing live 3D preview retained and verified as the wardrobe renderer. |
+| C5 | DONE | Codex | T2 | C3 | existing creator form/profile | Existing name/pronoun controls retain in-memory navigation state. |
 | C6 | DONE | Codex | T1 | C2 | `scripts/wardrobe_catalog.gd`, catalog docs | Stable item IDs/slots and honest rig/placeholder refs are defined. |
+| C7 | DONE | Codex | T2 | C4, C6 | profile, appearance, creator screen | Catalog selection visibly recolors the live preview via the shared rig. |
+| C8 | READY | unassigned | T2 | C7 | appearance/creator screen, future wrist mesh | Pants/belt/shoes render; finish a visible bracelet attachment and replace-per-slot review. |
 | WATER-03 | DONE | Codex | T3 | — | `docs/lab/WATER_AND_SWIMMING_SPEC.md`, board only | v1 contract/special mechanics approved from the current design request. |
-| WATER-04 | READY | unassigned | T2 | WATER-03 | `scripts/world_gen.gd`, `scripts/world.gd`, tests | Deterministic terrain water data/query layer. |
-| WATER-05 | BLOCKED | unassigned | T2 | WATER-04 | world visuals/assets/tests | Dedicated transparent water visuals, never opaque blocks. |
+| WATER-04 | DONE | Codex | T2 | WATER-03 | `scripts/world_gen.gd`, `scripts/world.gd`, tests | Deterministic terrain water data/query layer. |
+| WATER-05 | READY | unassigned | T2 | WATER-04 | world visuals/assets/tests | Dedicated transparent water visuals, never opaque blocks. |
 | WATER-06 | BLOCKED | unassigned | T3 | WATER-04, WATER-05 | player/world integration/tests | Swimming and special mechanics. |
 | WATER-07 | BLOCKED | unassigned | T2 | WATER-06 | HUD/audio/main | Presentation-only water response. |
 | WATER-08 | BLOCKED | unassigned | T3 | WATER-07 | review/tests | Edges, save decision, creatures, performance. |
@@ -111,3 +115,17 @@ Changed: `docs/lab/WATER_AND_SWIMMING_SPEC.md`, `docs/WORK_ORDERS.md`, `docs/AGE
 Verified: Contract reviewed against current terrain, player, HUD, audio, and chunk seams.
 Next: WATER-04 — deterministic water query data, then transparent visual water before player swimming.
 Notes: Shift + direction is reserved for camera-directed sprint swimming with a stamina/cooldown cap; no opaque water blocks or old-code rollback.
+
+### 2026-09-19 — C4/C5/C7 — done
+Owner: Codex (T2)
+Changed: `scripts/person_profile.gd`, `scripts/person_appearance.gd`, `scripts/screens.gd`
+Verified: Godot 4.7.2 headless boot/self-test completed without new parser/runtime errors.
+Next: C8 — add the visible bracelet attachment; C3 remains queued for a human in-game visual pass.
+Notes: Existing saves gain sanitized default wardrobe IDs. The creator now selects one item per catalog slot; T-shirts, pants, belts, and shoes visibly recolor the shared rig.
+
+### 2026-09-19 — WATER-04 — done
+Owner: Codex (T2)
+Changed: `scripts/world_gen.gd`, `scripts/world.gd`, `tools/selftest.gd`
+Verified: Godot 4.7.2 headless self-test prints a deterministic dry/surface/submerged fixture with all expected states true.
+Next: WATER-05 — render dedicated transparent chunk-aligned water surfaces.
+Notes: This layer changes no visual geometry, collision, player movement, or save data. The surface-boundary epsilon prevents an exact returned water height from being classified as submerged.

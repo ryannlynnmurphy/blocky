@@ -223,7 +223,8 @@ and verified before the next starts. No system gets built "all at once."
       one (same pattern as Workbench's special right-click) emits
       `player.sleep_requested`; `main._try_sleep()` skips straight to
       the next dawn (`day_night.skip_to_morning()`) if it's night, or
-      shows "Can't sleep now" by day — no "monsters nearby" block yet.
+      shows "Can't sleep now" by day — no "monsters nearby" block yet
+      (see M34).
       Shades-can't-breach-a-wall turned out to already be true
       structurally (physics collision blocks them regardless of AI;
       their only mobility trick is a 1-block hop, not wall-scaling) —
@@ -425,6 +426,23 @@ and verified before the next starts. No system gets built "all at once."
       movie confirming the tiled water renders with visible foam-ripple
       texture and lily pads, seamless to the horizon with no gaps or
       floating geometry.
+- [x] **M34 — Sleeping blocks on "monsters nearby".** `main._try_sleep()`
+      now also refuses (message: "Too dangerous to sleep") if
+      `world.hostile_near(player.global_position, Hostile.SIGHT)` finds a
+      live hostile within 18 blocks — the same range a hostile itself
+      uses to notice and start chasing the player, so "too dangerous to
+      sleep" and "close enough to be hunting you" are the same threshold
+      by construction rather than a second tuned number. `hostile_near()`
+      just walks `world._hostiles.get_children()` — mirrors
+      `hostile_count()` right next to it.
+      Verified: two new selftest phases — sleep attempted with a hostile
+      spawned 5 blocks away (day count unchanged) and again with one 30
+      blocks away (day advances normally) — plus the full suite otherwise
+      unaffected. Caught a real bug in the test itself while writing it,
+      not the game: `queue_free()` defers removal, so re-checking
+      "sleep works with nothing nearby" in the same physics frame still
+      saw the just-freed nearby hostile and failed; switched that one
+      cleanup call to immediate `.free()`.
 
 This closes out every item on the original backlog. See "Next" below
 for what's left — all either blocked on missing inputs (new art/audio
@@ -441,7 +459,5 @@ milestones above, not gaps that were missed.
       non-block-mining redesign (see M25) — voxel trees stay for now.
 - [ ] Per-slot tool durability (see M28's scope trade-off), if stacked
       duplicate tools wearing independently ever turns out to matter.
-- [ ] Sleeping could block on "monsters nearby" like Minecraft (M27
-      skipped this for scope).
 - [ ] Breath meter/drowning, underwater fog/muffled audio (M31 skipped
       these for scope — the core swim mechanic is there).

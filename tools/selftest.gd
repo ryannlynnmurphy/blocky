@@ -37,6 +37,7 @@ var _torch_pos := Vector3i.ZERO
 var _shelter_shade: Hostile
 var _shelter_center := Vector3.ZERO
 var _shelter_health := 0
+var _sleep_test_hostile: Hostile
 var _swim_health_before := 0
 var _corridor_start := Vector3.ZERO
 
@@ -421,6 +422,24 @@ func _physics_process(_delta: float) -> void:
 			main._try_sleep()
 			print("selftest: sleep attempt at night: time now %.2f (expect 0.25), day %d -> %d"
 				% [main.day_night.time_of_day, day_before, main.day_night.day_count])
+		895:
+			# Sleep should also refuse with a hostile nearby (Minecraft-
+			# style), even at night — Hostile.SIGHT (18 blocks) away is
+			# close enough, well past that is not.
+			main.day_night.time_of_day = 0.9   # deep night again
+			main.day_night._apply()
+			var day_before2: int = main.day_night.day_count
+			_sleep_test_hostile = world.spawn_hostile_at(player.global_position + Vector3(5, 0, 0))
+			main._try_sleep()
+			print("selftest: sleep blocked with a hostile 5 blocks away: day unchanged %s (expect true)"
+				% (main.day_night.day_count == day_before2))
+			_sleep_test_hostile.free()   # immediate, not queue_free — must be gone before the next check this same frame
+			_sleep_test_hostile = null
+			var far_hostile := world.spawn_hostile_at(player.global_position + Vector3(30, 0, 0))
+			main._try_sleep()
+			print("selftest: sleep works again with a hostile 30 blocks away: day %d -> %d (expect +1)"
+				% [day_before2, main.day_night.day_count])
+			far_hostile.queue_free()
 		900:
 			# Shelter: wall a 3x3 pocket in solid on all six sides, put the
 			# player at its centre, and send a night hunter after them —

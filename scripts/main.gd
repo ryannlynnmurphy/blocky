@@ -229,16 +229,20 @@ func respawn_from_death() -> void:
 	_enter(State.PLAYING)
 
 
-## Right-clicked a Bed. Only skips time at night (no "monsters nearby"
-## block yet — that's Minecraft's rule, not implemented here).
+## Right-clicked a Bed. Skips time at night, unless a hostile is close
+## enough to be a real threat — Hostile.SIGHT, the same range it uses to
+## notice and chase the player in the first place.
 func _try_sleep() -> void:
 	if state != State.PLAYING:
 		return
-	if day_night.is_night():
-		day_night.skip_to_morning()
-		hud.show_message("Slept until morning")
-	else:
+	if not day_night.is_night():
 		hud.show_message("Can't sleep now")
+		return
+	if world.hostile_near(player.global_position, Hostile.SIGHT):
+		hud.show_message("Too dangerous to sleep")
+		return
+	day_night.skip_to_morning()
+	hud.show_message("Slept until morning")
 
 
 func _new_game(seed_text: String) -> void:

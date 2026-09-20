@@ -781,6 +781,15 @@ func hostile_count() -> int:
 	return _hostiles.get_child_count()
 
 
+## True if any live hostile is within `radius` blocks of `pos` — used to
+## block sleeping with a monster nearby (see main._try_sleep).
+func hostile_near(pos: Vector3, radius: float) -> bool:
+	for c in _hostiles.get_children():
+		if c is Node3D and c.global_position.distance_to(pos) <= radius:
+			return true
+	return false
+
+
 ## Removes every creature, drop and hostile (New Game).
 func clear_entities() -> void:
 	for group in [_creatures, _drops, _hostiles]:

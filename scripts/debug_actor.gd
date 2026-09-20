@@ -57,12 +57,19 @@ func _ready() -> void:
 ## player) with no correction required.
 var _model: Node3D = null
 
+## A0: the resident's own name, so a UI (the context interaction menu)
+## can say who's in range, not just that someone is. Set from the exact
+## same profile dict build_appearance() already receives -- no separate
+## profile lookup needed for something this actor is already handed.
+var display_name := ""
+
 
 func build_appearance(profile: Dictionary) -> void:
 	if _model:
 		_model.queue_free()
 	_model = PersonAppearance.make_preview(profile)
 	add_child(_model)
+	display_name = str(profile.get("identity", {}).get("name", "")).strip_edges()
 
 
 ## Starts (or replaces) the ordered waypoints this actor walks toward. An

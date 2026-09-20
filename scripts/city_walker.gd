@@ -63,6 +63,15 @@ var near_shop := false
 ## Fired on B while near_shop is true.
 signal buy_requested
 
+## A0: the context interaction menu's actual content -- every action
+## currently valid, rebuilt in lockstep with near_workbench/near_resident/
+## near_shop above so it can never claim an action is available that
+## those booleans would actually refuse (or vice versa). Public/plain
+## strings (not an enum/signal pairing) so a test can assert on exactly
+## what a player would read on screen, not just that the right booleans
+## are true.
+var current_actions: Array[String] = []
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
@@ -72,11 +81,30 @@ var _pitch := 0.0
 ## CityBlock._add_transition().
 @onready var _block: CityBlock = get_parent()
 
+## A0: a small always-on-top label listing current_actions, in its own
+## CanvasLayer independent of main.gd's survival HUD (which is
+## deliberately hidden for the whole State.CITY visit, B5) -- this is the
+## only on-screen way a player can discover E/F/I/B exist at all, or that
+## they're currently in range of anything.
+var _menu_label: Label = null
+
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_camera.current = true
 	_camera.position = Vector3(0, EYE_HEIGHT, 0)
+
+	var menu_layer := CanvasLayer.new()
+	add_child(menu_layer)
+	_menu_label = Label.new()
+	_menu_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_menu_label.position = Vector2(24, -140)
+	_menu_label.add_theme_font_size_override("font_size", 20)
+	_menu_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	_menu_label.add_theme_constant_override("shadow_offset_x", 1)
+	_menu_label.add_theme_constant_override("shadow_offset_y", 1)
+	_menu_label.visible = false
+	menu_layer.add_child(_menu_label)
 
 
 ## Called by _check_triggers() when within CityBlock.TRANSITION_RADIUS of a
@@ -109,6 +137,26 @@ func _check_triggers() -> void:
 	near_workbench = _block.near_workbench_at(global_position)
 	near_resident = _block.nearest_resident_to(global_position)
 	near_shop = _block.near_shop_at(global_position)
+	_update_current_actions()
+
+
+## A0: the single place current_actions/the on-screen label get rebuilt,
+## always from the exact booleans/reference _check_triggers() just
+## refreshed above -- one source of truth for "what's in range" shared by
+## both what the menu shows and what E/F/I/B actually do.
+func _update_current_actions() -> void:
+	current_actions.clear()
+	if near_resident != null:
+		var who := near_resident.display_name if near_resident.display_name != "" else "them"
+		current_actions.append("[F] Talk to %s" % who)
+		current_actions.append("[I] Inspect %s" % who)
+	if near_workbench:
+		current_actions.append("[E] Work")
+	if near_shop:
+		current_actions.append("[B] Buy food")
+	if _menu_label:
+		_menu_label.text = "\n".join(current_actions)
+		_menu_label.visible = not current_actions.is_empty()
 
 
 func _unhandled_input(event: InputEvent) -> void:

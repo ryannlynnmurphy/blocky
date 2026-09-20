@@ -119,6 +119,11 @@ func _physics_process(_delta: float) -> void:
 		108:
 			_talked_to_actor = main._city_walker.near_resident
 			print("citytest: near_resident after standing near the crowd: found=%s" % [_talked_to_actor != null])
+			# A0: the context menu should already list both resident
+			# actions, naming who -- built from the exact same near_resident
+			# reference just checked above, not a second lookup.
+			print("citytest: A0 context menu near a resident: %s (expect 2 lines naming %s: Talk + Inspect)"
+				% [main._city_walker.current_actions, _talked_to_actor.display_name if _talked_to_actor else "??"])
 			for entry in main._city_residents:
 				entry["profile"].data["relationships"].clear()
 			main.person_profile.data["relationships"].clear()
@@ -153,6 +158,7 @@ func _physics_process(_delta: float) -> void:
 			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the crowd, clear of talk/inspect range
 		118:
 			print("citytest: near_resident after walking away: %s (expect null/none)" % [main._city_walker.near_resident])
+			print("citytest: A0 context menu after walking away: %s (expect [] -- not stale from the resident interaction above)" % [main._city_walker.current_actions])
 		120:
 			# S2: teleport to the floor in front of the workplace workbench
 			# (exposed as CityBlock.workbench_position, in CityBlock's own
@@ -179,6 +185,7 @@ func _physics_process(_delta: float) -> void:
 			# --citytest at 60fps too) rather than assuming 1-2 is enough.
 			print("citytest: near_workbench after standing at the trigger: %s (expect true -- CityBlock.near_workbench_at() found the walker in range), walker now at %s"
 				% [main._city_walker.near_workbench, main._city_walker.global_position])
+			print("citytest: A0 context menu at the workbench: %s (expect [\"[E] Work\"])" % [main._city_walker.current_actions])
 			main.person_profile.data["needs"]["money"] = 0
 			_work_minutes_before = main.day_night.total_minutes()
 			# A real E keypress, not a direct signal.emit() -- exercises
@@ -196,6 +203,7 @@ func _physics_process(_delta: float) -> void:
 			main._city_walker.global_position = Vector3(0, -499.9, 0)   # back onto the open street floor, clear of the trigger
 		136:
 			print("citytest: near_workbench after leaving the trigger: %s (expect false)" % [main._city_walker.near_workbench])
+			print("citytest: A0 context menu after leaving the workbench: %s (expect [])" % [main._city_walker.current_actions])
 		140:
 			# L4: teleport to the cafe's own outdoor point (location_positions,
 			# already public/reused throughout B4-B5) and confirm the shop
@@ -206,6 +214,7 @@ func _physics_process(_delta: float) -> void:
 		146:
 			print("citytest: near_shop after standing at the cafe: %s (expect true -- CityBlock.near_shop_at() found it)"
 				% [main._city_walker.near_shop])
+			print("citytest: A0 context menu at the cafe: %s (expect [\"[B] Buy food\"])" % [main._city_walker.current_actions])
 			main.person_profile.data["needs"]["money"] = 100
 			main.person_profile.data["needs"]["hunger"] = 30
 			# A real B keypress, not a direct call -- exercises
@@ -221,6 +230,7 @@ func _physics_process(_delta: float) -> void:
 			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the cafe, clear of the shop trigger
 		154:
 			print("citytest: near_shop after leaving the cafe: %s (expect false)" % [main._city_walker.near_shop])
+			print("citytest: A0 context menu after leaving the cafe: %s (expect [])" % [main._city_walker.current_actions])
 			# L4: a real day_changed (through load_save_data(), same real
 			# public path S0 already proved fires this signal) should pay
 			# every resident and charge rent on everyone, player included --

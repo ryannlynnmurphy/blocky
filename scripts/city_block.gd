@@ -24,17 +24,20 @@ extends Node3D
 ## content-boundary-excluded models (police_car, pistol_prop, rifle_prop)
 ## are never referenced.
 ##
-## 2026-09-20 addendum, ahead of B5: reachable directly from the title
-## screen ("Visit Hollowmark (preview)", scripts/screens.gd) via a full
+## 2026-09-20, ahead of B5: reachable directly from the title screen
+## ("Visit Hollowmark (preview)", scripts/screens.gd) via a full
 ## get_tree().change_scene_to_file() swap, at Ryann's direct request to be
-## able to walk around it -- NOT the formal B5 integration (a main.gd state
-## coexisting with the voxel world; needs B3/B4 first per Work Orders). This
-## is a preview-only detour: the two modes stay exactly as decoupled as
-## before, just reachable by a full scene swap instead of only a dev
-## command line. _spawn_walker() adds a CityWalker (scripts/city_walker.gd,
-## a minimal first-person controller, deliberately not the survival Player
-## class) so the scene has someone to look through; Esc returns to
-## scenes/main.tscn.
+## able to walk around it -- NOT the formal B5 integration. spawn_walker()
+## (below) adds a CityWalker (scripts/city_walker.gd, a minimal first-person
+## controller, deliberately not the survival Player class) so the scene has
+## someone to look through; Esc returns to scenes/main.tscn. This standalone
+## path (`standalone = true`, the default) is UNCHANGED by B5 below and
+## still behaves exactly this way when loaded as its own scene root.
+##
+## 2026-09-20, B5: main.gd's "Visit Hollowmark" (title screen AND pause
+## menu, now real gameplay, not just a preview) instead embeds an instance
+## of this scene inside the live voxel game via State.CITY -- see
+## `standalone` just below.
 ##
 ## B4 (route markers): `route_markers` is a named waypoint graph (the five
 ## locations plus a few street/park connector points) and `get_route()`
@@ -42,6 +45,14 @@ extends Node3D
 ## for scripts/debug_actor.gd (a non-player-controlled walker) and, later,
 ## Layer 5's resident home/work/food routines -- not for the player, who
 ## just walks freely on the open ground.
+##
+## B5 (`standalone`): true (default) is this scene exactly as B1-B4 built
+## and verified it -- its own WorldEnvironment/Sun/overview-camera, and it
+## spawns its own walker. main.gd sets this false before add_child()-ing an
+## instance for State.CITY: it embeds this scene inside the live voxel
+## game's own tree instead of loading it as a separate scene root, so it
+## must not silently fight that scene's WorldEnvironment or hijack the
+## viewport on its own -- main.gd drives spawning/camera activation itself.
 
 const TEX_DIR := "res://blocky/city/textures/blocks/"
 
@@ -64,9 +75,30 @@ var _rng := RandomNumberGenerator.new()
 var route_markers := {}
 var _route_edges := {}
 
+## See the class doc comment above. main.gd sets this false before
+## add_child()-ing an instance for State.CITY.
+var standalone := true
+
 
 func _ready() -> void:
 	_rng.seed = 20260920
+	if not standalone:
+		# Embedded in the running voxel game: rely on that scene's own
+		# WorldEnvironment/DayNight sun instead of this scene's standalone
+		# ones. Godot does not reliably support two active WorldEnvironment
+		# nodes in one tree, and the voxel game's is already the trusted,
+		# tested one -- freeing these immediately (before this frame's
+		# render, and before any of this scene's own code has referenced
+		# them) avoids gambling on undefined multi-WorldEnvironment
+		# behavior. Real, deliberate cost: the city's look no longer
+		# matches its standalone screenshots exactly (day/night now follows
+		# whatever time it already is in the voxel game).
+		var env_node := get_node_or_null("WorldEnvironment")
+		if env_node:
+			env_node.free()
+		var sun_node := get_node_or_null("Sun")
+		if sun_node:
+			sun_node.free()
 	_build_ground()
 	_build_street_and_sidewalks()
 	_build_park()
@@ -76,23 +108,24 @@ func _ready() -> void:
 	_build_street_furniture()
 	_build_interiors()
 	_build_route_markers()
-	_build_overview_camera()
-	_spawn_walker()
+	if standalone:
+		_build_overview_camera()
+		spawn_walker()
 
 
-## A CityWalker (see scripts/city_walker.gd) on the street, camera made
-## current after the overview camera above -- Godot only ever treats the
-## most-recently-activated Camera3D as current, so this one wins without
-## needing to touch or remove the overview camera other callers still use
-## (tools/city_block_check.gd, and quick standalone screenshots).
-func _spawn_walker() -> void:
+## A CityWalker (see scripts/city_walker.gd) at the named location (default
+## "street" -- the open 46x6 band along X/Z centered at the origin, clear of
+## every building and prop; default facing (-Z) already looks toward the
+## building row at z=-8.5), camera made current -- Godot only ever treats
+## the most-recently-activated Camera3D as current. Public and returns the
+## walker: the standalone flow above calls this itself; main.gd's State.CITY
+## calls it too when embedding (after setting standalone = false), then
+## connects the returned walker's own signals/flags itself.
+func spawn_walker(at: String = "street") -> CityWalker:
 	var walker := CharacterBody3D.new()
 	walker.set_script(load("res://scripts/city_walker.gd"))
 	walker.name = "Walker"
-	# The open street itself (46x6 along X/Z, centered at the origin) --
-	# clear of every building and prop. Default facing (-Z) already looks
-	# toward the building row at z=-8.5.
-	walker.position = location_positions.get("street", Vector3.ZERO) + Vector3(0, 0.1, 0)
+	walker.position = route_markers.get(at, location_positions.get("street", Vector3.ZERO)) + Vector3(0, 0.1, 0)
 
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = 0.25
@@ -107,6 +140,7 @@ func _spawn_walker() -> void:
 	walker.add_child(camera)
 
 	add_child(walker)
+	return walker
 
 
 ## A dev-only overview camera so this standalone scene always has something
@@ -499,7 +533,7 @@ func _build_workplace_interior() -> void:
 # ---------------------------------------------------------------- routes (B4)
 
 ## Apartment/cafe/workplace each connect to the open street (the z=0 band
-## `_spawn_walker()`'s own comment already documents as "clear of every
+## `spawn_walker()`'s own comment already documents as "clear of every
 ## building and prop") via a short straight hop from their door-out point to
 ## a spine marker at their own X; the spine markers connect to each other and
 ## to the park entry along that same clear band. The park entry then runs

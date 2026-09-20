@@ -84,6 +84,20 @@ func _physics_process(delta: float) -> bool:
 		print("city_block_check: %d location(s) registered: %s (expect apartment, street, park, cafe, workplace)"
 			% [block.location_positions.size(), ", ".join(block.location_positions.keys())])
 
+		# Free the title-screen preview Walker (scripts/city_block.gd's
+		# spawn_walker()) before the walk test below. Since it was added
+		# (commit eeea20e, ahead of B3), the preview walker parks itself on
+		# the street center (0,0,0) and physically blocks the test capsule:
+		# the capsule used to walk 27.2 m (B1's verified number), now it
+		# stops 0.5 m short of the walker (two 0.25 radii) at x=-0.5, i.e.
+		# 19.7 m < the ">25" the check expects. This is not a terrain or
+		# collision regression -- it is this dev tool racing the scene's own
+		# demo actor. Free it so the street-walk check measures the block's
+		# geometry, not an unrelated parked body.
+		var preview_walker := block.get_node_or_null("Walker")
+		if preview_walker:
+			preview_walker.queue_free()
+
 		capsule = CharacterBody3D.new()
 		capsule.name = "TestCapsule"
 		var shape := CollisionShape3D.new()

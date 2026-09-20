@@ -292,6 +292,15 @@ func toggle_view() -> void:
 	set_first_person(not first_person)
 
 
+## Makes this the player's active camera again. Needed after another
+## Camera3D has taken over `current` (e.g. scripts/city_walker.gd's, while
+## visiting the city via main.gd's State.CITY) -- Godot does not
+## automatically hand control back to a previous camera when the new one is
+## removed, so main.gd calls this explicitly on the way back to PLAYING.
+func activate_camera() -> void:
+	_camera.current = true
+
+
 ## Swings the camera onto the player's shoulder, or right up to their eyes.
 ## First-person hides the body model — otherwise you'd be staring at the
 ## inside of your own head.

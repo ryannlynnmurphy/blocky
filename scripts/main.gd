@@ -6,8 +6,15 @@ extends Node3D
 const SAVE_PATH := "user://save.json"
 const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
+## How far below the voxel world's own terrain (which never generates below
+## y=0 -- one vertical chunk per column, see README) an embedded city-block
+## instance is offset, so the two can share one scene tree/physics world
+## with zero chance of spatial or collision overlap however far the player
+## has explored. Same "pocket dimension via a Y offset" technique
+## scripts/city_block.gd already uses for its own interiors (INTERIOR_Y).
+const CITY_EMBED_Y_OFFSET := -500.0
 
-enum State { TITLE, CREATOR, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
+enum State { TITLE, CREATOR, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE, CITY }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -25,6 +32,10 @@ var _was_night := false
 var _spawn_col := Vector2i(8, 8)
 var person_profile := PersonProfile.new()
 var _pending_seed := 0
+## B5: the embedded city-block instance and its walker while State.CITY is
+## active, else null. See _enter_city()/_exit_city().
+var _city: Node3D = null
+var _city_walker: CityWalker = null
 
 
 func _ready() -> void:
@@ -94,6 +105,7 @@ func _ready() -> void:
 		_enter(State.TITLE))
 	screens.respawn_pressed.connect(respawn_from_death)
 	screens.sfx_volume_changed.connect(_set_sfx_volume)
+	screens.visit_city_pressed.connect(_enter_city)
 	player.died.connect(func():
 		if state == State.PLAYING:
 			_enter(State.DEAD))
@@ -136,6 +148,16 @@ func _ready() -> void:
 		anim_test.player = player
 		anim_test.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(anim_test)
+
+	# Testing aid: `-- --citytest` drives a full State.CITY round trip (see
+	# tools/city_integration_check.gd) to prove B5's real main.gd
+	# integration, not just the standalone city_block.tscn preview.
+	if "--citytest" in args:
+		var city_test: Node = load("res://tools/city_integration_check.gd").new()
+		city_test.main = self
+		city_test.player = player
+		city_test.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(city_test)
 
 	# Start on the title screen, unless a test or recording wants to skip it.
 	if selftest or "--skiptitle" in args:
@@ -224,10 +246,41 @@ func _enter(s: State) -> void:
 		State.FURNACE:
 			hud.set_inventory_open(true, "furnace")
 	var playing := s == State.PLAYING
-	hud.visible = s != State.TITLE
+	hud.visible = s != State.TITLE and s != State.CITY
 	player.ui_open = not playing
-	get_tree().paused = s in [State.TITLE, State.CREATOR, State.PAUSED, State.DEAD]
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if playing else Input.MOUSE_MODE_VISIBLE
+	get_tree().paused = s in [State.TITLE, State.CREATOR, State.PAUSED, State.DEAD, State.CITY]
+	var mouse_needed := s in [State.PLAYING, State.CITY]
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if mouse_needed else Input.MOUSE_MODE_VISIBLE
+
+
+## B5: "Visit Hollowmark" on the title screen AND the pause menu call this
+## instead of _enter(State.CITY) directly -- entering the city needs to
+## build and embed the scene first, which a plain state switch can't do.
+## Ignores a repeat press while already visiting.
+func _enter_city() -> void:
+	if _city:
+		return
+	var city: Node3D = load("res://scenes/city_block.tscn").instantiate()
+	city.standalone = false
+	city.process_mode = Node.PROCESS_MODE_ALWAYS   # keep working while get_tree().paused is true, same technique `world` already uses
+	city.position = Vector3(0, CITY_EMBED_Y_OFFSET, 0)
+	add_child(city)
+	_city = city
+	_city_walker = city.spawn_walker()
+	_city_walker.standalone = false
+	_city_walker.exit_requested.connect(_exit_city)
+	_enter(State.CITY)
+
+
+## scripts/city_walker.gd's exit_requested signal (Esc), only reachable
+## while embedded (standalone = false, i.e. actually State.CITY).
+func _exit_city() -> void:
+	if _city:
+		_city.queue_free()   # deferred: safe to call from a signal this same node's own subtree just emitted
+		_city = null
+		_city_walker = null
+	player.activate_camera()
+	_enter(State.PLAYING)
 
 
 ## Kept for tests: opens/closes the inventory screen.

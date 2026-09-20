@@ -17,6 +17,18 @@ const GRAVITY := 22.0
 const MOUSE_SENS := 0.0025
 const EYE_HEIGHT := 1.5
 
+## When true (the default -- e.g. the title-screen preview's standalone
+## scene swap), Esc reloads scenes/main.tscn directly, same as before B4/B5.
+## When false (main.gd's State.CITY embeds this walker in the running
+## game), Esc only emits exit_requested; reloading the whole scene there
+## would discard the live voxel game instead of just leaving the city.
+var standalone := true
+
+## Emitted on Esc regardless of `standalone`, so an embedding caller (like
+## main.gd) always has a clean hook without needing to know this class's
+## internal exit behavior.
+signal exit_requested
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
@@ -44,7 +56,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - event.relative.y * MOUSE_SENS, -1.4, 1.4)
 		_camera.rotation.x = _pitch
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		exit_requested.emit()
+		if standalone:
+			get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _physics_process(delta: float) -> void:

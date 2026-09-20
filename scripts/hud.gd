@@ -290,6 +290,8 @@ func _process(delta: float) -> void:
 			_pickup_label.visible = false
 
 	var parts: PackedStringArray = []
+	if _player != null and not _player.person_name().is_empty():
+		parts.append(_player.person_name())
 	if _world != null and _player != null:
 		var p := _player.global_position
 		parts.append(_world.biome_name_at(int(floor(p.x)), int(floor(p.z))))

@@ -8,8 +8,10 @@ extends Node
 ##   frames 300..320   kill two critters, reach level 2 (progression)
 ##   frames 330..360   save, wreck the state, load it back (saving); also
 ##                     round-trips the person profile (id/name/wardrobe)
-##                     through the same save file, and checks a save with
-##                     no "person" key (pre-D0) still migrates safely
+##                     through the same save file, checks a save with no
+##                     "person" key (pre-D0) still migrates safely, needs
+##                     clamp on load, and (frame 351) the HUD shows the
+##                     player's chosen name
 ##   frames 370..430   walk 0.5 s, then run 0.5 s; check distances (movement)
 ##   frames 440..480   craft log -> planks -> sticks -> workbench -> pickaxe (crafting)
 ##   frames 490..640   midnight: a Shade hunts and bites; noon: it burns (hostiles)
@@ -255,6 +257,13 @@ func _physics_process(_delta: float) -> void:
 			migrated.load_dict({})   # simulates main.load_game() on a pre-D0 save with no "person" key
 			print("selftest: old save missing 'person' key still loads safely: id %s (expect non-empty), name %s (expect Alex Rivera)"
 				% [not migrated.id().is_empty(), migrated.data["identity"]["name"]])
+		351:
+			# A frame later: hud._process() runs on the idle loop, not this
+			# physics loop, so it needs a tick to pick up frame 350's new
+			# player reference -- same class of gotcha as M28/M36's
+			# check-a-frame-later notes.
+			print("selftest: HUD shows the player's name: %s (expect true)"
+				% main.hud._clock_label.text.begins_with(player.person_name()))
 			var clamped := PersonProfile.new()
 			clamped.load_dict({"needs": {"hunger": 999, "energy": -50, "money": -20}})
 			print("selftest: need clamping: hunger %d (expect 100), energy %d (expect 0), money %d (expect 0)"

@@ -207,6 +207,10 @@ func set_person_profile(profile: Dictionary) -> void:
 		PersonAppearance.apply_to(_model, _person_profile)
 
 
+func person_name() -> String:
+	return str(_person_profile.get("identity", {}).get("name", "")).strip_edges()
+
+
 ## Makes a pivot at the top-centre of `upper_name` (where that limb
 ## joins the body) and moves it, plus everything named in `hanging`,
 ## underneath it — keeping their appearance exactly as authored.

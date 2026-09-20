@@ -43,8 +43,10 @@ extends Node
 ##                      save/load round trip preserving the routine
 ##   frame  1900        S5: ResidentRoutine.current_goal() pure logic across
 ##                      a full day (sleep/work/food, both sides of midnight)
-##   frames 1910..1970  S1: the HUD clock reads DayNight.clock_text()
+##   frames 1910..2000  S1: the HUD clock reads DayNight.clock_text()
 ##                      exactly, and holding T measurably speeds up time
+##   frame  2010        L0: 20 deterministic resident records validate and
+##                      rebuild identically (name/appearance), no id reuse
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1101,6 +1103,39 @@ func _physics_process(_delta: float) -> void:
 			var ff_ratio := (_ff_fast_delta / _ff_normal_delta) if _ff_normal_delta > 0.0 else 0.0
 			print("selftest: S1 fast-forward (T held): normal advance %.5f, held advance %.5f, ratio %.1fx (expect > 5x)"
 				% [_ff_normal_delta, _ff_fast_delta, ff_ratio])
+		2010:
+			# L0: 20 deterministic resident records -- data only, no
+			# spawning change (still just Priya, confirmed a different way
+			# below: main._enter_city() is unchanged by this card and its
+			# own S4 test already proves exactly one "Resident" node exists).
+			var roster: Array[PersonProfile] = ResidentRoster.build()
+			var ids := {}
+			var all_valid := true
+			for p in roster:
+				ids[p.id()] = true
+				if p.display_name().is_empty():
+					all_valid = false
+				if p.routine("home") not in PersonProfile.ROUTINE_LOCATIONS or p.routine("job") not in PersonProfile.ROUTINE_LOCATIONS:
+					all_valid = false
+				for hour_key in ["wake_hour", "work_start_hour", "work_end_hour", "sleep_hour"]:
+					var h: int = p.routine(hour_key)
+					if h < 0 or h > 23:
+						all_valid = false
+				for key in PersonProfile.APPEARANCE_OPTIONS:
+					if p.appearance(key) not in PersonProfile.APPEARANCE_OPTIONS[key]:
+						all_valid = false
+			print("selftest: L0 roster size=%d (expect 20), unique ids=%d (expect 20, no collisions), all valid=%s"
+				% [roster.size(), ids.size(), all_valid])
+			print("selftest: L0 index 0 matches S3/S4's own live resident: name=%s home=%s job=%s (expect Priya Nair, apartment, workplace)"
+				% [roster[0].display_name(), roster[0].routine("home"), roster[0].routine("job")])
+			# Determinism: building the roster twice must produce the exact
+			# same names/routine in the same order, not a fresh random draw.
+			var roster2: Array[PersonProfile] = ResidentRoster.build()
+			var deterministic := true
+			for i in roster.size():
+				if roster[i].display_name() != roster2[i].display_name() or roster[i].appearance("skin") != roster2[i].appearance("skin"):
+					deterministic = false
+			print("selftest: L0 roster is deterministic across builds: %s" % [deterministic])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

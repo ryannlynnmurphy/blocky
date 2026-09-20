@@ -176,6 +176,15 @@ func routine(key: String) -> Variant:
 	return data["routine"].get(key, "")
 
 
+## L0: re-runs _sanitize() after a caller writes directly into `data`
+## (e.g. ResidentRoster's per-resident routine/appearance variation) --
+## a small public door to the same validation load_dict() and adjust_need()
+## already run through, instead of every caller reaching into a "private"
+## method by name.
+func revalidate() -> void:
+	_sanitize()
+
+
 ## S3: builds one resident's PersonProfile -- the same shape the player
 ## uses (see the class doc comment), just with a name/home/job appropriate
 ## to an NPC instead of the player's own default_data() ("New arrival",

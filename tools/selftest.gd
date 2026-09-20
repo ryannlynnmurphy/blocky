@@ -44,6 +44,8 @@ var _swim_wz := 0
 var _drown_health_before := 0
 var _breath_before := 0
 var _corridor_start := Vector3.ZERO
+var _water_walk_ever_surfaced := false
+var _water_walk_max_speed := 0.0
 
 
 func _physics_process(_delta: float) -> void:
@@ -715,6 +717,33 @@ func _physics_process(_delta: float) -> void:
 								break
 			print("selftest: water tiles never cover dry ground: checked %d tiles, %d bad (expect 0 bad)"
 				% [checked, bad])
+		1540:
+			# Regression check for a real reported bug: holding jump (swim
+			# up) while moving forward in water used to let the player
+			# "walk on water" — each frame's uncapped swim-up rise popped
+			# just past WATER_SURFACE_Y, flipping _in_water off for an
+			# instant and handing back real gravity + full walk/run speed,
+			# over and over. Dive into deep water and hold both forward
+			# and swim-up continuously (test_run true too — Ryann's report
+			# was "whether sprinting or not").
+			player.global_position = Vector3(_swim_wx + 0.5, WorldGen.SEA_LEVEL - 2.0, _swim_wz + 0.5)
+			player.velocity = Vector3.ZERO
+			player.test_move = Vector2(0, -1)
+			player.test_run = true
+			player.test_swim_up = true
+			_water_walk_ever_surfaced = false
+			_water_walk_max_speed = 0.0
+		1550, 1560, 1570, 1580, 1590, 1600, 1610, 1620, 1630, 1640:
+			if not player._in_water:
+				_water_walk_ever_surfaced = true
+			var speed := Vector2(player.velocity.x, player.velocity.z).length()
+			_water_walk_max_speed = maxf(_water_walk_max_speed, speed)
+		1650:
+			player.test_move = Vector2.ZERO
+			player.test_run = false
+			player.test_swim_up = false
+			print("selftest: holding jump+forward+run in water never breaks the surface: ever left water %s (expect false), max horizontal speed %.1f (expect %.1f, not run's %.1f)"
+				% [_water_walk_ever_surfaced, _water_walk_max_speed, Player.SWIM_SPEED, Player.RUN_SPEED])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

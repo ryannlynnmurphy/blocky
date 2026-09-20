@@ -31,6 +31,9 @@ const WATER_SURFACE_Y := WorldGen.SEA_LEVEL + 0.9
 const SWIM_SPEED := 3.0
 const SWIM_RISE_SPEED := 3.0
 const WATER_GRAVITY := 4.0   # much gentler than GRAVITY — you sink slowly, not drop
+# Swim-up caps just under WATER_SURFACE_Y (not AT it — resting exactly on
+# the strict "<" threshold would itself read as "not in water" next frame).
+const WATER_SURFACE_CEILING := WATER_SURFACE_Y - 0.05
 var _in_water := false
 # ---- breath / drowning ----
 # Separate from _in_water (feet-in-water, drives swim physics): this is
@@ -350,6 +353,17 @@ func _physics_process(delta: float) -> void:
 		velocity.y = maxf(velocity.y - WATER_GRAVITY * delta, -SWIM_SPEED)
 		if test_swim_up or (not _no_input and Input.is_action_pressed("jump")):
 			velocity.y = SWIM_RISE_SPEED
+			# Swim-up alone must never carry you ABOVE the surface. Left
+			# uncapped, holding jump set velocity.y to the same constant
+			# rise speed every single frame (not a one-time impulse), so
+			# each frame's climb popped just past WATER_SURFACE_Y, flipped
+			# _in_water off for an instant, and handed back real gravity
+			# and full walk/run speed for that instant — repeated every
+			# frame while holding jump + a move key, that reads as smooth
+			# walking across the surface instead of swimming. Now it caps
+			# right at the surface instead of crossing it.
+			if global_position.y + velocity.y * delta > WATER_SURFACE_CEILING:
+				velocity.y = (WATER_SURFACE_CEILING - global_position.y) / delta
 	elif not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):

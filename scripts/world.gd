@@ -76,6 +76,9 @@ const TORCH_LIGHT_COLOR := Color(1.0, 0.65, 0.32)
 ## Night hunters won't consider a spawn point this close to a lit torch.
 const TORCH_HOSTILE_AVOID_RADIUS := 10.0
 var chunks := {}        # Vector2i -> Chunk node (only the ones near the player)
+## Chunk position -> transparent, non-physical water surface. The node is
+## parented to its Chunk, so it streams out with the terrain.
+var _water_surfaces := {}
 var mesh_queue: Array[Vector2i] = []
 var player: Node3D
 
@@ -171,6 +174,21 @@ var _hostile_timer := 0.0
 var _forced_hostile: PackedScene = null
 
 
+## Water is a separate render layer, never a voxel block or physics object.
+static var WATER_MATERIAL: StandardMaterial3D = _make_water_material()
+
+
+static func _make_water_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(0.16, 0.52, 0.78, 0.48)
+	material.roughness = 0.28
+	material.metallic = 0.05
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	return material
+
+
 func _ready() -> void:
 	gen = WorldGen.new(world_seed)
 	_creatures.name = "Creatures"
@@ -264,6 +282,7 @@ func _collect_finished_jobs(pc: Vector2i) -> int:
 		chunk.collision_enabled = near
 		chunk.apply_mesh(job.mesh)
 		chunk.dirty = false
+		_update_water_surface(job.cpos)
 		_apply_usec += Time.get_ticks_usec() - t0
 		_shape_usec += chunk.last_shape_usec
 		_apply_count += 1
@@ -472,6 +491,95 @@ func is_water_at(world_position: Vector3) -> bool:
 	return water_depth_at(world_position) > 0.0
 
 
+## Builds one flat, chunk-local transparent surface over terrain columns that
+## are below the deterministic water table.  It intentionally uses no
+## collision node.  Checking the current data at the surface also prevents a
+## player-built solid column from being visibly flooded until this v1 table is
+## later expanded to support editable water.
+func _update_water_surface(cpos: Vector2i) -> void:
+	var old: MeshInstance3D = _water_surfaces.get(cpos)
+	if old != null and is_instance_valid(old):
+		old.queue_free()
+	_water_surfaces.erase(cpos)
+	if not chunks.has(cpos) or not chunk_data.has(cpos):
+		return
+
+	var surface := water_surface_y_at(cpos.x * SIZE, cpos.y * SIZE)
+	var surface_block := floori(surface)
+	if surface_block < 0 or surface_block >= HEIGHT:
+		return
+	var data: PackedByteArray = chunk_data[cpos]
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	for lz in SIZE:
+		for lx in SIZE:
+			var wx: int = cpos.x * SIZE + lx
+			var wz: int = cpos.y * SIZE + lz
+			# A dry/sandbar column, or a block filling the water surface, gets
+			# no transparent quad. This keeps the visual out of solid terrain.
+			if float(gen.height_at(wx, wz) + 1) >= water_surface_y_at(wx, wz):
+				continue
+			var data_index := lx + SIZE * (lz + SIZE * surface_block)
+			if data[data_index] != Blocks.AIR:
+				continue
+			var base := verts.size()
+			verts.append(Vector3(lx, surface, lz))
+			verts.append(Vector3(lx, surface, lz + 1))
+			verts.append(Vector3(lx + 1, surface, lz + 1))
+			verts.append(Vector3(lx + 1, surface, lz))
+			for _i in 4:
+				normals.append(Vector3.UP)
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base, base + 3, base + 2]))
+	if verts.is_empty():
+		return
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, WATER_MATERIAL)
+	var visual := MeshInstance3D.new()
+	visual.name = "WaterSurface"
+	visual.mesh = mesh
+	chunks[cpos].add_child(visual)
+	_water_surfaces[cpos] = visual
+
+
+func water_visual_count() -> int:
+	return _water_surfaces.size()
+
+
+## Lightweight regression query for the headless suite. Only completed chunk
+## meshes are considered; queued stream work is intentionally excluded.
+func water_visuals_match_streamed_chunks() -> bool:
+	for cpos in chunks:
+		if not chunk_data.has(cpos) or chunks[cpos].dirty:
+			continue
+		var has_water := false
+		var surface_block := floori(water_surface_y_at(cpos.x * SIZE, cpos.y * SIZE))
+		var data: PackedByteArray = chunk_data[cpos]
+		for lz in SIZE:
+			for lx in SIZE:
+				var wx: int = cpos.x * SIZE + lx
+				var wz: int = cpos.y * SIZE + lz
+				var index := lx + SIZE * (lz + SIZE * surface_block)
+				if float(gen.height_at(wx, wz) + 1) < water_surface_y_at(wx, wz) \
+						and data[index] == Blocks.AIR:
+					has_water = true
+					break
+			if has_water:
+				break
+		if has_water != _water_surfaces.has(cpos):
+			return false
+		if has_water and _water_surfaces[cpos].get_parent() != chunks[cpos]:
+			return false
+	return true
+
+
 func biome_name_at(x: int, z: int) -> String:
 	return gen.biome_name_at(x, z)
 
@@ -627,6 +735,7 @@ func update_chunks(pc: Vector2i) -> void:
 		if max(d.x, d.y) > view_radius + 2:
 			chunks[cpos].queue_free()
 			chunks.erase(cpos)
+			_water_surfaces.erase(cpos)
 			_populated.erase(cpos)   # animals may return when you come back
 			_props_placed.erase(cpos)   # re-instantiated (same layout) when you come back
 			if chunk_props.has(cpos):
@@ -696,6 +805,7 @@ func _rebuild_now(cpos: Vector2i) -> void:
 		# Anything you can edit is next to you, so it needs collision.
 		chunk.collision_enabled = true
 		chunk.build_mesh()
+		_update_water_surface(cpos)
 		_place_props_if_new(cpos)
 		_populate_if_new(cpos)
 
@@ -860,6 +970,7 @@ func reset_chunks() -> void:
 	for c in chunks.values():
 		c.queue_free()
 	chunks.clear()
+	_water_surfaces.clear()
 	chunk_data.clear()
 	chunk_max_y.clear()
 	chunk_tints.clear()

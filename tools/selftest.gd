@@ -109,6 +109,12 @@ func _physics_process(_delta: float) -> void:
 		22:
 			print("selftest: after toggle back: first_person %s, arm offset %s, spring %.1f, model visible %s (expect false, x=0.55, 4.0, true)"
 				% [player.first_person, player._arm.position, player._arm.spring_length, player._model.visible])
+		30:
+			# WATER-05: completed streamed chunks own exactly one transparent
+			# surface when they contain floodable columns. The World helper also
+			# confirms it never retains a surface over dry/solid columns.
+			print("selftest: water visuals %d, streamed surfaces valid %s (expect true)"
+				% [world.water_visual_count(), world.water_visuals_match_streamed_chunks()])
 		40:
 			print("selftest: inventory before break: %s" % player.inventory.summary())
 			player.test_hold_break = true   # hold the button...

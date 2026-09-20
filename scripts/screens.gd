@@ -107,7 +107,9 @@ func _build_creator() -> void:
 	_creator.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_creator)
 	var background := ColorRect.new()
-	background.color = Color("14121c")
+	# Creator is intentionally a calm, light workspace: the game can be messy,
+	# but making a person should be legible and welcoming.
+	background.color = Color("f5f3ef")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_creator.add_child(background)
 	var margin := MarginContainer.new()
@@ -116,7 +118,7 @@ func _build_creator() -> void:
 		margin.add_theme_constant_override("margin_%s" % side, 28)
 	_creator.add_child(margin)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _card_style(Color("1b1826"), Color("3a3548")))
+	panel.add_theme_stylebox_override("panel", _card_style(Color("fbfaf7"), Color("c9c9c6")))
 	margin.add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
@@ -124,13 +126,13 @@ func _build_creator() -> void:
 	var heading := Label.new()
 	heading.text = "CREATE A PERSON"
 	heading.add_theme_font_size_override("font_size", 34)
-	heading.add_theme_color_override("font_color", Color("f6e0b0"))
+	heading.add_theme_color_override("font_color", Color("292d33"))
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(heading)
 	var subheading := Label.new()
 	subheading.text = "Build a person. The city decides what happens next."
 	subheading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subheading.modulate = Color("a8b6c7")
+	subheading.modulate = Color("5f666f")
 	column.add_child(subheading)
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -179,13 +181,13 @@ func _build_creator() -> void:
 	var preview_label := Label.new()
 	preview_label.text = "LIVE 3D AVATAR"
 	preview_label.add_theme_font_size_override("font_size", 15)
-	preview_label.add_theme_color_override("font_color", Color("e8a04a"))
+	preview_label.add_theme_color_override("font_color", Color("75602d"))
 	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	right.add_child(preview_label)
 	_build_preview(right)
 	_creator_summary = Label.new()
 	_creator_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_creator_summary.add_theme_stylebox_override("normal", _card_style(Color("262232"), Color("3a3548")))
+	_creator_summary.add_theme_stylebox_override("normal", _card_style(Color("eeeeea"), Color("c9c9c6")))
 	_creator_summary.add_theme_constant_override("outline_size", 1)
 	_creator_summary.custom_minimum_size = Vector2(0, 100)
 	right.add_child(_creator_summary)
@@ -229,19 +231,19 @@ func _build_preview(parent: Control) -> void:
 	var environment := WorldEnvironment.new()
 	var settings := Environment.new()
 	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("201c2c")
+	settings.background_color = Color("e7e2db")
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("9db7d0")
+	settings.ambient_light_color = Color("d9d3ca")
 	settings.ambient_light_energy = 0.65
 	environment.environment = settings
 	stage.add_child(environment)
 	var key := DirectionalLight3D.new()
-	key.light_color = Color("ffe6bd")
+	key.light_color = Color("fff0d8")
 	key.light_energy = 1.6
 	key.rotation_degrees = Vector3(-48, -28, 0)
 	stage.add_child(key)
 	var fill := OmniLight3D.new()
-	fill.light_color = Color("759dca")
+	fill.light_color = Color("b8cce0")
 	fill.light_energy = 2.0
 	fill.omni_range = 8.0
 	fill.position = Vector3(-2.0, 2.5, 2.0)
@@ -251,7 +253,7 @@ func _build_preview(parent: Control) -> void:
 	floor_mesh.size = Vector2(8, 8)
 	floor.mesh = floor_mesh
 	var floor_material := StandardMaterial3D.new()
-	floor_material.albedo_color = Color("302b3f")
+	floor_material.albedo_color = Color("d5d1cb")
 	floor_material.roughness = 1.0
 	floor.material_override = floor_material
 	stage.add_child(floor)
@@ -289,7 +291,7 @@ func _add_appearance_select(parent: Container, key: String) -> void:
 func _add_axis(parent: Container, axis: String) -> void:
 	var row := VBoxContainer.new()
 	var label := Label.new()
-	label.add_theme_color_override("font_color", Color("b3bfcc"))
+	label.add_theme_color_override("font_color", Color("454b53"))
 	row.add_child(label)
 	var slider := HSlider.new()
 	slider.min_value = -100
@@ -318,7 +320,7 @@ func _labelled_select(parent: Container, title: String, values: Array) -> Option
 	var label := Label.new()
 	label.text = title
 	label.custom_minimum_size = Vector2(148, 0)
-	label.add_theme_color_override("font_color", Color("b3bfcc"))
+	label.add_theme_color_override("font_color", Color("454b53"))
 	row.add_child(label)
 	var select := OptionButton.new()
 	select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -333,7 +335,7 @@ func _section(parent: Container, text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color("e8a04a"))
+	label.add_theme_color_override("font_color", Color("75602d"))
 	label.add_theme_constant_override("outline_size", 2)
 	parent.add_child(label)
 

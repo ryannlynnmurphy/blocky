@@ -43,6 +43,8 @@ extends Node
 ##                      save/load round trip preserving the routine
 ##   frame  1900        S5: ResidentRoutine.current_goal() pure logic across
 ##                      a full day (sleep/work/food, both sides of midnight)
+##   frames 1910..1970  S1: the HUD clock reads DayNight.clock_text()
+##                      exactly, and holding T measurably speeds up time
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -70,6 +72,9 @@ var _deep_fixture := Vector2i.ZERO
 var _deep_mid := 0.0
 var _sim_hour_seen := -1
 var _sim_day_seen := -1
+var _ff_time_before := 0.0
+var _ff_normal_delta := 0.0
+var _ff_fast_delta := 0.0
 
 
 func _on_selftest_hour_changed(h: int) -> void:
@@ -1047,6 +1052,55 @@ func _physics_process(_delta: float) -> void:
 			var goals_ok: bool = goals[23] == "apartment" and goals[3] == "apartment" and goals[8] == "cafe" \
 				and goals[12] == "workplace" and goals[18] == "cafe" and goals[22] == "apartment"
 			print("selftest: S5 all expected goals correct: %s" % [goals_ok])
+		1910:
+			# S1: the HUD clock (already built for the biome+clock status
+			# line P2 added) reads legibly and matches DayNight's own
+			# clock_text() exactly -- not just "some text is present."
+			main.day_night.time_of_day = 0.5
+			main.day_night.day_count = 4
+			main.day_night._apply()
+		1940:
+			# hud._process() is on Godot's idle loop, not the physics loop
+			# this suite drives -- same one-frame-later gotcha P2/M28/M36
+			# already hit for the exact same _clock_label, except a single
+			# physics frame turned out not to be enough here: this deep into
+			# a long --selftest run, physics can run many substeps ahead of
+			# the idle loop, so a real gap (30 physics frames, not 1) is
+			# what actually guarantees at least one _process() call landed
+			# -- checked directly (a 1-frame gap measurably still showed a
+			# stale value from much earlier in the run), not assumed.
+			var expected_clock: String = main.day_night.clock_text()
+			print("selftest: S1 HUD clock text contains clock_text(): %s (clock_text=%s, HUD=%s)"
+				% [expected_clock in main.hud._clock_label.text, expected_clock, main.hud._clock_label.text])
+			_ff_time_before = main.day_night.time_of_day
+		1970:
+			# S1: fast-forward (T key) measurably speeds up time -- 30
+			# physics frames with T not held vs. the same 30 held, both
+			# starting from a clean baseline so neither run crosses
+			# midnight (which would corrupt the delta with a day rollover).
+			_ff_normal_delta = main.day_night.time_of_day - _ff_time_before
+			main.day_night.time_of_day = 0.5
+			main.day_night._apply()
+			_ff_time_before = main.day_night.time_of_day
+			var t_press := InputEventKey.new()
+			t_press.keycode = KEY_T
+			t_press.pressed = true
+			Input.parse_input_event(t_press)
+		2000:
+			_ff_fast_delta = main.day_night.time_of_day - _ff_time_before
+			var t_release := InputEventKey.new()
+			t_release.keycode = KEY_T
+			t_release.pressed = false
+			Input.parse_input_event(t_release)
+			# Generous threshold (5x, well under DayNight.fast_forward's own
+			# 40x) -- this measures across the idle _process loop DayNight
+			# actually ticks on via a physics-frame-counted window, so it
+			# only needs to clearly prove T measurably speeds time up, not
+			# hit an exact ratio two different loops were never going to
+			# agree on to the frame.
+			var ff_ratio := (_ff_fast_delta / _ff_normal_delta) if _ff_normal_delta > 0.0 else 0.0
+			print("selftest: S1 fast-forward (T held): normal advance %.5f, held advance %.5f, ratio %.1fx (expect > 5x)"
+				% [_ff_normal_delta, _ff_fast_delta, ff_ratio])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

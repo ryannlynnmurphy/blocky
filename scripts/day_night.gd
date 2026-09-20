@@ -7,6 +7,19 @@ extends Node3D
 ## The Sun light is rotated around the world once per day; the Moon light
 ## is always on the exact opposite side. Every frame we look at how high
 ## the sun is and blend sky / fog / light colors between three palettes.
+##
+## S0 (Work Orders Layer 5): this IS the project's fixed simulation clock --
+## `time_of_day`/`day_count` already advance consistently and already
+## round-trip through get_save_data()/load_save_data() (in production since
+## the original game; every card since has depended on it indirectly
+## through the HUD clock and sleep-to-morning). Building a second, parallel
+## clock for the city simulation would just risk two sources of truth
+## drifting apart. What was actually missing for Layer 5+ (actions, resident
+## routines) is a clean hour/day-boundary API instead of every future
+## system re-deriving "did the hour just tick over" from a raw float --
+## hour()/minute()/day()/total_minutes() and the hour_changed/day_changed
+## signals below are that API. Layer 5+ code should treat this script as
+## the canonical simulation clock rather than inventing another one.
 
 ## Real seconds for one full in-game day.
 @export var day_length_seconds := 600.0
@@ -17,6 +30,16 @@ extends Node3D
 
 var time_of_day := 0.0   # 0..1 within the current day
 var day_count := 1
+
+## S0: fired when hour()/day() actually changes value -- from normal
+## ticking, skip_to_morning(), or load_save_data() alike (all three funnel
+## through _update_derived_time()), so a resident routine (Layer 5+) can
+## react correctly to a sleep-skip or a reload, not just to real-time play.
+signal hour_changed(hour: int)
+signal day_changed(day: int)
+
+var _last_hour := -1
+var _last_day := -1
 
 @onready var sun: DirectionalLight3D = $Sun
 @onready var moon: DirectionalLight3D = $Moon
@@ -42,6 +65,11 @@ func _ready() -> void:
 		if arg.begins_with("--day-length="):
 			day_length_seconds = float(arg.get_slice("=", 1))
 	_apply()
+	# Seed these from the real starting time so the first _process() tick
+	# doesn't spuriously fire hour_changed/day_changed for a value that
+	# hasn't actually changed yet -- only real transitions should signal.
+	_last_hour = hour()
+	_last_day = day_count
 
 
 func _process(delta: float) -> void:
@@ -53,6 +81,7 @@ func _process(delta: float) -> void:
 		time_of_day -= 1.0
 		day_count += 1
 	_apply()
+	_update_derived_time()
 
 
 ## Height of the sun above the horizon: 1 straight overhead, -1 straight below.
@@ -68,6 +97,43 @@ func is_night() -> bool:
 func clock_text() -> String:
 	var minutes := int(time_of_day * 24.0 * 60.0)
 	return "Day %d  %02d:%02d" % [day_count, minutes / 60, minutes % 60]
+
+
+# ------------------------------------------------------------ S0: sim clock API
+
+func hour() -> int:
+	return int(time_of_day * 24.0) % 24
+
+
+func minute() -> int:
+	return int(time_of_day * 24.0 * 60.0) % 60
+
+
+func day() -> int:
+	return day_count
+
+
+## Absolute simulated minutes elapsed since day 1 began (day_count is
+## 1-based). Monotonic across the whole save, so Layer 5+ duration math
+## ("how long ago", "how many minutes until work") can subtract two
+## readings of this instead of juggling day_count/time_of_day pairs.
+func total_minutes() -> float:
+	return float(day_count - 1) * 1440.0 + time_of_day * 1440.0
+
+
+## Emits hour_changed/day_changed exactly on the frame each actually
+## changes value. Called after every place time_of_day/day_count can move
+## (normal ticking, skip_to_morning(), load_save_data()) so a listener sees
+## the same signals whether time passed by playing, sleeping, or loading a
+## save from a different moment -- not just during real-time play.
+func _update_derived_time() -> void:
+	var h := hour()
+	if h != _last_hour:
+		_last_hour = h
+		hour_changed.emit(h)
+	if day_count != _last_day:
+		_last_day = day_count
+		day_changed.emit(day_count)
 
 
 func _apply() -> void:
@@ -121,6 +187,7 @@ func skip_to_morning() -> void:
 		day_count += 1
 	time_of_day = 0.25
 	_apply()
+	_update_derived_time()
 
 
 func get_save_data() -> Dictionary:
@@ -131,6 +198,7 @@ func load_save_data(d: Dictionary) -> void:
 	time_of_day = float(d.get("time_of_day", time_of_day))
 	day_count = int(d.get("day_count", day_count))
 	_apply()
+	_update_derived_time()
 
 
 func _lerp_palette(a: Array, b: Array, t: float) -> Array:

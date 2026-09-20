@@ -31,6 +31,10 @@ extends Node
 ##                      deep-water fall-damage cushion (contrast with 1300..1380);
 ##                      frame 1395 also covers WATER-07's presentation (tint,
 ##                      muffled audio, splash) on the same Swim entry
+##   frames 1800..1830 S0: DayNight as the simulation clock -- hour()/minute()/
+##                      day()/total_minutes() derivation, hour_changed/
+##                      day_changed firing through the real load_save_data()
+##                      path, and get_save_data()/load_save_data() round-trip
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -56,6 +60,16 @@ var _shallow_health_before := 0
 var _shallow_fixture := Vector2i.ZERO
 var _deep_fixture := Vector2i.ZERO
 var _deep_mid := 0.0
+var _sim_hour_seen := -1
+var _sim_day_seen := -1
+
+
+func _on_selftest_hour_changed(h: int) -> void:
+	_sim_hour_seen = h
+
+
+func _on_selftest_day_changed(d: int) -> void:
+	_sim_day_seen = d
 
 
 func _physics_process(_delta: float) -> void:
@@ -883,6 +897,49 @@ func _physics_process(_delta: float) -> void:
 			# (already force-built) floor.
 			print("selftest: fell into deep water and settled to the bottom: health %d -> %d (expect no drop -- entering deep water cushions the fall), on floor %s (expect true), water_state %d (expect %d = Swim)"
 				% [_shallow_health_before, player.health, player.is_on_floor(), player.water_state, Player.WaterState.SWIM])
+		1800:
+			# S0: DayNight IS the project's fixed simulation clock (see its
+			# own header comment) -- prove the derived hour/minute/day/
+			# total_minutes API against a known, directly-set time rather
+			# than trusting the formulas.
+			main.day_night.time_of_day = 0.5   # exactly noon
+			main.day_night.day_count = 3
+			main.day_night._apply()
+			var expected_total := 2.0 * 1440.0 + 0.5 * 1440.0   # (day_count - 1) * 1440 + time_of_day * 1440
+			print("selftest: S0 clock derivation at time_of_day=0.5 day_count=3: hour=%d minute=%d day=%d total_minutes=%.1f (expect 12, 0, 3, %.1f)"
+				% [main.day_night.hour(), main.day_night.minute(), main.day_night.day(), main.day_night.total_minutes(), expected_total])
+		1810:
+			# hour_changed/day_changed must fire through the real public
+			# entry point (load_save_data()) a resident routine would
+			# actually see -- not just during normal real-time ticking.
+			# Currently hour=12, day=3 from frame 1800; load a save with a
+			# different hour AND day so both signals must fire from one call.
+			_sim_hour_seen = -1
+			_sim_day_seen = -1
+			main.day_night.hour_changed.connect(_on_selftest_hour_changed)
+			main.day_night.day_changed.connect(_on_selftest_day_changed)
+			main.day_night.load_save_data({"time_of_day": 0.75, "day_count": 5})   # 18:00, day 5
+			print("selftest: S0 load_save_data() crossing both hour and day fired hour_changed(%d) and day_changed(%d) (expect 18, 5)"
+				% [_sim_hour_seen, _sim_day_seen])
+			main.day_night.hour_changed.disconnect(_on_selftest_hour_changed)
+			main.day_night.day_changed.disconnect(_on_selftest_day_changed)
+		1830:
+			# S0's literal acceptance check, isolated from the rest of the
+			# game's save data: get_save_data()/load_save_data() (the same
+			# calls main.save_game()/load_game() already delegate to for the
+			# "time" key) actually round-trip the clock, not just never
+			# happen to have broken it yet.
+			main.day_night.time_of_day = 0.42
+			main.day_night.day_count = 7
+			main.day_night._apply()
+			var clock_data: Dictionary = main.day_night.get_save_data()
+			main.day_night.time_of_day = 0.0
+			main.day_night.day_count = 1
+			main.day_night._apply()
+			main.day_night.load_save_data(clock_data)
+			var restored: bool = is_equal_approx(main.day_night.time_of_day, 0.42) and main.day_night.day_count == 7
+			print("selftest: S0 get_save_data()/load_save_data() round trip: restored=%s (time_of_day %.3f, day %d; expect ~0.42, 7)"
+				% [restored, main.day_night.time_of_day, main.day_night.day_count])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

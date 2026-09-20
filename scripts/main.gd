@@ -36,6 +36,14 @@ var _pending_seed := 0
 ## active, else null. See _enter_city()/_exit_city().
 var _city: Node3D = null
 var _city_walker: CityWalker = null
+## S4/S5: the one resident and their profile while State.CITY is active,
+## else null. _city_resident_location is the last CityBlock location key
+## they were dispatched to or arrived at -- an approximation of "where they
+## currently are" good enough for CityBlock.get_route()'s "from" (see the
+## board's S5 handoff for why exact arrival-tracking wasn't needed).
+var _city_resident: DebugActor = null
+var _city_resident_profile: PersonProfile = null
+var _city_resident_location := ""
 
 
 func _ready() -> void:
@@ -271,12 +279,14 @@ func _enter_city() -> void:
 	_city_walker.standalone = false
 	_city_walker.exit_requested.connect(_exit_city)
 	_city_walker.work_requested.connect(_on_city_work_requested)
-	# S4: the one resident S3 built now actually appears in the city --
-	# standing at home, since nothing yet drives their routine (S5's job).
-	# Not tracked in a var: the whole node tree (including this) is freed
-	# on _exit_city(), same as _city_walker.
-	var resident_profile := PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
-	city.spawn_resident(resident_profile.to_dict(), resident_profile.routine("home"))
+	# S4/S5: the one resident S3 built now appears in the city, standing at
+	# home, and S5's routine loop starts driving them from here on --
+	# real hour boundaries (day_night.hour_changed, S0), not a fake clock.
+	_city_resident_profile = PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
+	_city_resident = city.spawn_resident(_city_resident_profile.to_dict(), _city_resident_profile.routine("home"))
+	_city_resident_location = _city_resident_profile.routine("home")
+	day_night.hour_changed.connect(_on_city_resident_hour_changed)
+	_drive_city_resident(day_night.hour())   # also act on the hour we're already in, not just the next change
 	_enter(State.CITY)
 
 
@@ -291,6 +301,32 @@ func _on_city_work_requested() -> void:
 	print("Worked a shift: +$%d, needs now %s" % [PersonActions.WORK_PAY, person_profile.data["needs"]])
 
 
+## S5: day_night.hour_changed while a resident is present -- the real hour
+## boundary, whether it arrived through normal play, a sleep-skip, or a
+## load. Ignores it if a State.CITY visit ended in the same beat this
+## signal fires in (the resident/city are already freed by then).
+func _on_city_resident_hour_changed(hour: int) -> void:
+	if _city_resident == null or not is_instance_valid(_city_resident):
+		return
+	_drive_city_resident(hour)
+
+
+## ResidentRoutine.current_goal() decides where the resident should be
+## right now; if that's not where they're already heading, get a fresh
+## route there and start walking it. No-ops (correctly) if they're already
+## at/heading to the right place -- most hour changes shouldn't interrupt
+## an in-progress walk with a route to the exact same destination.
+func _drive_city_resident(hour: int) -> void:
+	var goal := ResidentRoutine.current_goal(_city_resident_profile.data["routine"], hour)
+	if goal == _city_resident_location:
+		return
+	var route: Array = _city.get_route(_city_resident_location, goal)
+	if route.is_empty():
+		return
+	_city_resident.follow_route(route)
+	_city_resident_location = goal
+
+
 ## scripts/city_walker.gd's exit_requested signal (Esc), only reachable
 ## while embedded (standalone = false, i.e. actually State.CITY).
 func _exit_city() -> void:
@@ -298,6 +334,18 @@ func _exit_city() -> void:
 		_city.queue_free()   # deferred: safe to call from a signal this same node's own subtree just emitted
 		_city = null
 		_city_walker = null
+	# S5: disconnect before dropping the resident refs -- day_night keeps
+	# running (and ticking hours) long after the city is gone, so a stale
+	# connection would call _drive_city_resident() against a freed city/
+	# resident on the very next hour boundary. The is_instance_valid()
+	# guard in _on_city_resident_hour_changed() covers the same-frame case
+	# (this signal firing before queue_free() above actually takes effect);
+	# this disconnect is for every hour after that.
+	if day_night.hour_changed.is_connected(_on_city_resident_hour_changed):
+		day_night.hour_changed.disconnect(_on_city_resident_hour_changed)
+	_city_resident = null
+	_city_resident_profile = null
+	_city_resident_location = ""
 	player.activate_camera()
 	_enter(State.PLAYING)
 

@@ -54,6 +54,30 @@ func _physics_process(_delta: float) -> void:
 			var apartment_global: Vector3 = main._city.to_global(main._city.location_positions["apartment"])
 			print("citytest: S4 resident present=%s, mesh parts=%d (expect > 0 -- a real rig, not a bare capsule), %.1fm from apartment (expect small -- spawned home)"
 				% [resident != null, mesh_count, resident_pos.distance_to(apartment_global) if resident else -1.0])
+		74:
+			# S5: drive the resident through a full home/work/food day via
+			# the REAL hour_changed signal (main._on_city_resident_hour_changed()),
+			# not a direct call to _drive_city_resident() -- proves the whole
+			# wired path, same reasoning as the E-keypress test above.
+			# Boot's start_time (day_night.gd) is 0.3 = hour 7 (wake), which
+			# _enter_city() already dispatched once on entry (breakfast, hour
+			# 7 is neither Priya's sleep nor work window) -- confirm that
+			# happened before jumping further.
+			print("citytest: S5 initial dispatch at hour=%d: resident location=%s (expect cafe -- awake, not yet work hours)"
+				% [main.day_night.hour(), main._city_resident_location])
+		78:
+			main.day_night.load_save_data({"time_of_day": 9.0 / 24.0 + 0.001, "day_count": 1})
+			print("citytest: S5 hour jumped to work_start (9): resident location=%s (expect workplace), route in progress=%s"
+				% [main._city_resident_location, not main._city_resident.route_complete])
+		82:
+			main.day_night.load_save_data({"time_of_day": 18.0 / 24.0 + 0.001, "day_count": 1})
+			print("citytest: S5 hour jumped past work_end to dinner (18): resident location=%s (expect cafe), route in progress=%s"
+				% [main._city_resident_location, not main._city_resident.route_complete])
+		86:
+			main.day_night.load_save_data({"time_of_day": 22.0 / 24.0 + 0.001, "day_count": 1})
+			print("citytest: S5 hour jumped to sleep_hour (22): resident location=%s (expect apartment), route in progress=%s"
+				% [main._city_resident_location, not main._city_resident.route_complete])
+			print("citytest: S5 full home->work->food->home loop dispatched entirely through real hour_changed signals, not direct calls")
 		90:
 			var on_floor: bool = main._city_walker.is_on_floor() if main._city_walker else false
 			print("citytest: walker settled on_floor=%s (expect true -- real ground collision inside the embedded instance)" % [on_floor])

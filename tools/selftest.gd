@@ -41,6 +41,8 @@ extends Node
 ##   frame  1890        S3: one resident PersonProfile record (home/job/
 ##                      routine/appearance), sanitizing bad home/job, and a
 ##                      save/load round trip preserving the routine
+##   frame  1900        S5: ResidentRoutine.current_goal() pure logic across
+##                      a full day (sleep/work/food, both sides of midnight)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1028,6 +1030,23 @@ func _physics_process(_delta: float) -> void:
 			var routine_survived: bool = round_trip.routine("home") == "apartment" and round_trip.routine("job") == "workplace" \
 				and round_trip.display_name() == "Priya Nair"
 			print("selftest: S3 routine survives a save/load round trip: %s" % [routine_survived])
+		1900:
+			# S5: ResidentRoutine.current_goal() pure logic, against Priya's
+			# actual routine (sleep 22, wake 7, work 9-17) -- covers all
+			# three goal kinds and both sides of the midnight wrap.
+			var pr: Dictionary = PersonProfile.new_resident("Priya Nair", "apartment", "workplace").data["routine"]
+			var goals := {
+				23: ResidentRoutine.current_goal(pr, 23),   # deep night, wrapped sleep range
+				3: ResidentRoutine.current_goal(pr, 3),     # deep night, other side of the wrap
+				8: ResidentRoutine.current_goal(pr, 8),     # awake, before work: breakfast
+				12: ResidentRoutine.current_goal(pr, 12),   # mid-shift
+				18: ResidentRoutine.current_goal(pr, 18),   # after work, before bed: dinner
+				22: ResidentRoutine.current_goal(pr, 22),   # bedtime starts
+			}
+			print("selftest: S5 ResidentRoutine.current_goal() by hour: %s (expect 23,3=apartment; 8,18=cafe; 12=workplace; 22=apartment)" % [goals])
+			var goals_ok: bool = goals[23] == "apartment" and goals[3] == "apartment" and goals[8] == "cafe" \
+				and goals[12] == "workplace" and goals[18] == "cafe" and goals[22] == "apartment"
+			print("selftest: S5 all expected goals correct: %s" % [goals_ok])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

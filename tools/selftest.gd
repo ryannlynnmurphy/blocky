@@ -24,6 +24,11 @@ extends Node
 ##   frames 1070..1080 furnace: iron ore only smelts into Iron there, not on breaking it
 ##   frames 1110..1200 a carved 2-tall corridor doesn't snag the player's head
 ##   frame  1210       breaking the ground under a prop removes it and drops an item
+##   frames 1300..1380 WATER-06 gate 4 edge case: Wade speed, and a fall through
+##                      shallow (Wade-depth) water still costs normal fall damage
+##   frames 1390..1770 WATER-06 gate 4: Swim state/speed cap, ascend/descend,
+##                      sprint-propel's stamina drain + forced cooldown, and the
+##                      deep-water fall-damage cushion (contrast with 1300..1380)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -44,6 +49,11 @@ var _shelter_health := 0
 var _sleep_test_hostile: Hostile
 var _corridor_start := Vector3.ZERO
 var _person_test_id := ""
+var _water_move_start := Vector3.ZERO
+var _shallow_health_before := 0
+var _shallow_fixture := Vector2i.ZERO
+var _deep_fixture := Vector2i.ZERO
+var _deep_mid := 0.0
 
 
 func _physics_process(_delta: float) -> void:
@@ -666,6 +676,203 @@ func _physics_process(_delta: float) -> void:
 			world.set_block(bx, by - 1, bz, Blocks.AIR)   # break the ground it stands on
 			print("selftest: after breaking ground under it: prop gone %s (expect true), item dropped %s (expect true)"
 				% [not world._prop_nodes.has(wpos), world.drop_count() > before_drops])
+		1300:
+			# WATER-06 gate 4, Wade half: shallow water (depth capped well
+			# under Player.TORSO_HEIGHT of 1.0, so standing on its bottom
+			# truly never submerges the torso) should read as Wade, never
+			# Swim, and move slower than dry WALK_SPEED. Found near the
+			# player's OWN current position via a nearest-first ring search
+			# (not an absolute world corner, and not just the first "any
+			# depth" hit in raster order, and not overlapping a column an
+			# earlier test already hand-edited).
+			#
+			# Collision is forced synchronously via world.build_chunk_now()
+			# rather than just waiting some number of frames for it to
+			# stream in -- this card's first two versions guessed at a
+			# settle time, but VoxelWorld only auto-enables collision within
+			# collision_radius (3 chunks = 48 blocks) of the player, a much
+			# smaller radius than the view_radius (8 chunks = 128) the
+			# fixture search itself is bounded by, so a fixture beyond 48
+			# blocks would never have gotten collision no matter how long
+			# the test waited. build_chunk_now sidesteps that distinction
+			# entirely by building the exact chunk (and its neighbours, for
+			# clean edge faces) right now, on this thread -- once the chunk
+			# NODE exists, which needs the teleport below to actually happen
+			# first so World's own _process() creates it on the next regular
+			# (non-physics) frame; see frame 1305 just below.
+			var center := Vector2i(floori(player.global_position.x), floori(player.global_position.z))
+			_shallow_fixture = _find_water_table_fixture_near(center, 100, 1.0)
+			var ground_top := float(world.height_at(_shallow_fixture.x, _shallow_fixture.y) + 1)
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_shallow_fixture.x + 0.5, ground_top + 3.0, _shallow_fixture.y + 0.5)
+			player.set_look(0.0, 0.0)
+		1330:
+			# 30 frames later, World's _process() (which runs once per
+			# regular, non-physics frame -- possibly more than once per
+			# physics tick if the two aren't 1:1 this run) has had ample
+			# chance to notice the player is now in a new chunk and create
+			# (empty, unmeshed) Chunk nodes around it -- now build_chunk_now
+			# can find one to act on. Land exactly on the forced floor
+			# directly instead of trusting the intervening 3-block fall to a
+			# chunk that only just got collision this same frame.
+			_force_build_chunk_at(_shallow_fixture)
+			var ground_top_b := float(world.height_at(_shallow_fixture.x, _shallow_fixture.y) + 1)
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_shallow_fixture.x + 0.5, ground_top_b + 0.1, _shallow_fixture.y + 0.5)
+		1340:
+			# 10 more frames (~0.17 s) to settle the last 0.1 blocks onto the
+			# now force-built floor, then start moving.
+			player.test_move = Vector2(0, -1)
+		1345:
+			# Read velocity almost immediately (5 frames / ~0.08 s, ~0.28
+			# blocks of travel) instead of measuring distance over a longer
+			# window -- this card's first version walked for a full 0.5 s and
+			# often walked (or, thanks to the capsule radius alone, even just
+			# stood) the player onto a neighbouring column at a different
+			# height, since a lone Wade-depth tile is a knife-edge shoreline
+			# feature; _find_water_table_fixture_near now requires flat
+			# neighbours too (see _is_shallow_water_column), so this reduced
+			# window is just an extra margin, not the only fix.
+			var horiz := Vector2(player.velocity.x, player.velocity.z).length()
+			print("selftest: standing in the shallowest generated water: water_state %d (expect %d = Wade, never Swim), on floor %s, horizontal speed %.2f (expect ~%.2f, slower than dry %.2f)"
+				% [player.water_state, Player.WaterState.WADE, player.is_on_floor(), horiz,
+					Player.WALK_SPEED * Player.WADE_SPEED_MULT, Player.WALK_SPEED])
+			player.test_move = Vector2.ZERO
+		1350:
+			# Shallow-water fall-damage edge case: a naive "any water at the
+			# feet resets fall damage" rule would zero this out. The correct
+			# rule (torso must be in DEEP water) must not, since this column
+			# never reaches Swim -- see 1380 below. This chunk already has
+			# forced collision from the wade test just above.
+			player.velocity = Vector3.ZERO
+			player.health = player.max_health
+			var ground_top2 := float(world.height_at(_shallow_fixture.x, _shallow_fixture.y) + 1)
+			player.global_position = Vector3(_shallow_fixture.x + 0.5, ground_top2 + 6.0, _shallow_fixture.y + 0.5)
+			_shallow_health_before = player.health
+		1380:
+			print("selftest: fell 6 blocks into the shallowest generated (Wade-depth) water: state stayed out of Swim, health %d -> %d (expect a real drop -- shallow water must NOT cushion a fall)"
+				% [_shallow_health_before, player.health])
+		1390:
+			# WATER-06 gate 4, Swim half: find genuinely deep water (torso-
+			# submerged with margin), near the player again, with the same
+			# forced-collision treatment as the Wade fixture above. Bounded
+			# above too, so the later fall-cushion test's snap-to-bottom
+			# distance stays predictable regardless of which column the
+			# search lands on.
+			var center2 := Vector2i(floori(player.global_position.x), floori(player.global_position.z))
+			_deep_fixture = _find_deep_water_fixture_near(center2, 100, 4.0, 6.0)
+			var ground_top3 := float(world.height_at(_deep_fixture.x, _deep_fixture.y) + 1)
+			var surface3 := world.water_surface_y_at(_deep_fixture.x, _deep_fixture.y)
+			_deep_mid = (ground_top3 + surface3) * 0.5
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_deep_fixture.x + 0.5, _deep_mid, _deep_fixture.y + 0.5)
+			player.set_look(0.0, 0.0)
+			player.test_move = Vector2.ZERO
+		1391:
+			# One frame later, so water_state (last frame's result) actually
+			# reflects the teleport above instead of being read before
+			# physics ever ran at the new position -- this test's first
+			# version printed on the very same frame as the teleport and saw
+			# a stale Dry reading purely from that timing, not a real bug.
+			print("selftest: dropped into deep water at (%d, %d): water_state %d (expect %d = Swim)"
+				% [_deep_fixture.x, _deep_fixture.y, player.water_state, Player.WaterState.SWIM])
+		1400:
+			# Normal swim speed cap (no Shift): should match SWIM_SPEED, well
+			# under the sprint-propel speed tested further below.
+			player.test_move = Vector2(0, -1)
+			_water_move_start = player.global_position
+		1420:
+			# Ascend/descend/sprint (this and the several tests after it)
+			# don't need real collision at all -- Swim movement never touches
+			# is_on_floor() -- but the eventual snap-to-bottom fall-cushion
+			# test at frame 1750 does. Force it now (30 frames after the 1390
+			# teleport, the same margin and reasoning as the Wade fixture
+			# above), well ahead of when it's actually needed, rather than
+			# right before 1750 where a too-short margin bit this card's
+			# first version of this test.
+			_force_build_chunk_at(_deep_fixture)
+		1430:
+			var dist := player.global_position.distance_to(_water_move_start)
+			print("selftest: swam %.2f blocks in 0.5 s (expect ~%.2f = SWIM_SPEED, well under sprint-propel's %.2f)"
+				% [dist, Player.SWIM_SPEED * 0.5, Player.SPRINT_SWIM_SPEED * 0.5])
+			player.test_move = Vector2.ZERO
+		1440:
+			# Space ascends, Ctrl descends, while actually swimming.
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_deep_fixture.x + 0.5, _deep_mid, _deep_fixture.y + 0.5)
+			player.test_ascend = true
+		1470:
+			print("selftest: Space held for 0.5 s while swimming: velocity.y %.2f (expect ~%.2f = SWIM_VERTICAL_SPEED), rose %.2f blocks"
+				% [player.velocity.y, Player.SWIM_VERTICAL_SPEED, player.global_position.y - _deep_mid])
+			player.test_ascend = false
+			player.test_descend = true
+		1500:
+			print("selftest: Ctrl held for 0.5 s while swimming: velocity.y %.2f (expect ~%.2f = -SWIM_VERTICAL_SPEED)"
+				% [player.velocity.y, -Player.SWIM_VERTICAL_SPEED])
+			player.test_descend = false
+		1540:
+			# Sprint-propel: Shift + direction should burst at SPRINT_SWIM_SPEED
+			# along the camera, but only while stamina lasts.
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_deep_fixture.x + 0.5, _deep_mid, _deep_fixture.y + 0.5)
+			player.set_look(0.0, 0.0)
+			player.test_move = Vector2(0, -1)
+			player.test_run = true
+		1550:
+			print("selftest: sprint-propel engaged: speed %.2f (expect ~%.2f = SPRINT_SWIM_SPEED), state %d (expect %d = Sprint-swim)"
+				% [player.velocity.length(), Player.SPRINT_SWIM_SPEED, player.water_state, Player.WaterState.SPRINT_SWIM])
+		1620:
+			# Held Shift+direction well past SWIM_STAMINA_MAX (1.2 s = 72
+			# frames at 60 Hz; it's now been held for 80): stamina must have
+			# run out and locked the burst out, even though the buttons never
+			# stopped -- this is the "can't be spammed for infinite speed or
+			# vertical climbing" requirement.
+			print("selftest: held sprint-propel past its stamina budget: locked out %s (expect true), speed now %.2f (expect back near SWIM_SPEED %.2f, not sprint's %.2f), state %d (expect %d = Swim, burst denied)"
+				% [player._swim_locked_out, player.velocity.length(), Player.SWIM_SPEED, Player.SPRINT_SWIM_SPEED,
+					player.water_state, Player.WaterState.SWIM])
+			player.test_run = false
+			player.test_move = Vector2.ZERO
+		1710:
+			# SWIM_STAMINA_COOLDOWN (1.5 s = 90 frames) has elapsed since
+			# exhaustion (~frame 1612): the lockout must clear and stamina
+			# must refill on its own, not stay stuck forever.
+			print("selftest: stamina cooldown elapsed: locked out %s (expect false), stamina %.2f/%.2f (expect > 0, regenerating)"
+				% [player._swim_locked_out, player._swim_stamina, Player.SWIM_STAMINA_MAX])
+		1720:
+			# Deep-water fall-damage cushion: a real freefall into genuinely
+			# deep water must NOT cost health, in contrast with the
+			# shallow-water case at frame 1380. Only 1 block above the
+			# surface is needed to prove it -- depth alone (>= 4.0) already
+			# exceeds SAFE_FALL (3.0), so this still counts as a real fall
+			# that a naive implementation would get wrong.
+			player.velocity = Vector3.ZERO
+			player.health = player.max_health
+			var surface4 := world.water_surface_y_at(_deep_fixture.x, _deep_fixture.y)
+			player.global_position = Vector3(_deep_fixture.x + 0.5, surface4 + 1.0, _deep_fixture.y + 0.5)
+			player.test_move = Vector2.ZERO
+			player.test_ascend = false
+			player.test_descend = false
+			_shallow_health_before = player.health
+		1750:
+			# By now the player should be well into Swim (torso submerged):
+			# ~1 block of real air-fall plus another ~1.2 to submerge the
+			# torso, all well within 0.5 s. Snap the rest of the way down
+			# directly instead of a long commanded descent through open
+			# water -- this card's first version drove that whole descent
+			# through real physics and saw inconsistent results between runs
+			# on some generated columns, most likely the capsule clipping a
+			# steeper neighbouring column near the edge of the lake basin;
+			# snapping avoids relying on a long, unrelated horizontal-clearance
+			# assumption when the only thing this test actually needs to prove
+			# is the landing itself.
+			var ground_top4 := float(world.height_at(_deep_fixture.x, _deep_fixture.y) + 1)
+			player.velocity = Vector3.ZERO
+			player.global_position = Vector3(_deep_fixture.x + 0.5, ground_top4 + 0.1, _deep_fixture.y + 0.5)
+		1770:
+			# 20 frames (~0.33 s) to settle the last 0.1 blocks onto the
+			# (already force-built) floor.
+			print("selftest: fell into deep water and settled to the bottom: health %d -> %d (expect no drop -- entering deep water cushions the fall), on floor %s (expect true), water_state %d (expect %d = Swim)"
+				% [_shallow_health_before, player.health, player.is_on_floor(), player.water_state, Player.WaterState.SWIM])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,
@@ -686,3 +893,122 @@ func _find_water_table_fixture() -> Vector2i:
 				return Vector2i(x, z)
 	push_error("selftest: no generated water-table fixture found")
 	return Vector2i.ZERO
+
+
+## Finds a column near `center` (not an absolute world corner) whose water
+## depth is positive but stays under max_depth -- shallow enough that a
+## standing player's torso (Player.TORSO_HEIGHT) never submerges, i.e. a true
+## Wade-only spot, not just "some" water. Searches ring by ring outward so
+## the result is the CLOSEST match, not merely the first hit in raster-scan
+## order (which can land arbitrarily far from center and even outside the
+## radius' Chebyshev distance if scanned corner-first) -- minimizing distance
+## keeps the destination inside the player's already-streamed chunk radius,
+## so it has real collision immediately instead of dropping the player
+## through not-yet-built terrain.
+func _find_water_table_fixture_near(center: Vector2i, max_radius: int, max_depth: float) -> Vector2i:
+	if _is_shallow_water_column(center.x, center.y, max_depth):
+		return center
+	for r in range(1, max_radius + 1):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dz)) != r:
+					continue
+				var x := center.x + dx
+				var z := center.y + dz
+				if _is_shallow_water_column(x, z, max_depth):
+					return Vector2i(x, z)
+	push_error("selftest: no shallow water-table fixture found near %s (radius %d, max depth %.1f)"
+		% [center, max_radius, max_depth])
+	return center
+
+
+## A Wade-depth column is only safe to stand and walk on if its immediate
+## neighbours are the SAME height, not a step down. This card's water table
+## is a single flat plane, so "shallow" (depth <= max_depth) only ever means
+## exactly one specific ground height (h = 18, giving a fixed 0.9 depth) --
+## a knife-edge shoreline tile that, on its own, is very likely to have at
+## least one neighbour at a different (often much lower, into real deep
+## water) height. The player capsule's 0.25 radius already reaches to
+## within 0.25 of a 1x1 column's edges even standing dead centre, so testing
+## an isolated tile risks the capsule catching a neighbouring column's edge
+## and resting at some in-between height that neither the Wade nor the Dry
+## math actually describes -- exactly what an earlier version of this test
+## hit (a repeatable, exact-radius-sized 0.25 sink below the expected floor).
+func _is_shallow_water_column(x: int, z: int, max_depth: float) -> bool:
+	if _column_is_edited(x, z):
+		return false
+	var depth := world.water_surface_y_at(x, z) - float(world.height_at(x, z) + 1)
+	if not (depth > 0.0 and depth <= max_depth):
+		return false
+	var h := world.height_at(x, z)
+	for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if world.height_at(x + n.x, z + n.y) != h or _column_is_edited(x + n.x, z + n.y):
+			return false
+	return true
+
+
+## Forces real, immediate collision at world column (x, z) regardless of
+## distance from the player -- VoxelWorld only auto-enables collision within
+## collision_radius (3 chunks) of the player, well inside the much larger
+## radius these water-fixture searches are allowed to range over, so a
+## teleport there would otherwise have nothing solid to land on until (if
+## ever) the player got close enough on foot for the normal streaming system
+## to bother. Also forces the 4 neighbouring chunks, since a query point can
+## sit close enough to a chunk seam to touch a neighbour's collision too.
+func _force_build_chunk_at(fixture: Vector2i) -> void:
+	var cpos := world.chunk_coord_of(Vector3(fixture.x, 0, fixture.y))
+	world.build_chunk_now(cpos)
+	for n in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		world.build_chunk_now(cpos + n)
+
+
+## True if any block in world column (x, z) has been individually edited
+## (world.set_block), which would make world.height_at()'s procedural answer
+## for that column diverge from the real, already-modified terrain there --
+## exactly the trap this card's fixture search fell into once, landing right
+## on a column an earlier test (corridor/shelter/mushroom, all of which carve
+## real blocks near wherever the player happens to be standing) had already
+## carved, so the "ground" the water-depth math expected wasn't the "ground"
+## the physics engine actually put there.
+func _column_is_edited(x: int, z: int) -> bool:
+	var cpos := world.chunk_coord_of(Vector3(x, 0, z))
+	if not world.edits.has(cpos):
+		return false
+	var lx := posmod(x, VoxelWorld.SIZE)
+	var lz := posmod(z, VoxelWorld.SIZE)
+	var col: Dictionary = world.edits[cpos]
+	for y in VoxelWorld.HEIGHT:
+		if col.has(lx + VoxelWorld.SIZE * (lz + VoxelWorld.SIZE * y)):
+			return true
+	return false
+
+
+## Same idea as _find_water_table_fixture_near (nearest-first ring search, for
+## the same streamed-collision reason), but for a column whose water depth
+## (measured at its own lakebed) falls in [min_depth, max_depth] -- deep
+## enough to unambiguously submerge a standing player's torso
+## (Player.TORSO_HEIGHT), with an upper bound so WATER-06's ascend/descend/
+## sprint/fall tests have a predictable amount of room to work with
+## regardless of which column the search happens to land on.
+func _find_deep_water_fixture_near(center: Vector2i, max_radius: int, min_depth: float, max_depth: float) -> Vector2i:
+	if _is_deep_water_column(center.x, center.y, min_depth, max_depth):
+		return center
+	for r in range(1, max_radius + 1):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dz)) != r:
+					continue
+				var x := center.x + dx
+				var z := center.y + dz
+				if _is_deep_water_column(x, z, min_depth, max_depth):
+					return Vector2i(x, z)
+	push_error("selftest: no deep-water fixture found near %s (radius %d) in [%.1f, %.1f]"
+		% [center, max_radius, min_depth, max_depth])
+	return center
+
+
+func _is_deep_water_column(x: int, z: int, min_depth: float, max_depth: float) -> bool:
+	if _column_is_edited(x, z):
+		return false
+	var depth := world.water_surface_y_at(x, z) - float(world.height_at(x, z) + 1)
+	return depth >= min_depth and depth <= max_depth

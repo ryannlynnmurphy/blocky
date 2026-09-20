@@ -15,6 +15,10 @@ signal furnace_used   # right-clicked a Furnace block
 signal sleep_requested   # right-clicked a Bed block
 signal tool_broke(item_name: String)   # a tool/weapon ran out of durability
 signal durability_changed   # any tool/weapon's remaining durability ticked down
+signal water_state_changed(state: int)   # see WaterState; HUD/audio (WATER-07) consume this
+
+## WATER-06: Dry/Wade/Swim/Sprint-swim, per docs/lab/WATER_AND_SWIMMING_SPEC.md.
+enum WaterState { DRY, WADE, SWIM, SPRINT_SWIM }
 
 const WALK_SPEED := 4.5
 const RUN_SPEED := 7.5
@@ -38,6 +42,38 @@ var tool_durability := {}
 const BASE_HEALTH := 10
 const HEALTH_PER_LEVEL := 2
 const SAFE_FALL := 3.0    # blocks you can drop without getting hurt
+
+# ---- water / swimming (WATER-06) ----
+## CORRECTED 2026-09-20: an earlier draft of this comment claimed Godot's
+## CapsuleShape3D.height excludes the two hemispherical end caps (total =
+## height + 2*radius = 1.6 for player.tscn's radius=0.25, height=1.1). That
+## claim was wrong -- see the board's "CORRECTION" entry appended after the
+## 2026-09-20 REGRESSION FIX one. Directly measured via
+## CapsuleShape3D.new().get_debug_mesh().get_aabb(): height IS the total,
+## caps included, so the player's real physical height is 1.1, not 1.6.
+##
+## TORSO_HEIGHT is deliberately NOT derived from the collision capsule at
+## all (1.1 is quite short and has nothing to do with where a "torso"
+## anatomically is -- it's sized for corridor clearance, not this).
+## Instead it's tied directly to the water table's own geometry
+## (world_gen.gd's WATER_TABLE_Y = LOWLAND_LEVEL + 0.9): the shallowest
+## possible flooded column is exactly 0.9 deep even standing on its very
+## bottom, so any threshold safely above 0.9 keeps that puddle classified
+## as Wade while genuinely deep water (a column whose terrain dips well
+## below LOWLAND_LEVEL) still reads as Swim.
+const TORSO_HEIGHT := 1.0
+
+const WADE_SPEED_MULT := 0.75      # Wade: existing directional movement, mildly slowed
+const SWIM_SPEED := 3.0            # Swim: directional speed (matches WATER-01's prior tuning)
+const SWIM_VERTICAL_SPEED := 2.2   # Space ascends / Ctrl descends while actually swimming
+const SWIM_SINK_SPEED := 0.6       # gentle sinking with neither held, per the spec
+const SPRINT_SWIM_SPEED := 5.0     # camera-directed burst, pitch included (matches WATER-01's prior tuning)
+const SWIM_STAMINA_MAX := 1.2          # seconds of continuous sprint-propel before exhaustion
+const SWIM_STAMINA_REGEN_RATE := 0.3   # per second, whenever not actively propelling (slower than
+                                        # the 1:1 drain below, so alternating shift taps still nets
+                                        # a drain instead of sustaining a free perpetual burst)
+const SWIM_STAMINA_COOLDOWN := 1.5     # forced lockout once stamina hits zero: closes the loop so
+                                        # spamming Shift can't chain infinite speed or climb forever
 
 # ---- hunger ----
 const MAX_HUNGER := 10
@@ -64,6 +100,12 @@ var spawn_point := Vector3.ZERO   # where you come back to life
 
 var _was_on_floor := true
 var _peak_y := 0.0   # highest point of the current fall
+
+var water_state: int = WaterState.DRY
+var _swim_stamina := SWIM_STAMINA_MAX
+var _swim_locked_out := false   # true from exhaustion until _swim_cooldown_timer elapses
+var _swim_cooldown_timer := 0.0
+var _sprinting_now := false   # this frame's sprint-propel actually engaged (vs. just requested)
 
 var _yaw := 0.0
 var _pitch := -0.3
@@ -119,6 +161,8 @@ var test_move := Vector2.ZERO
 var test_run := false
 var test_hold_break := false
 var test_jump := false   # one-shot: set true for a frame to trigger a jump
+var test_ascend := false    # tests: hold true to emulate holding Space while swimming
+var test_descend := false   # tests: hold true to emulate holding Ctrl while swimming
 
 var _knock := Vector3.ZERO   # shove from being hit; fades out
 
@@ -267,6 +311,7 @@ func _setup_input_actions() -> void:
 	_add_key("move_right", KEY_D)
 	_add_key("jump", KEY_SPACE)
 	_add_key("run", KEY_SHIFT)
+	_add_key("descend", KEY_CTRL)   # water only: Space still ascends via "jump"
 
 
 func _add_key(action: String, key: Key) -> void:
@@ -327,11 +372,10 @@ func held_id() -> int:
 
 func _physics_process(delta: float) -> void:
 	_punch_cooldown = maxf(_punch_cooldown - delta, 0.0)
-	if not is_on_floor():
-		velocity.y -= GRAVITY * delta
-	elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):
-		velocity.y = JUMP_SPEED
-		test_jump = false
+	_swim_cooldown_timer = maxf(_swim_cooldown_timer - delta, 0.0)
+	if _swim_cooldown_timer <= 0.0:
+		_swim_locked_out = false
+	_sprinting_now = false
 
 	# Movement is relative to where the camera is looking.
 	var input := test_move
@@ -343,14 +387,51 @@ func _physics_process(delta: float) -> void:
 	horizontal_dir.y = 0
 	horizontal_dir = horizontal_dir.normalized()
 	var moving := input.length() > 0.1
-	var running := run_held and moving
+
+	# water_state here is last frame's result (this frame hasn't moved yet,
+	# so it still matches the feet/torso the player is actually standing at).
+	var in_water := water_state != WaterState.DRY
+	# Land Shift remains run; water repurposes Shift for sprint-propel
+	# instead, so it never also drives the land run-lean/FOV/hunger feel.
+	var running := run_held and moving and not in_water
 	var speed := RUN_SPEED if running else WALK_SPEED
-	velocity.x = horizontal_dir.x * speed + _knock.x
-	velocity.z = horizontal_dir.z * speed + _knock.z
-	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
+
+	if not in_water:
+		if not is_on_floor():
+			velocity.y -= GRAVITY * delta
+		elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):
+			velocity.y = JUMP_SPEED
+			test_jump = false
+		velocity.x = horizontal_dir.x * speed + _knock.x
+		velocity.z = horizontal_dir.z * speed + _knock.z
+		_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
+	else:
+		_process_water_physics(delta, water_state, horizontal_dir, moving, run_held)
+
+	if not _sprinting_now:
+		_swim_stamina = minf(_swim_stamina + SWIM_STAMINA_REGEN_RATE * delta, SWIM_STAMINA_MAX)
 
 	move_and_slide()
+
+	var next_base_state := _water_state_at(global_position) if world != null else WaterState.DRY
+	var next_state := next_base_state
+	if next_base_state == WaterState.SWIM and _sprinting_now:
+		next_state = WaterState.SPRINT_SWIM
+	# Deep (torso-submerged) water continuously cushions a fall: as long as
+	# you're actually swimming, "the top of your fall" keeps sliding down to
+	# right now, so touching bottom while still submerged never counts as a
+	# fall no matter how deep the water is. A shin-deep Wade puddle over
+	# solid ground does NOT get this -- it never reaches Swim at all, so a
+	# fall through one still costs the normal damage. That distinction (not
+	# "is there water at my feet at all") is the intentional edge case this
+	# card calls out; see the shallow-water fall test in tools/selftest.gd.
+	if next_state == WaterState.SWIM or next_state == WaterState.SPRINT_SWIM:
+		_peak_y = global_position.y
 	_check_fall_damage()
+
+	if next_state != water_state:
+		water_state = next_state
+		water_state_changed.emit(water_state)
 
 	# Turn the model to face the way we're walking; lean into a sprint.
 	if horizontal_dir.length() > 0.1:
@@ -367,6 +448,66 @@ func _physics_process(delta: float) -> void:
 	_tick_hunger(delta, running)
 	_update_highlight()
 	_sword.visible = held_id() == Blocks.SWORD
+
+
+# ---------------------------------------------------------------- water / swimming
+
+## Feet-and-torso water sample, per WATER_AND_SWIMMING_SPEC.md's state table.
+## Sprint-swim is layered on top of a Swim result by the caller; this only
+## tells Dry / Wade / Swim apart. `feet` is where global_position.y already
+## sits (see TORSO_HEIGHT's comment above for why).
+func _water_state_at(feet: Vector3) -> int:
+	if world.is_water_at(feet + Vector3(0, TORSO_HEIGHT, 0)):
+		return WaterState.SWIM
+	elif world.is_water_at(feet):
+		return WaterState.WADE
+	return WaterState.DRY
+
+
+## Wade/Swim/Sprint-swim movement, called instead of the dry-land branch in
+## _physics_process whenever `state` (last frame's water_state) isn't Dry.
+## Space/Ctrl are read directly here rather than through the land jump
+## action, since only actual swimming repurposes them as continuous
+## ascend/descend; Wade keeps ordinary jump/gravity per the spec.
+func _process_water_physics(delta: float, state: int, horizontal_dir: Vector3, moving: bool, shift_held: bool) -> void:
+	if state == WaterState.WADE:
+		if not is_on_floor():
+			velocity.y -= GRAVITY * delta
+		elif test_jump or (not _no_input and Input.is_action_just_pressed("jump")):
+			velocity.y = JUMP_SPEED
+			test_jump = false
+		var wade_speed := WALK_SPEED * WADE_SPEED_MULT
+		velocity.x = horizontal_dir.x * wade_speed + _knock.x
+		velocity.z = horizontal_dir.z * wade_speed + _knock.z
+		_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
+		return
+
+	# Swim, or Swim + an active sprint-propel burst.
+	if shift_held and moving and not _swim_locked_out and _swim_stamina > 0.0:
+		_sprinting_now = true
+		# A controlled burst straight along where the camera is looking,
+		# pitch included, so aiming up actually climbs and aiming down
+		# actually dives. Stamina/cooldown below (not distance or a max
+		# speed cap) is what keeps this from being spammed into infinite
+		# speed or an endless vertical ladder out of the water.
+		velocity = -_camera.global_basis.z * SPRINT_SWIM_SPEED
+		_swim_stamina = maxf(_swim_stamina - delta, 0.0)
+		if _swim_stamina <= 0.0:
+			_swim_locked_out = true
+			_swim_cooldown_timer = SWIM_STAMINA_COOLDOWN
+		return
+
+	var ascend := test_ascend if _no_input else Input.is_action_pressed("jump")
+	var descend := test_descend if _no_input else Input.is_action_pressed("descend")
+	if ascend and not descend:
+		velocity.y = SWIM_VERTICAL_SPEED
+	elif descend and not ascend:
+		velocity.y = -SWIM_VERTICAL_SPEED
+	else:
+		velocity.y = -SWIM_SINK_SPEED   # gentle passive sinking, per the spec
+	velocity.x = horizontal_dir.x * SWIM_SPEED + _knock.x
+	velocity.z = horizontal_dir.z * SWIM_SPEED + _knock.z
+	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
 
 
 ## The block under your feet decides what a step sounds like.
@@ -550,6 +691,13 @@ func respawn() -> void:
 	health_changed.emit(health, max_health)
 	hunger = MAX_HUNGER
 	hunger_changed.emit(hunger, MAX_HUNGER)
+	# Runtime-only water state, not saved (v1's water table has no persistence
+	# decision yet -- see WATER-08): a respawn shouldn't carry over a used-up
+	# sprint-propel stamina bar or an in-progress lockout from a prior life.
+	water_state = WaterState.DRY
+	_swim_stamina = SWIM_STAMINA_MAX
+	_swim_locked_out = false
+	_swim_cooldown_timer = 0.0
 
 
 # ---------------------------------------------------------------- saving

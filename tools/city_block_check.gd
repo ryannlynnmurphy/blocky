@@ -36,6 +36,7 @@ const CAPSULE_RADIUS := 0.25
 const CAPSULE_HEIGHT := 1.1
 const SETTLE_FRAME := 40    # ~0.67s at 60fps — comfortably more than the ~27 frames a 2.2m fall under GRAVITY=22 needs
 const WALK_FRAMES := 360    # 6s at WALK_SPEED 4.5 = ~27m, most of the ~43m clear street run from spawn to the far end
+const CityWalkerScript := preload("res://scripts/city_walker.gd")
 
 var block: Node3D
 var capsule: CharacterBody3D
@@ -44,6 +45,12 @@ var _start_pos := Vector3.ZERO
 var _reported_audit := false
 var _reported_settle := false
 var _reported_move := false
+var _entrance_frame := 0
+var _entrance_keys := ["apartment", "cafe", "workplace"]
+var _entrance_walker: CharacterBody3D
+var _entrance_index := 0
+var _entrance_phase := "enter"   # "enter" then "exit" for the current key
+var _reported_entrances := false
 
 
 func _init() -> void:
@@ -115,4 +122,62 @@ func _physics_process(delta: float) -> bool:
 		print("city_block_check: after %d physics frames of walking, moved %.1f m along the street (expect > 25 — collision-driven traversal across most of the block, not a teleport or a wall stopping it dead)"
 			% [WALK_FRAMES, moved])
 		print("city_block_check: final position %s, still on_floor=%s" % [capsule.position, capsule.is_on_floor()])
+
+	# B3: every location's door/interior transition, run after the move test
+	# so it doesn't interfere with that capsule. Uses a real CityWalker (not
+	# the bare capsule above) since the transition triggers in
+	# scripts/city_block.gd only act on bodies with a teleport_to() method --
+	# a deliberate guard so an unrelated physics body can never crash them --
+	# which is itself worth proving here, not just asserted.
+	if _reported_move and not _reported_entrances:
+		_entrance_frame += 1
+		if _entrance_index >= _entrance_keys.size():
+			_reported_entrances = true
+			print("city_block_check: all %d entrances checked" % _entrance_keys.size())
+			return true   # tools/*.gd SceneTree scripts: true ends the loop
+		var key: String = _entrance_keys[_entrance_index]
+		if _entrance_walker == null:
+			_entrance_walker = CharacterBody3D.new()
+			_entrance_walker.set_script(CityWalkerScript)
+			var shape := CollisionShape3D.new()
+			var cap := CapsuleShape3D.new()
+			cap.radius = CAPSULE_RADIUS
+			cap.height = CAPSULE_HEIGHT
+			shape.shape = cap
+			shape.position = Vector3(0, CAPSULE_HEIGHT * 0.5, 0)
+			_entrance_walker.add_child(shape)
+			var cam := Camera3D.new()
+			cam.name = "Camera3D"
+			_entrance_walker.add_child(cam)
+			get_root().add_child(_entrance_walker)
+			var door: Vector3 = block._entrances[key]
+			_entrance_walker.global_position = door + Vector3(0, 1.0, 0.1)
+			_entrance_frame = 0
+			return false
+		if _entrance_frame == 3 and _entrance_phase == "enter":
+			var interior_y: float = block.INTERIOR_Y
+			var entered := _entrance_walker.global_position.y < interior_y + 5.0
+			print("city_block_check: %s entrance teleported inside: %s (y=%.1f, expect true, near %.1f)"
+				% [key, entered, _entrance_walker.global_position.y, interior_y])
+			# Move to just inside the room's own exit trigger (near its far
+			# wall) without walking there -- one physics frame is enough for
+			# Area3D to notice the overlap, which is all this needs to prove.
+			var size := Vector2(6.0, 5.0) if key == "apartment" else Vector2(7.0, 5.5)
+			var post_entry: Vector3 = _entrance_walker.global_position
+			var door: Vector3 = block._entrances[key]
+			_entrance_walker.global_position = Vector3(post_entry.x, post_entry.y, door.z + size.y * 0.5 - 0.4)
+			_entrance_phase = "exit"
+			_entrance_frame = 0
+			return false
+		if _entrance_frame == 3 and _entrance_phase == "exit":
+			var out: Vector3 = block.location_positions[key]
+			var back_outside := absf(_entrance_walker.global_position.y - out.y) < 2.0
+			print("city_block_check: %s exit teleported back outside: %s (y=%.1f, expect true, near %.1f)"
+				% [key, back_outside, _entrance_walker.global_position.y, out.y])
+			_entrance_index += 1
+			_entrance_phase = "enter"
+			_entrance_frame = 0
+			_entrance_walker.queue_free()
+			_entrance_walker = null
+			return false
 	return false

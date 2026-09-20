@@ -43,6 +43,12 @@ const TEX_DIR := "res://blocky/city/textures/blocks/"
 ## coordinates by reading this whole file.
 var location_positions := {}
 
+## Where each B0 building's own front door sits (world position, at the
+## door itself, not the "stand outside" spot `location_positions` gives).
+## B3 uses this to place the entry trigger; interiors keep their own
+## matching exit point so leaving puts you back exactly here.
+var _entrances := {}
+
 var _rng := RandomNumberGenerator.new()
 
 
@@ -55,6 +61,7 @@ func _ready() -> void:
 	_build_cafe()
 	_build_workplace()
 	_build_street_furniture()
+	_build_interiors()
 	_build_overview_camera()
 	_spawn_walker()
 
@@ -258,9 +265,23 @@ func _build_park() -> void:
 
 # ---------------------------------------------------------------- shells
 
+## A real assembled door from the four door_* textures, offset sideways
+## from the building's own center line by `x_offset` so it can sit beside
+## a shop window instead of through it (cafe/workplace both have one).
+func _add_door(prefix: String, x_offset: float, front_z: float) -> void:
+	_add_visual_box(prefix + "DoorLower", Vector3(x_offset, 0.55, front_z), Vector3(0.9, 1.1, 0.06),
+		_material("door_lower"))
+	_add_visual_box(prefix + "DoorUpper", Vector3(x_offset, 1.65, front_z), Vector3(0.9, 1.1, 0.06),
+		_material("door_upper"))
+	_add_visual_box(prefix + "DoorFrameL", Vector3(x_offset - 0.55, 1.1, front_z), Vector3(0.15, 2.2, 0.07),
+		_material("door_frame"))
+	_add_visual_box(prefix + "DoorFrameR", Vector3(x_offset + 0.55, 1.1, front_z), Vector3(0.15, 2.2, 0.07),
+		_material("door_side"))
+
+
 ## The apartment (home, private, one entrance) gets a real assembled door
-## from the four door_* textures — the only building that gets one, since
-## it's the location B0 calls out as the private single-entrance one.
+## from the four door_* textures — the only building with nothing else on
+## its front face, so its door sits centered.
 func _build_apartment() -> void:
 	var center := Vector3(-16.0, 0.0, -8.5)
 	var size := Vector3(8.0, 4.0, 6.0)
@@ -270,17 +291,11 @@ func _build_apartment() -> void:
 		_material("roof_tile", Vector2(8.8, 6.8)))
 
 	var front_z := center.z + size.z * 0.5 + 0.03
-	_add_visual_box("ApartmentDoorLower", Vector3(center.x, 0.55, front_z), Vector3(0.9, 1.1, 0.06),
-		_material("door_lower"))
-	_add_visual_box("ApartmentDoorUpper", Vector3(center.x, 1.65, front_z), Vector3(0.9, 1.1, 0.06),
-		_material("door_upper"))
-	_add_visual_box("ApartmentDoorFrameL", Vector3(center.x - 0.55, 1.1, front_z), Vector3(0.15, 2.2, 0.07),
-		_material("door_frame"))
-	_add_visual_box("ApartmentDoorFrameR", Vector3(center.x + 0.55, 1.1, front_z), Vector3(0.15, 2.2, 0.07),
-		_material("door_side"))
+	_add_door("Apartment", center.x, front_z)
 
 	_add_sign("The Player's Apartment", Vector3(center.x, size.y + 0.9, front_z))
 	location_positions["apartment"] = Vector3(center.x, 0.0, front_z + 1.0)
+	_entrances["apartment"] = Vector3(center.x, 0.0, front_z)
 
 
 func _build_cafe() -> void:
@@ -292,12 +307,15 @@ func _build_cafe() -> void:
 		_material("roof_tile", Vector2(8.8, 6.8)))
 
 	var front_z := center.z + size.z * 0.5 + 0.03
-	_add_visual_box("CafeWindow", Vector3(center.x, 1.8, front_z), Vector3(4.0, 1.8, 0.06),
-		_material("shop_window", Vector2(4, 1.8)))
+	_add_visual_box("CafeWindow", Vector3(center.x - 0.6, 1.8, front_z), Vector3(3.0, 1.8, 0.06),
+		_material("shop_window", Vector2(3, 1.8)))
+	var door_x := center.x + size.x * 0.5 - 0.9
+	_add_door("Cafe", door_x, front_z)
 	# Café's outdoor deck: tavern_floor re-purposed as decking, not a tavern
 	# floor (see CITY_ASSET_MANIFEST.md's README-mismatch note).
 	_add_visual_box("CafeDeck", Vector3(center.x, 0.02, front_z + 1.1), Vector3(6.0, 0.05, 2.2),
 		_material("tavern_floor", Vector2(6, 2.2)))
+	_entrances["cafe"] = Vector3(door_x, 0.0, front_z)
 
 	_add_sign("The Corner Cafe", Vector3(center.x, size.y + 0.9, front_z))
 	location_positions["cafe"] = Vector3(center.x, 0.0, front_z + 1.0)
@@ -315,8 +333,11 @@ func _build_workplace() -> void:
 		_material("slate_roof", Vector2(9.8, 6.8)))
 
 	var front_z := center.z + size.z * 0.5 + 0.03
-	_add_visual_box("WorkplaceWindow", Vector3(center.x, 1.9, front_z), Vector3(4.4, 1.6, 0.06),
-		_material("shop_window", Vector2(4.4, 1.6)))
+	_add_visual_box("WorkplaceWindow", Vector3(center.x + 0.7, 1.9, front_z), Vector3(3.4, 1.6, 0.06),
+		_material("shop_window", Vector2(3.4, 1.6)))
+	var door_x := center.x - size.x * 0.5 + 0.9
+	_add_door("Workplace", door_x, front_z)
+	_entrances["workplace"] = Vector3(door_x, 0.0, front_z)
 
 	_add_sign("Hollowmark Workshop", Vector3(center.x, size.y + 0.9, front_z))
 	location_positions["workplace"] = Vector3(center.x, 0.0, front_z + 1.0)
@@ -342,3 +363,120 @@ func _build_street_furniture() -> void:
 	_add_prop("bench", Vector3(8.0, 0.0, 13.0))
 	_add_prop("sedan", Vector3(-10.0, 0.0, -3.3), PI * 0.5)
 	_add_prop("taxi", Vector3(10.0, 0.0, 3.3), PI * 0.5)
+
+
+# ---------------------------------------------------------------- interiors (B3)
+
+## Interiors are real 3D rooms built the same "generate the mesh" way as
+## the exterior, not menus -- but they'd overlap the street's own geometry
+## if placed at street level, so each one is a "pocket" far below its own
+## building (same X/Z as its door, offset only in Y) reached purely by
+## teleport. B3's literal acceptance check is "every location is
+## enterable" — walking into a building's front door teleports you inside;
+## walking to the interior's own doorway teleports you back outside to
+## exactly the spot `location_positions` already gives every other card.
+const INTERIOR_Y := -30.0
+const WALL_HEIGHT := 3.0
+
+
+func _build_interiors() -> void:
+	_build_apartment_interior()
+	_build_cafe_interior()
+	_build_workplace_interior()
+
+
+## Floor + 4 walls, no ceiling, plus one warm ceiling-height light. The
+## scene's own DirectionalLight3D does technically reach in (no ceiling to
+## block it), but at its low angle (see the WorldEnvironment sun) a small
+## room's own walls shadow most of the floor -- confirmed by an actual
+## screenshot looking too dim to read, not assumed.
+func _build_room_shell(prefix: String, center: Vector3, size: Vector2, wall_material: Material, floor_material: Material) -> void:
+	_add_solid_box(prefix + "Floor", center + Vector3(0, -0.1, 0), Vector3(size.x, 0.2, size.y), floor_material)
+	var t := WALL_HEIGHT * 0.5
+	_add_solid_box(prefix + "WallN", center + Vector3(0, t, -size.y * 0.5), Vector3(size.x, WALL_HEIGHT, 0.2), wall_material)
+	_add_solid_box(prefix + "WallS", center + Vector3(0, t, size.y * 0.5), Vector3(size.x, WALL_HEIGHT, 0.2), wall_material)
+	_add_solid_box(prefix + "WallE", center + Vector3(size.x * 0.5, t, 0), Vector3(0.2, WALL_HEIGHT, size.y), wall_material)
+	_add_solid_box(prefix + "WallW", center + Vector3(-size.x * 0.5, t, 0), Vector3(0.2, WALL_HEIGHT, size.y), wall_material)
+
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.92, 0.78)
+	light.light_energy = 2.2
+	light.omni_range = maxf(size.x, size.y) * 1.1
+	light.position = center + Vector3(0, WALL_HEIGHT - 0.3, 0)
+	add_child(light)
+
+
+## A trigger volume that teleports any body with a `teleport_to(pos, yaw)`
+## method (CityWalker; guarded so an unrelated physics body could never
+## crash this) to `target`, facing `target_yaw`.
+func _add_transition(pos: Vector3, target: Vector3, target_yaw: float = 0.0) -> void:
+	var area := Area3D.new()
+	area.position = pos
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.4, 2.2, 0.8)
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	area.add_child(cs)
+	add_child(area)
+	area.body_entered.connect(func(body: Node3D):
+		if body.has_method("teleport_to"):
+			body.teleport_to(target, target_yaw))
+
+
+func _build_apartment_interior() -> void:
+	var door: Vector3 = _entrances["apartment"]
+	var out: Vector3 = location_positions["apartment"]
+	var size := Vector2(6.0, 5.0)
+	var center := Vector3(door.x, INTERIOR_Y, door.z)
+	_build_room_shell("ApartmentInterior", center, size,
+		_material("plaster", Vector2(size.x, WALL_HEIGHT)), _material("flagstone", size))
+
+	# Bed in the back corner: a frame plus a two-tone mattress/pillow.
+	var bed := center + Vector3(-1.7, 0.0, -1.5)
+	_add_solid_box("Bed", bed + Vector3(0, 0.25, 0), Vector3(1.0, 0.5, 2.0), _flat_material(Color(0.42, 0.28, 0.2)))
+	_add_visual_box("BedMattress", bed + Vector3(0, 0.52, 0.1), Vector3(0.9, 0.12, 1.7), _flat_material(Color(0.75, 0.72, 0.62)))
+	_add_visual_box("BedPillow", bed + Vector3(0, 0.6, -0.75), Vector3(0.8, 0.16, 0.4), _flat_material(Color(0.92, 0.9, 0.85)))
+	# A small bedside table, reusing the crate material already used outside.
+	_add_solid_box("ApartmentTable", center + Vector3(1.5, 0.35, 1.3), Vector3(0.9, 0.7, 0.9), _material("crate"))
+
+	_add_transition(door + Vector3(0, 1.0, 0.1), center + Vector3(0, 0, -0.8), 0.0)
+	_add_transition(center + Vector3(0, 1.0, size.y * 0.5 - 0.4), out, PI)
+
+
+func _build_cafe_interior() -> void:
+	var door: Vector3 = _entrances["cafe"]
+	var out: Vector3 = location_positions["cafe"]
+	var size := Vector2(7.0, 5.5)
+	var center := Vector3(door.x, INTERIOR_Y, door.z)
+	_build_room_shell("CafeInterior", center, size,
+		_material("plaster", Vector2(size.x, WALL_HEIGHT)), _material("tavern_floor", size))
+
+	# A counter along the back wall, plus two bench-seated tables (reusing
+	# the same bench prop already used for café/park/street seating).
+	_add_solid_box("CafeCounter", center + Vector3(0, 0.5, -size.y * 0.5 + 0.6), Vector3(3.5, 1.0, 0.8),
+		_material("brick", Vector2(3.5, 1)))
+	for x in [-1.8, 1.8]:
+		_add_solid_box("CafeTable%d" % int(x), center + Vector3(x, 0.35, 1.0), Vector3(0.8, 0.7, 0.8), _material("crate"))
+		_add_prop("bench", center + Vector3(x, 0.0, 1.9), PI)
+
+	_add_transition(door + Vector3(0, 1.0, 0.1), center + Vector3(0, 0, -0.8), 0.0)
+	_add_transition(center + Vector3(0, 1.0, size.y * 0.5 - 0.4), out, PI)
+
+
+func _build_workplace_interior() -> void:
+	var door: Vector3 = _entrances["workplace"]
+	var out: Vector3 = location_positions["workplace"]
+	var size := Vector2(7.0, 5.5)
+	var center := Vector3(door.x, INTERIOR_Y, door.z)
+	_build_room_shell("WorkplaceInterior", center, size,
+		_material("brick", Vector2(size.x, WALL_HEIGHT)), _material("cobblestone", size))
+
+	# A long workbench, and stacked crates as shelving against the back wall.
+	_add_solid_box("Workbench", center + Vector3(0.5, 0.45, -size.y * 0.5 + 0.6), Vector3(3.0, 0.9, 0.8),
+		_flat_material(Color(0.35, 0.24, 0.16)))
+	for i in 3:
+		_add_visual_box("Shelf%d" % i, center + Vector3(-2.6, 0.35 + i * 0.72, -size.y * 0.5 + 0.5),
+			Vector3(0.7, 0.6, 0.7), _material("crate"))
+
+	_add_transition(door + Vector3(0, 1.0, 0.1), center + Vector3(0, 0, -0.8), 0.0)
+	_add_transition(center + Vector3(0, 1.0, size.y * 0.5 - 0.4), out, PI)

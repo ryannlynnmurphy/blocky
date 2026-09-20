@@ -28,6 +28,16 @@ func _ready() -> void:
 	_camera.position = Vector3(0, EYE_HEIGHT, 0)
 
 
+## Called by scripts/city_block.gd's door/interior Area3D triggers (B3).
+## Zeroing velocity matters: without it, whatever speed carried you into
+## the trigger keeps being applied for a frame or two on the other side,
+## which reads as a jarring shove out of a doorway rather than a clean cut.
+func teleport_to(pos: Vector3, yaw: float = 0.0) -> void:
+	global_position = pos
+	rotation.y = yaw
+	velocity = Vector3.ZERO
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		rotate_y(-event.relative.x * MOUSE_SENS)

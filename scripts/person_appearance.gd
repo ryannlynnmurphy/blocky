@@ -5,6 +5,7 @@ extends RefCounted
 ## colours, hair silhouettes, outfits and body proportions.
 
 const PLAYER_GLB := preload("res://blocky/models/player.glb")
+const WARDROBE_CATALOG = preload("res://scripts/wardrobe_catalog.gd")
 
 const SKIN := {
 	"Porcelain": Color("f1c8ad"), "Warm": Color("c9875d"),
@@ -45,6 +46,14 @@ static func apply_to(root: Node, profile: Dictionary) -> void:
 	var hair: Color = HAIR.get(str(look.get("hair_color", "Chestnut")), HAIR["Chestnut"])
 	var outfit: Array = OUTFIT.get(str(look.get("outfit", "Casual")), OUTFIT["Casual"])
 	var accent: Color = ACCENT.get(str(look.get("accent", "Teal")), ACCENT["Teal"])
+	# Catalog IDs select reusable rig parts.  Keep legacy preset colours as a
+	# fallback so profiles made before wardrobe IDs still render correctly.
+	var raw_wardrobe: Dictionary = look.get("wardrobe", {})
+	var wardrobe: Dictionary = WARDROBE_CATALOG.sanitize(raw_wardrobe)
+	var shirt_color := _wardrobe_color(wardrobe["tshirt"], outfit[0])
+	var pants_color := _wardrobe_color(wardrobe["pants"], outfit[1])
+	var belt_color := _wardrobe_color(wardrobe["belt"], accent)
+	var shoes_color := _wardrobe_color(wardrobe["shoes"], outfit[1])
 	for node in root.find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
 		var part := mesh.name.to_lower()
@@ -54,11 +63,13 @@ static func apply_to(root: Node, profile: Dictionary) -> void:
 		elif part == "head" or part.begins_with("hand"):
 			_tint(mesh, skin)
 		elif part.begins_with("arm") or part == "torso":
-			_tint(mesh, outfit[0])
-		elif part.begins_with("leg") or part.begins_with("boot"):
-			_tint(mesh, outfit[1])
+			_tint(mesh, shirt_color)
+		elif part.begins_with("leg"):
+			_tint(mesh, pants_color)
+		elif part.begins_with("boot"):
+			_tint(mesh, shoes_color)
 		elif part == "belt" or part == "buckle":
-			_tint(mesh, accent)
+			_tint(mesh, belt_color)
 	_apply_body_shape(root, str(look.get("body", "Balanced")))
 
 
@@ -87,3 +98,10 @@ static func _tint(mesh: MeshInstance3D, color: Color) -> void:
 	material.albedo_color = color
 	material.roughness = 0.82
 	mesh.material_override = material
+
+
+static func _wardrobe_color(item_id: String, fallback: Color) -> Color:
+	var item: Dictionary = WARDROBE_CATALOG.item(item_id)
+	if item.has("color"):
+		return Color(str(item["color"]))
+	return fallback

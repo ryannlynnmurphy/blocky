@@ -3,6 +3,8 @@ extends RefCounted
 ## The simulation-facing description of a person.  It deliberately contains
 ## no scene nodes: players and NPCs can use the exact same data shape.
 
+const WARDROBE_CATALOG = preload("res://scripts/wardrobe_catalog.gd")
+
 const APPEARANCE_OPTIONS := {
 	"body": ["Balanced", "Tall", "Broad"],
 	"skin": ["Porcelain", "Warm", "Umber", "Deep", "Copper"],
@@ -34,6 +36,9 @@ static func default_data() -> Dictionary:
 		"appearance": {
 			"body": "Balanced", "skin": "Warm", "hair": "Sweep",
 			"hair_color": "Chestnut", "outfit": "Casual", "accent": "Teal",
+			# Item IDs are intentionally separate from the older outfit/accent presets.
+			# Missing this field in an older profile is safe: _sanitize supplies defaults.
+			"wardrobe": WARDROBE_CATALOG.DEFAULT_OUTFIT.duplicate(),
 		},
 		"personality": {
 			"ambition": 20, "sociability": 15, "risk": 0,
@@ -79,6 +84,18 @@ func set_appearance(key: String, value: String) -> void:
 		data["appearance"][key] = value
 
 
+func wardrobe_id(slot: String) -> String:
+	return str(data["appearance"].get("wardrobe", {}).get(slot, WARDROBE_CATALOG.DEFAULT_OUTFIT.get(slot, "")))
+
+
+func set_wardrobe(slot: String, item_id: String) -> void:
+	if slot not in WARDROBE_CATALOG.SLOTS:
+		return
+	var item: Dictionary = WARDROBE_CATALOG.item(item_id)
+	if item.get("slot", "") == slot:
+		data["appearance"]["wardrobe"][slot] = item_id
+
+
 func axis(key: String) -> int:
 	return int(data["personality"].get(key, 0))
 
@@ -99,12 +116,18 @@ func randomize_visuals() -> void:
 	for key in APPEARANCE_OPTIONS:
 		var options: Array = APPEARANCE_OPTIONS[key]
 		data["appearance"][key] = options.pick_random()
+	for slot in WARDROBE_CATALOG.SLOTS:
+		var choices: Array = WARDROBE_CATALOG.items_for_slot(slot)
+		if not choices.is_empty():
+			data["appearance"]["wardrobe"][slot] = choices.pick_random()["id"]
 
 
 func _sanitize() -> void:
 	for key in APPEARANCE_OPTIONS:
 		if data["appearance"].get(key) not in APPEARANCE_OPTIONS[key]:
 			data["appearance"][key] = APPEARANCE_OPTIONS[key][0]
+	var raw_wardrobe: Dictionary = data["appearance"].get("wardrobe", {})
+	data["appearance"]["wardrobe"] = WARDROBE_CATALOG.sanitize(raw_wardrobe)
 	for key in AXES:
 		data["personality"][key] = clampi(int(data["personality"].get(key, 0)), -100, 100)
 	while data["values"].size() < 3:

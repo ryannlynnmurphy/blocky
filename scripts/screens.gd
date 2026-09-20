@@ -3,6 +3,8 @@ extends CanvasLayer
 ## Full-screen menus: title, pause, death. Built from plain Controls in
 ## code. Each button just emits a signal; main.gd decides what happens.
 
+const WARDROBE_CATALOG = preload("res://scripts/wardrobe_catalog.gd")
+
 signal continue_pressed
 signal new_game_pressed(seed_text: String)
 signal quit_pressed
@@ -164,6 +166,12 @@ func _build_creator() -> void:
 	_section(form, "APPEARANCE · SHARED 3D ASSETS")
 	for key in ["body", "skin", "hair", "hair_color", "outfit", "accent"]:
 		_add_appearance_select(form, key)
+	_section(form, "WARDROBE · ONE ITEM PER SLOT")
+	# The catalog is the same stable-ID source used by the preview and future
+	# player actor. T-shirt is the first visual slice; the remaining controls
+	# use the same safe one-slot replacement seam.
+	for slot in WARDROBE_CATALOG.SLOTS:
+		_add_wardrobe_select(form, slot)
 
 	_section(form, "BEHAVIORAL TENDENCIES")
 	for axis in PersonProfile.AXES:
@@ -288,6 +296,19 @@ func _add_appearance_select(parent: Container, key: String) -> void:
 		_refresh_preview())
 
 
+func _add_wardrobe_select(parent: Container, slot: String) -> void:
+	var choices: Array = WARDROBE_CATALOG.items_for_slot(slot)
+	var labels: Array = []
+	for choice in choices:
+		labels.append(choice["name"])
+	var select := _labelled_select(parent, slot.capitalize(), labels)
+	_creator_selects["wardrobe_" + slot] = select
+	select.item_selected.connect(func(index: int):
+		if index >= 0 and index < choices.size():
+			_creator_profile.set_wardrobe(slot, str(choices[index]["id"]))
+			_refresh_preview())
+
+
 func _add_axis(parent: Container, axis: String) -> void:
 	var row := VBoxContainer.new()
 	var label := Label.new()
@@ -350,6 +371,14 @@ func _sync_creator() -> void:
 	for key in PersonProfile.APPEARANCE_OPTIONS:
 		var appearance_button: OptionButton = _creator_selects["appearance_" + key]
 		appearance_button.select(_find_text(appearance_button, _creator_profile.appearance(key)))
+	for slot in WARDROBE_CATALOG.SLOTS:
+		var wardrobe_button: OptionButton = _creator_selects["wardrobe_" + slot]
+		var selected_id := _creator_profile.wardrobe_id(slot)
+		var choices: Array = WARDROBE_CATALOG.items_for_slot(slot)
+		for index in choices.size():
+			if str(choices[index]["id"]) == selected_id:
+				wardrobe_button.select(index)
+				break
 	for slot in range(3):
 		var value_button: OptionButton = _creator_selects["value_%d" % slot]
 		value_button.select(_find_text(value_button, str(_creator_profile.data["values"][slot])))

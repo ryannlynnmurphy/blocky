@@ -352,8 +352,17 @@ func _physics_process(_delta: float) -> void:
 			main._enter(main.State.TITLE)
 			print("selftest: title: %s, HUD hidden: %s" % [main.state == main.State.TITLE, not main.hud.visible])
 		842:
+			# New Game now stops at Create a Person (main.State.CREATOR, which
+			# also pauses the tree) rather than starting play directly; confirm
+			# it the same way clicking "Enter Hollowmark" would, or every test
+			# below this point silently runs against a paused, non-PLAYING
+			# game (state-gated signals like furnace_used no-op, even though
+			# direct data calls like inventory/world edits keep "working"
+			# regardless of pause -- this is exactly how WATER-05's sibling
+			# regression was found).
 			main._new_game("42")
-			print("selftest: new game: seed %d (expect 42), inventory %s, health %d, playing: %s"
+			main._finish_new_game()
+			print("selftest: new game: seed %d (expect 42), inventory %s, health %d, playing: %s (expect true)"
 				% [world.world_seed, player.inventory.summary(), player.health, main.state == main.State.PLAYING])
 			print("selftest: real save untouched: save path is %s" % main.save_path)
 		800:

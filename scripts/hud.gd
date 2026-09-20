@@ -14,6 +14,10 @@ var _health_bar: IconBar
 var _hunger_bar: IconBar
 var _hotbar: HotbarView
 var _damage_flash: ColorRect
+var _underwater_tint: ColorRect
+var _underwater_target := 0.0   # WATER-07: eases toward this each frame, doesn't snap
+var _stroke_timer := 0.0        # WATER-07: seconds since the last stroke sound
+const STROKE_INTERVAL := 1.1    # "a restrained stroke cadence", not a footstep-fast tempo
 var _day_night: DayNight
 var _world: VoxelWorld
 var _player: Player
@@ -149,6 +153,18 @@ func _ready() -> void:
 	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_damage_flash)
 
+	# WATER-07: a translucent blue wash while actually swimming (not while
+	# merely wading — the spec's "Presentation" section ties this to
+	# head-submerged, and Wade never submerges the head). Same screen-tint
+	# technique as _damage_flash, deliberately not touching WorldEnvironment
+	# fog, which day_night.gd already drives every frame — a second system
+	# fighting over the same resource for a cosmetic tint isn't worth it.
+	_underwater_tint = ColorRect.new()
+	_underwater_tint.color = Color(0.1, 0.35, 0.55, 0.0)
+	_underwater_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_underwater_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_underwater_tint)
+
 	_crosshair = Crosshair.new()
 	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -232,6 +248,7 @@ func bind_player(player: Player) -> void:
 	player.health_changed.connect(_health_bar.set_value)
 	player.hunger_changed.connect(_hunger_bar.set_value)
 	player.damaged.connect(func(_amount: int): _damage_flash.color.a = 0.35)
+	player.water_state_changed.connect(_on_water_state_changed)
 	_health_bar.set_value(player.health, player.max_health)
 	_hunger_bar.set_value(player.hunger, Player.MAX_HUNGER)
 	_hotbar.refresh(player)
@@ -251,6 +268,22 @@ func set_inventory_open(open: bool, mode: String = "pocket") -> void:
 
 func inventory_ui() -> InventoryUI:
 	return _inventory_ui
+
+
+## WATER-07: presentation only, consumes Player.water_state_changed rather
+## than re-deriving any water query itself. Wade never counts as
+## "submerged" (see _underwater_tint's comment); Swim/Sprint-swim both do,
+## since this game has no separate head-tracking, and swimming at all
+## implies the torso -- and, in practice, the head -- is under the surface.
+func _on_water_state_changed(state: int) -> void:
+	var submerged := state == Player.WaterState.SWIM or state == Player.WaterState.SPRINT_SWIM
+	var was_submerged := _underwater_target > 0.0
+	_underwater_target = 0.45 if submerged else 0.0
+	Sfx.set_underwater(submerged)
+	if submerged and not was_submerged:
+		Sfx.play("splash_in", _player.global_position)
+	elif was_submerged and not submerged:
+		Sfx.play("splash_out", _player.global_position)
 
 
 func _show_pickup(id: int, amount: int) -> void:
@@ -279,6 +312,23 @@ func bind_world(world: VoxelWorld, player: Player) -> void:
 func _process(delta: float) -> void:
 	# Fade the hurt flash and the message.
 	_damage_flash.color.a = move_toward(_damage_flash.color.a, 0.0, 1.2 * delta)
+	_underwater_tint.color.a = move_toward(_underwater_tint.color.a, _underwater_target, 1.5 * delta)
+
+	# WATER-07: a stroke sound on a slow, steady cadence while actually
+	# swimming and actually moving -- mirrors _footstep()'s "only while
+	# moving" rule in player.gd, just driven from here instead, since this
+	# is presentation, not movement logic. Resets whenever not swimming so
+	# surfacing and diving back in doesn't fire one immediately.
+	if _player != null and (_player.water_state == Player.WaterState.SWIM
+			or _player.water_state == Player.WaterState.SPRINT_SWIM) \
+			and Vector2(_player.velocity.x, _player.velocity.z).length() > 0.5:
+		_stroke_timer += delta
+		if _stroke_timer >= STROKE_INTERVAL:
+			_stroke_timer = 0.0
+			Sfx.play("stroke", _player.global_position, 0.15, -4.0)
+	else:
+		_stroke_timer = 0.0
+
 	if _message_timer > 0.0:
 		_message_timer -= delta
 		if _message_timer <= 0.0:

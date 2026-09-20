@@ -31,6 +31,8 @@ var _amb_day: AudioStreamPlayer
 var _amb_night: AudioStreamPlayer
 var _music: AudioStreamPlayer
 var _rng := RandomNumberGenerator.new()
+var _sfx_lowpass: AudioEffectLowPassFilter    # WATER-07: muffled audio while submerged
+var _music_lowpass: AudioEffectLowPassFilter
 
 
 func _ready() -> void:
@@ -79,6 +81,20 @@ func _ready() -> void:
 	limiter.ceiling_db = -1.0
 	AudioServer.add_bus_effect(0, limiter)
 
+	# WATER-07: a low-pass filter on both buses, added disabled, toggled by
+	# set_underwater() -- matches the spec's "Presentation" section
+	# ("Muffled audio... follow head-submerged state only"). Added, not
+	# left enabled, so ordinary dry-land audio is completely unaffected
+	# until the first time someone actually goes swimming.
+	_sfx_lowpass = AudioEffectLowPassFilter.new()
+	_sfx_lowpass.cutoff_hz = 700.0
+	AudioServer.add_bus_effect(_sfx_bus, _sfx_lowpass)
+	AudioServer.set_bus_effect_enabled(_sfx_bus, 0, false)
+	_music_lowpass = AudioEffectLowPassFilter.new()
+	_music_lowpass.cutoff_hz = 700.0
+	AudioServer.add_bus_effect(_music_bus, _music_lowpass)
+	AudioServer.set_bus_effect_enabled(_music_bus, 0, false)
+
 	if "--mute" in OS.get_cmdline_user_args():
 		AudioServer.set_bus_mute(0, true)
 
@@ -88,6 +104,20 @@ func _ready() -> void:
 func set_volume(v: float) -> void:
 	AudioServer.set_bus_volume_db(_sfx_bus, SFX_DB + linear_to_db(maxf(v, 0.001)))
 	AudioServer.set_bus_volume_db(_music_bus, MUSIC_DB + linear_to_db(maxf(v, 0.001)))
+
+
+## WATER-07: called from hud.gd whenever Player.water_state_changed crosses
+## the submerged boundary (Swim/Sprint-swim vs. Dry/Wade). Static wrapper
+## matches the play()/instance split every other Sfx entry point already
+## uses.
+static func set_underwater(submerged: bool) -> void:
+	if instance != null:
+		instance._set_underwater(submerged)
+
+
+func _set_underwater(submerged: bool) -> void:
+	AudioServer.set_bus_effect_enabled(_sfx_bus, 0, submerged)
+	AudioServer.set_bus_effect_enabled(_music_bus, 0, submerged)
 
 
 ## Stop the loops before the tree tears down, or the audio thread still
@@ -181,6 +211,13 @@ func _build_sounds() -> void:
 	_sounds["eat"] = _wav(_concat([_crunch(0.1, 0.3), _silence(0.08), _crunch(0.1, 0.3)]))
 	_sounds["died"] = _wav(_concat([_tone(0.25, 440.0, 440.0, 8.0, 0.25, true), _tone(0.25, 330.0, 330.0, 8.0, 0.25, true), _tone(0.6, 220.0, 110.0, 5.0, 0.25, true)]))
 	_sounds["groan"] = _wav(_tone(0.9, 70.0, 55.0, 3.0, 0.35, true, 5.0, 0.04))
+	# WATER-07: splash on crossing the submerged boundary either way (a
+	# quick bright noise burst reads as "surface breaking"), plus a soft,
+	# restrained stroke sound repeated while actively swimming -- both per
+	# the spec's "Presentation" section.
+	_sounds["splash_in"] = _wav(_mix([_noise(0.28, 12.0, 0.7, 0.4), _tone(0.12, 500.0, 150.0, 20.0, 0.2, false)]))
+	_sounds["splash_out"] = _wav(_mix([_noise(0.22, 15.0, 0.65, 0.35), _tone(0.1, 700.0, 300.0, 25.0, 0.18, false)]))
+	_sounds["stroke"] = _wav(_mix([_noise(0.2, 9.0, 0.4, 0.22), _tone(0.18, 260.0, 140.0, 12.0, 0.12, false)]))
 	# Ambience loops.
 	_sounds["amb_day"] = _wav(_birds(6.0), true)
 	_sounds["amb_night"] = _wav(_wind(5.0), true)

@@ -28,7 +28,9 @@ extends Node
 ##                      shallow (Wade-depth) water still costs normal fall damage
 ##   frames 1390..1770 WATER-06 gate 4: Swim state/speed cap, ascend/descend,
 ##                      sprint-propel's stamina drain + forced cooldown, and the
-##                      deep-water fall-damage cushion (contrast with 1300..1380)
+##                      deep-water fall-damage cushion (contrast with 1300..1380);
+##                      frame 1395 also covers WATER-07's presentation (tint,
+##                      muffled audio, splash) on the same Swim entry
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -776,6 +778,14 @@ func _physics_process(_delta: float) -> void:
 			# a stale Dry reading purely from that timing, not a real bug.
 			print("selftest: dropped into deep water at (%d, %d): water_state %d (expect %d = Swim)"
 				% [_deep_fixture.x, _deep_fixture.y, player.water_state, Player.WaterState.SWIM])
+		1395:
+			# WATER-07: a few more frames so hud._process() (the idle loop,
+			# same gotcha as the frame-351 HUD-name check) has actually run
+			# since the water_state_changed signal fired at 1391.
+			print("selftest: WATER-07 presentation on entering Swim: underwater tint rising %s (expect true), SFX bus muffled %s (expect true), splash played %s (expect true)"
+				% [main.hud._underwater_target > 0.0,
+					AudioServer.is_bus_effect_enabled(AudioServer.get_bus_index("SFX"), 0),
+					Sfx.instance.plays.get("splash_in", 0) > 0])
 		1400:
 			# Normal swim speed cap (no Shift): should match SWIM_SPEED, well
 			# under the sprint-propel speed tested further below.

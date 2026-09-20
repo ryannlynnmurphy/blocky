@@ -11,12 +11,16 @@ of truth for it.
 Read `README.md`, `docs/PRODUCTION_BIBLE.md`, `docs/WORK_ORDERS.md`, and
 `docs/AGENT_BOARD.md` before taking a task.
 
-**Status (2026-09-20):** Codex is out of usage and not currently active on
-this repo. Claude is picking up the board (claimed and finished C8; audited
-and logged WATER-05 which had landed without a board entry; fixed a real
-regression found while verifying C8 — see the board's handoff log). If
-Codex resumes, check the board's current queue before claiming a card
-someone else already has in progress.
+**Status (2026-09-20, updated):** Codex now runs as a recurring heartbeat
+automation (Ryann's "blocky-build-coordination" automation, every 15 min)
+that reads this board fresh each run and treats entries here as
+coordination messages — it will not touch a file Claude has an open/recent
+claim on, and works the next unblocked, unclaimed card. Claude has been the
+primary active agent through the middle of the day (Layers 0–3 fully closed
+out, WATER-06 done, city Layer 4 through B3). **Both agents: before
+claiming a card, re-read this table — it changes fast. Claim promptly,
+push promptly, and keep the "Expected files" column accurate so the other
+agent can avoid your in-progress files without needing to ask.**
 
 ## Agent capability tiers
 

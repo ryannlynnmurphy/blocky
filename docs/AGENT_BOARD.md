@@ -48,3 +48,10 @@ Changed: project import cache only; no source changes for this card
 Verified: Godot 4.7.2 headless fresh-save self-test completed successfully.
 Next: C1 — inventory the committed city/creator draft before the next implementation card.
 Notes: The creator draft had two Godot parse issues (typed color inference and a wrapped format expression); both were corrected before the test run.
+
+### 2026-09-19 — WATER-01 — done
+Owner: Codex (T3)
+Changed: `scripts/player.gd`, `tools/selftest.gd`
+Verified: Godot 4.7.2 fresh-save self-test: normal swimming 3.0, Shift + direction underwater 4.9–5.0, water tiles 0/868 dry-land overlaps.
+Next: C1 — inventory the city/creator draft before the next planned implementation card.
+Notes: Shift + a direction is now active, camera-directed underwater swimming. Space remains the safe rise-to-surface control.

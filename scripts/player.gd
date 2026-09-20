@@ -29,6 +29,10 @@ const MOUSE_SENS := 0.0025
 # directly rather than reading it off any placed tile.
 const WATER_SURFACE_Y := WorldGen.SEA_LEVEL + 0.9
 const SWIM_SPEED := 3.0
+## Holding Shift plus a direction while fully underwater is an active swim:
+## faster than wading, and follows the camera's up/down angle so looking down
+## lets the player dive and looking up lets them climb without surface-walking.
+const SWIM_SPRINT_SPEED := 5.0
 const SWIM_RISE_SPEED := 3.0
 const WATER_GRAVITY := 4.0   # much gentler than GRAVITY — you sink slowly, not drop
 # Swim-up caps just under WATER_SURFACE_Y (not AT it — resting exactly on
@@ -386,22 +390,33 @@ func _physics_process(delta: float) -> void:
 	if not _no_input and not ui_open:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 		run_held = Input.is_action_pressed("run")
-	var dir := (_pivot.global_basis * Vector3(input.x, 0, input.y))
-	dir.y = 0
-	dir = dir.normalized()
-	var moving := dir.length() > 0.1
+	var horizontal_dir := (_pivot.global_basis * Vector3(input.x, 0, input.y))
+	horizontal_dir.y = 0
+	horizontal_dir = horizontal_dir.normalized()
+	var moving := input.length() > 0.1
 	var running := run_held and moving
-	var speed := SWIM_SPEED if _in_water else (RUN_SPEED if running else WALK_SPEED)
-	velocity.x = dir.x * speed + _knock.x
-	velocity.z = dir.z * speed + _knock.z
+	# The camera's basis includes pitch; use it only for deliberate underwater
+	# sprint-swimming. Normal water movement stays horizontal so shallow water
+	# remains easy to navigate and Space remains the reliable surface control.
+	var fully_submerged := _pivot.global_position.y < WATER_SURFACE_Y
+	var actively_swimming := _in_water and fully_submerged and running
+	var swim_dir := (_camera.global_basis.x * input.x + _camera.global_basis.z * input.y).normalized()
+	var speed := SWIM_SPRINT_SPEED if actively_swimming else (SWIM_SPEED if _in_water else (RUN_SPEED if running else WALK_SPEED))
+	if actively_swimming:
+		velocity.x = swim_dir.x * speed + _knock.x
+		velocity.y = swim_dir.y * speed
+		velocity.z = swim_dir.z * speed + _knock.z
+	else:
+		velocity.x = horizontal_dir.x * speed + _knock.x
+		velocity.z = horizontal_dir.z * speed + _knock.z
 	_knock = _knock.move_toward(Vector3.ZERO, 25.0 * delta)
 
 	move_and_slide()
 	_check_fall_damage()
 
 	# Turn the model to face the way we're walking; lean into a sprint.
-	if moving:
-		var target := atan2(-dir.x, -dir.z)
+	if horizontal_dir.length() > 0.1:
+		var target := atan2(-horizontal_dir.x, -horizontal_dir.z)
 		_model.rotation.y = lerp_angle(_model.rotation.y, target, 12.0 * delta)
 	_model.rotation.x = lerp_angle(_model.rotation.x, -RUN_LEAN if running else 0.0, 8.0 * delta)
 	_camera.fov = lerpf(_camera.fov, RUN_FOV if running else BASE_FOV, 6.0 * delta)

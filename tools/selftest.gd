@@ -594,9 +594,14 @@ func _physics_process(_delta: float) -> void:
 				% [player._in_water, player.velocity.y, Player.SWIM_SPEED + 0.5])
 			print("selftest: swim speed while moving: %.1f (expect %.1f, slower than walking)"
 				% [Vector2(player.velocity.x, player.velocity.z).length(), Player.SWIM_SPEED])
+			player.test_run = true
+		1092:
+			print("selftest: Shift + direction underwater actively swims: %.1f (expect %.1f)"
+				% [Vector2(player.velocity.x, player.velocity.z).length(), Player.SWIM_SPRINT_SPEED])
+			player.test_run = false
 			player.test_move = Vector2.ZERO
 			player.test_swim_up = true
-		1092:
+		1093:
 			print("selftest: holding jump swims up: velocity.y %.1f (expect %.1f)"
 				% [player.velocity.y, Player.SWIM_RISE_SPEED])
 			player.test_swim_up = false
@@ -724,8 +729,8 @@ func _physics_process(_delta: float) -> void:
 			# just past WATER_SURFACE_Y, flipping _in_water off for an
 			# instant and handing back real gravity + full walk/run speed,
 			# over and over. Dive into deep water and hold both forward
-			# and swim-up continuously (test_run true too — Ryann's report
-			# was "whether sprinting or not").
+			# and swim-up continuously. Shift now intentionally makes the
+			# swimmer faster, but must still never let them break the surface.
 			player.global_position = Vector3(_swim_wx + 0.5, WorldGen.SEA_LEVEL - 2.0, _swim_wz + 0.5)
 			player.velocity = Vector3.ZERO
 			player.test_move = Vector2(0, -1)
@@ -743,7 +748,7 @@ func _physics_process(_delta: float) -> void:
 			player.test_run = false
 			player.test_swim_up = false
 			print("selftest: holding jump+forward+run in water never breaks the surface: ever left water %s (expect false), max horizontal speed %.1f (expect %.1f, not run's %.1f)"
-				% [_water_walk_ever_surfaced, _water_walk_max_speed, Player.SWIM_SPEED, Player.RUN_SPEED])
+				% [_water_walk_ever_surfaced, _water_walk_max_speed, Player.SWIM_SPRINT_SPEED, Player.RUN_SPEED])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

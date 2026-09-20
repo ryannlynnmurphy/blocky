@@ -4,6 +4,29 @@ An original voxel RPG built in **Godot 4** (GDScript). Inspired by the
 exploration, chunky aesthetic, and sense of adventure of Cube World and
 Minecraft — but its own game.
 
+## City-life simulation: agent entry point
+
+Blocky is growing into a voxel city-life RPG: create a person, inhabit a
+living city, build in it, and make choices that affect people and
+institutions. The existing voxel survival game is the foundation; it is not
+to be casually rewritten while this work is underway.
+
+Every human or coding agent working on the project must read these files
+before changing code:
+
+1. [AGENTS.md](AGENTS.md) — rules of engagement, capability tiers, and
+   definition of done.
+2. [Production Bible](docs/PRODUCTION_BIBLE.md) — the game's creative and
+   technical north star.
+3. [Work Orders](docs/WORK_ORDERS.md) — the required implementation order.
+4. [Agent Board](docs/AGENT_BOARD.md) — available tasks, handoffs, and
+   blocked decisions.
+
+**One work order at a time.** Finish its acceptance checks, post a handoff
+on the board, and only then begin a dependent task. The first city-life
+vertical slice is `C0 → C8`: a light-themed **CREATE A PERSON** screen with
+a blocky 3D preview and one interchangeable outfit.
+
 ## Running it
 
 1. Install Godot 4.7+ (standard build, not .NET): `winget install GodotEngine.GodotEngine`

@@ -1,0 +1,39 @@
+newmtl 316b41
+Kd 0.192 0.420 0.255
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 1f4a34
+Kd 0.122 0.290 0.204
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 4a9050
+Kd 0.290 0.565 0.314
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 14121c
+Kd 0.078 0.071 0.110
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 262232
+Kd 0.149 0.133 0.196
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1

@@ -7,7 +7,7 @@ const SAVE_PATH := "user://save.json"
 const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
 
-enum State { TITLE, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
+enum State { TITLE, CREATOR, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -23,6 +23,8 @@ var save_path: String = SAVE_PATH
 var _autosave_timer := 0.0
 var _was_night := false
 var _spawn_col := Vector2i(8, 8)
+var person_profile := PersonProfile.new()
+var _pending_seed := 0
 
 
 func _ready() -> void:
@@ -79,6 +81,8 @@ func _ready() -> void:
 	add_child(screens)
 	screens.continue_pressed.connect(func(): _enter(State.PLAYING))
 	screens.new_game_pressed.connect(_new_game)
+	screens.person_confirmed.connect(_finish_new_game)
+	screens.creator_cancelled.connect(func(): _enter(State.TITLE))
 	screens.quit_pressed.connect(func(): get_tree().quit())
 	screens.resume_pressed.connect(func(): _enter(State.PLAYING))
 	screens.save_pressed.connect(func():
@@ -204,6 +208,8 @@ func _enter(s: State) -> void:
 	match s:
 		State.TITLE:
 			screens.show_title(SaveGame.exists(save_path))
+		State.CREATOR:
+			screens.show_creator(person_profile)
 		State.PAUSED:
 			screens.show_pause()
 		State.DEAD:
@@ -217,7 +223,7 @@ func _enter(s: State) -> void:
 	var playing := s == State.PLAYING
 	hud.visible = s != State.TITLE
 	player.ui_open = not playing
-	get_tree().paused = s in [State.TITLE, State.PAUSED, State.DEAD]
+	get_tree().paused = s in [State.TITLE, State.CREATOR, State.PAUSED, State.DEAD]
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if playing else Input.MOUSE_MODE_VISIBLE
 
 
@@ -255,17 +261,24 @@ func _new_game(seed_text: String) -> void:
 		seed_value = int(seed_text)
 	else:
 		seed_value = hash(seed_text)
+	_pending_seed = seed_value
+	person_profile = PersonProfile.new()
+	_enter(State.CREATOR)
+
+
+func _finish_new_game() -> void:
 	if SaveGame.exists(save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
-	world.load_save_data({"seed": seed_value, "edits": {}})
+	world.load_save_data({"seed": _pending_seed, "edits": {}})
 	world.clear_entities()
 	day_night.load_save_data({"time_of_day": day_night.start_time, "day_count": 1})
 	player.reset_for_new_game()
+	player.set_person_profile(person_profile.to_dict())
 	_place_player_at_spawn()
 	_build_ground_under_player()
 	_was_night = day_night.is_night()
 	_enter(State.PLAYING)
-	hud.show_message("Seed %d" % seed_value)
+	hud.show_message("%s begins a new life" % person_profile.display_name())
 
 
 # ---------------------------------------------------------------- spawning
@@ -299,6 +312,7 @@ func save_game(path: String = "") -> bool:
 		"world": world.get_save_data(),
 		"player": player.get_save_data(),
 		"time": day_night.get_save_data(),
+		"person": person_profile.to_dict(),
 	}
 	return SaveGame.write(path, data)
 
@@ -312,6 +326,8 @@ func load_game(path: String = "") -> bool:
 	world.load_save_data(data.get("world", {}))
 	player.load_save_data(data.get("player", {}))
 	day_night.load_save_data(data.get("time", {}))
+	person_profile.load_dict(data.get("person", {}))
+	player.set_person_profile(person_profile.to_dict())
 	_build_ground_under_player()
 	return true
 

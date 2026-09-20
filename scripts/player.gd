@@ -116,6 +116,9 @@ var _arm_r: Node3D
 var _leg_l: Node3D
 var _leg_r: Node3D
 var _sword: Node3D   # visible only while Blocks.SWORD is the held item
+## Visual identity comes from Create a Person. Gameplay code never depends on
+## it, which keeps the same player controller usable for every appearance.
+var _person_profile: Dictionary = PersonProfile.default_data()
 
 var _walk_cycle := 0.0    # advances while walking; drives the limb swing
 var _punch_timer := 0.0   # while > 0 the right arm is thrown forward
@@ -228,6 +231,13 @@ func _build_model() -> void:
 	_sword.rotation.x = PI
 	_sword.scale = Vector3.ONE * SWORD_SCALE
 	_sword.visible = false
+	PersonAppearance.apply_to(_model, _person_profile)
+
+
+func set_person_profile(profile: Dictionary) -> void:
+	_person_profile = profile.duplicate(true)
+	if is_instance_valid(_model):
+		PersonAppearance.apply_to(_model, _person_profile)
 
 
 ## Makes a pivot at the top-centre of `upper_name` (where that limb

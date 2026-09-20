@@ -1,0 +1,55 @@
+newmtl c2622e
+Kd 0.761 0.384 0.180
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 262232
+Kd 0.149 0.133 0.196
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 2e3b46
+Kd 0.180 0.231 0.275
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl ab5628
+Kd 0.671 0.337 0.157
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl f6e0b0
+Kd 0.965 0.878 0.690
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 72849a
+Kd 0.447 0.518 0.604
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1
+
+newmtl 14121c
+Kd 0.078 0.071 0.110
+Ka 0 0 0
+Ks 0 0 0
+Ns 1
+d 1
+illum 1

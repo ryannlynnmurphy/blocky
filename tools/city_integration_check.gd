@@ -41,11 +41,14 @@ func _physics_process(_delta: float) -> void:
 				var pos: Vector3 = main._city_walker.global_position
 				print("citytest: walker world position %s (expect y far below 0 -- embedded offset, never overlapping real terrain)" % [pos])
 		70:
-			# S4: the one resident S3 built now actually appears in the city
-			# (see main._enter_city()) -- find it by node name rather than a
-			# stored main.gd var (main.gd doesn't track it, same as the walker
-			# doesn't track NPCs it isn't driving) and confirm it has a real
-			# rendered body, not just a bare capsule.
+			# S4/L1: the resident roster (L0) now actually appears in the
+			# city (see main._enter_city()) -- find the first one by node
+			# name (Godot auto-suffixes siblings sharing a base name:
+			# Resident, Resident2, Resident3, ...) and confirm it has a
+			# real rendered body, not just a bare capsule. A separate,
+			# direct scene-tree count (not just trusting main._city_residents,
+			# main.gd's own bookkeeping) confirms all 20 actually exist as
+			# real nodes, not just tracked references.
 			var resident: Node = main._city.get_node_or_null("Resident")
 			var mesh_count := 0
 			if resident:
@@ -54,30 +57,44 @@ func _physics_process(_delta: float) -> void:
 			var apartment_global: Vector3 = main._city.to_global(main._city.location_positions["apartment"])
 			print("citytest: S4 resident present=%s, mesh parts=%d (expect > 0 -- a real rig, not a bare capsule), %.1fm from apartment (expect small -- spawned home)"
 				% [resident != null, mesh_count, resident_pos.distance_to(apartment_global) if resident else -1.0])
+			# Counted by actual node type (DebugActor), not by name -- Godot's
+			# sibling name auto-dedup for 20 children all created with the
+			# same name.begins_with("Resident") doesn't reliably keep that
+			# prefix (checked directly: it did not), so type is the honest
+			# way to count them, not a naming-convention guess.
+			var debug_actor_count := 0
+			for c in main._city.get_children():
+				if c is DebugActor:
+					debug_actor_count += 1
+			print("citytest: L1 resident nodes actually in the scene tree=%d (expect 20)" % [debug_actor_count])
 		74:
-			# S5: drive the resident through a full home/work/food day via
-			# the REAL hour_changed signal (main._on_city_resident_hour_changed()),
-			# not a direct call to _drive_city_resident() -- proves the whole
-			# wired path, same reasoning as the E-keypress test above.
-			# Boot's start_time (day_night.gd) is 0.3 = hour 7 (wake), which
-			# _enter_city() already dispatched once on entry (breakfast, hour
-			# 7 is neither Priya's sleep nor work window) -- confirm that
-			# happened before jumping further.
+			# S5/L1: drive Priya (roster index 0, see L0's handoff) through a
+			# full home/work/food day via the REAL hour_changed signal
+			# (main._on_city_resident_hour_changed()), not a direct call to
+			# _drive_all_city_residents() -- proves the whole wired path,
+			# same reasoning as the E-keypress test above. Boot's start_time
+			# (day_night.gd) is 0.3 = hour 7 (wake), which _enter_city()
+			# already dispatched once on entry (breakfast, hour 7 is neither
+			# Priya's sleep nor work window) -- confirm that happened before
+			# jumping further.
 			print("citytest: S5 initial dispatch at hour=%d: resident location=%s (expect cafe -- awake, not yet work hours)"
-				% [main.day_night.hour(), main._city_resident_location])
+				% [main.day_night.hour(), main._city_residents[0]["location"]])
 		78:
 			main.day_night.load_save_data({"time_of_day": 9.0 / 24.0 + 0.001, "day_count": 1})
 			print("citytest: S5 hour jumped to work_start (9): resident location=%s (expect workplace), route in progress=%s"
-				% [main._city_resident_location, not main._city_resident.route_complete])
+				% [main._city_residents[0]["location"], not main._city_residents[0]["actor"].route_complete])
 		82:
 			main.day_night.load_save_data({"time_of_day": 18.0 / 24.0 + 0.001, "day_count": 1})
 			print("citytest: S5 hour jumped past work_end to dinner (18): resident location=%s (expect cafe), route in progress=%s"
-				% [main._city_resident_location, not main._city_resident.route_complete])
+				% [main._city_residents[0]["location"], not main._city_residents[0]["actor"].route_complete])
 		86:
 			main.day_night.load_save_data({"time_of_day": 22.0 / 24.0 + 0.001, "day_count": 1})
 			print("citytest: S5 hour jumped to sleep_hour (22): resident location=%s (expect apartment), route in progress=%s"
-				% [main._city_resident_location, not main._city_resident.route_complete])
+				% [main._city_residents[0]["location"], not main._city_residents[0]["actor"].route_complete])
 			print("citytest: S5 full home->work->food->home loop dispatched entirely through real hour_changed signals, not direct calls")
+			# L1: all 20 residents (not just Priya) exist and are being
+			# driven -- confirm the population, not just one representative.
+			print("citytest: L1 resident population=%d (expect 20)" % [main._city_residents.size()])
 		90:
 			var on_floor: bool = main._city_walker.is_on_floor() if main._city_walker else false
 			print("citytest: walker settled on_floor=%s (expect true -- real ground collision inside the embedded instance)" % [on_floor])

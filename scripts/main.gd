@@ -36,14 +36,14 @@ var _pending_seed := 0
 ## active, else null. See _enter_city()/_exit_city().
 var _city: Node3D = null
 var _city_walker: CityWalker = null
-## S4/S5: the one resident and their profile while State.CITY is active,
-## else null. _city_resident_location is the last CityBlock location key
-## they were dispatched to or arrived at -- an approximation of "where they
-## currently are" good enough for CityBlock.get_route()'s "from" (see the
-## board's S5 handoff for why exact arrival-tracking wasn't needed).
-var _city_resident: DebugActor = null
-var _city_resident_profile: PersonProfile = null
-var _city_resident_location := ""
+## L1: every active resident while State.CITY is active, else empty. Each
+## entry is {"actor": DebugActor, "profile": PersonProfile, "location":
+## String}. "location" is the last CityBlock location key that resident was
+## dispatched to or arrived at -- an approximation of "where they currently
+## are" good enough for CityBlock.get_route()'s "from" (see S5's handoff
+## for why exact arrival-tracking wasn't needed; still true at 20 residents
+## for the same reason -- every leg is well under an hour).
+var _city_residents: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -279,14 +279,22 @@ func _enter_city() -> void:
 	_city_walker.standalone = false
 	_city_walker.exit_requested.connect(_exit_city)
 	_city_walker.work_requested.connect(_on_city_work_requested)
-	# S4/S5: the one resident S3 built now appears in the city, standing at
-	# home, and S5's routine loop starts driving them from here on --
-	# real hour boundaries (day_night.hour_changed, S0), not a fake clock.
-	_city_resident_profile = PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
-	_city_resident = city.spawn_resident(_city_resident_profile.to_dict(), _city_resident_profile.routine("home"))
-	_city_resident_location = _city_resident_profile.routine("home")
+	# L1: the full 20-resident roster (L0) now appears in the city, each
+	# standing at home, and S5's routine loop drives every one of them from
+	# here on -- real hour boundaries (day_night.hour_changed, S0), not a
+	# fake clock. spread_offset() spaces them around each shared home point
+	# (many residents share the one Apartment as home) so 20 bodies don't
+	# spawn stacked on top of each other or jostling too close together.
+	var roster := ResidentRoster.build()
+	_city_residents.clear()
+	for i in roster.size():
+		var profile: PersonProfile = roster[i]
+		var home: String = profile.routine("home")
+		var actor: DebugActor = city.spawn_resident(profile.to_dict(), home)
+		actor.position += CityBlock.spread_offset(i, roster.size())
+		_city_residents.append({"actor": actor, "profile": profile, "location": home})
 	day_night.hour_changed.connect(_on_city_resident_hour_changed)
-	_drive_city_resident(day_night.hour())   # also act on the hour we're already in, not just the next change
+	_drive_all_city_residents(day_night.hour())   # also act on the hour we're already in, not just the next change
 	_enter(State.CITY)
 
 
@@ -301,30 +309,38 @@ func _on_city_work_requested() -> void:
 	print("Worked a shift: +$%d, needs now %s" % [PersonActions.WORK_PAY, person_profile.data["needs"]])
 
 
-## S5: day_night.hour_changed while a resident is present -- the real hour
-## boundary, whether it arrived through normal play, a sleep-skip, or a
-## load. Ignores it if a State.CITY visit ended in the same beat this
-## signal fires in (the resident/city are already freed by then).
+## S5/L1: day_night.hour_changed while residents are present -- the real
+## hour boundary, whether it arrived through normal play, a sleep-skip, or
+## a load. Ignores it if a State.CITY visit ended in the same beat this
+## signal fires in (residents/city are already freed by then).
 func _on_city_resident_hour_changed(hour: int) -> void:
-	if _city_resident == null or not is_instance_valid(_city_resident):
+	if _city_residents.is_empty():
 		return
-	_drive_city_resident(hour)
+	_drive_all_city_residents(hour)
 
 
-## ResidentRoutine.current_goal() decides where the resident should be
+## ResidentRoutine.current_goal() decides where each resident should be
 ## right now; if that's not where they're already heading, get a fresh
-## route there and start walking it. No-ops (correctly) if they're already
-## at/heading to the right place -- most hour changes shouldn't interrupt
-## an in-progress walk with a route to the exact same destination.
-func _drive_city_resident(hour: int) -> void:
-	var goal := ResidentRoutine.current_goal(_city_resident_profile.data["routine"], hour)
-	if goal == _city_resident_location:
-		return
-	var route: Array = _city.get_route(_city_resident_location, goal)
-	if route.is_empty():
-		return
-	_city_resident.follow_route(route)
-	_city_resident_location = goal
+## route there and start walking it. No-ops (correctly) per-resident if
+## they're already at/heading to the right place -- most hour changes
+## shouldn't interrupt an in-progress walk with a route to the exact same
+## destination. Skips (not crashes on) a resident whose actor was freed
+## some other way, same defensive pattern as everywhere else this project
+## touches a node across a frame boundary.
+func _drive_all_city_residents(hour: int) -> void:
+	for entry in _city_residents:
+		var actor: DebugActor = entry["actor"]
+		if not is_instance_valid(actor):
+			continue
+		var profile: PersonProfile = entry["profile"]
+		var goal := ResidentRoutine.current_goal(profile.data["routine"], hour)
+		if goal == entry["location"]:
+			continue
+		var route: Array = _city.get_route(entry["location"], goal)
+		if route.is_empty():
+			continue
+		actor.follow_route(route)
+		entry["location"] = goal
 
 
 ## scripts/city_walker.gd's exit_requested signal (Esc), only reachable
@@ -334,18 +350,16 @@ func _exit_city() -> void:
 		_city.queue_free()   # deferred: safe to call from a signal this same node's own subtree just emitted
 		_city = null
 		_city_walker = null
-	# S5: disconnect before dropping the resident refs -- day_night keeps
+	# S5/L1: disconnect before dropping the resident refs -- day_night keeps
 	# running (and ticking hours) long after the city is gone, so a stale
-	# connection would call _drive_city_resident() against a freed city/
-	# resident on the very next hour boundary. The is_instance_valid()
-	# guard in _on_city_resident_hour_changed() covers the same-frame case
-	# (this signal firing before queue_free() above actually takes effect);
-	# this disconnect is for every hour after that.
+	# connection would call _drive_all_city_residents() against a freed
+	# city/residents on the very next hour boundary. The is_empty() guard
+	# in _on_city_resident_hour_changed() covers the same-frame case (this
+	# signal firing before queue_free() above actually takes effect); this
+	# disconnect is for every hour after that.
 	if day_night.hour_changed.is_connected(_on_city_resident_hour_changed):
 		day_night.hour_changed.disconnect(_on_city_resident_hour_changed)
-	_city_resident = null
-	_city_resident_profile = null
-	_city_resident_location = ""
+	_city_residents.clear()
 	player.activate_camera()
 	_enter(State.PLAYING)
 

@@ -163,6 +163,30 @@ func spawn_resident(profile: Dictionary, at: String = "street") -> DebugActor:
 	return resident
 
 
+## L1: a position offset for the `index`-th of `total` bodies that all
+## share one spawn point (e.g. every resident whose routine.home is the
+## same Apartment), arranged in a grid extending only in +Z (the direction
+## every location_positions point already faces away from its building,
+## per _build_apartment()/_build_cafe()/_build_workplace()'s own "out"
+## points -- "front_z + 1.0") and centered in X, spaced `spacing` apart.
+## Deliberately NOT a circle around the spawn point: measured directly with
+## tools/city_population_check.gd, a circle put roughly a third of its
+## points *behind* the spawn point, inside the building's own solid
+## geometry (front_z - radius reaches back through the front wall once
+## radius is more than the ~1 unit of clearance the spawn point itself
+## has), leaving several residents never settling after 60 physics frames
+## from constant collision push-out. A forward-only grid can't do that.
+static func spread_offset(index: int, total: int, spacing: float = 2.0) -> Vector3:
+	if total <= 1:
+		return Vector3.ZERO
+	var columns := ceili(sqrt(float(total)))
+	var col := index % columns
+	var row := index / columns
+	var x := (float(col) - float(columns - 1) * 0.5) * spacing
+	var z := (float(row) + 1.0) * spacing   # always forward of the spawn point, never behind it
+	return Vector3(x, 0.0, z)
+
+
 ## A dev-only overview camera so this standalone scene always has something
 ## sensible to render (screenshots, tools/city_block_check.gd) without
 ## needing main.gd's player camera. Not meant to survive B5's integration —

@@ -271,6 +271,12 @@ func _enter_city() -> void:
 	_city_walker.standalone = false
 	_city_walker.exit_requested.connect(_exit_city)
 	_city_walker.work_requested.connect(_on_city_work_requested)
+	# S4: the one resident S3 built now actually appears in the city --
+	# standing at home, since nothing yet drives their routine (S5's job).
+	# Not tracked in a var: the whole node tree (including this) is freed
+	# on _exit_city(), same as _city_walker.
+	var resident_profile := PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
+	city.spawn_resident(resident_profile.to_dict(), resident_profile.routine("home"))
 	_enter(State.CITY)
 
 

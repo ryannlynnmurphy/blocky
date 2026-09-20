@@ -40,6 +40,20 @@ func _physics_process(_delta: float) -> void:
 			if main._city_walker:
 				var pos: Vector3 = main._city_walker.global_position
 				print("citytest: walker world position %s (expect y far below 0 -- embedded offset, never overlapping real terrain)" % [pos])
+		70:
+			# S4: the one resident S3 built now actually appears in the city
+			# (see main._enter_city()) -- find it by node name rather than a
+			# stored main.gd var (main.gd doesn't track it, same as the walker
+			# doesn't track NPCs it isn't driving) and confirm it has a real
+			# rendered body, not just a bare capsule.
+			var resident: Node = main._city.get_node_or_null("Resident")
+			var mesh_count := 0
+			if resident:
+				mesh_count = resident.find_children("*", "MeshInstance3D", true, false).size()
+			var resident_pos: Vector3 = resident.global_position if resident else Vector3.ZERO
+			var apartment_global: Vector3 = main._city.to_global(main._city.location_positions["apartment"])
+			print("citytest: S4 resident present=%s, mesh parts=%d (expect > 0 -- a real rig, not a bare capsule), %.1fm from apartment (expect small -- spawned home)"
+				% [resident != null, mesh_count, resident_pos.distance_to(apartment_global) if resident else -1.0])
 		90:
 			var on_floor: bool = main._city_walker.is_on_floor() if main._city_walker else false
 			print("citytest: walker settled on_floor=%s (expect true -- real ground collision inside the embedded instance)" % [on_floor])

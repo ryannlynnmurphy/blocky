@@ -149,6 +149,20 @@ func spawn_walker(at: String = "street") -> CityWalker:
 	return walker
 
 
+## S4: spawns a DebugActor with a visible PersonAppearance body at the
+## named location (default "street") and returns it -- the movement
+## primitive B4 built specifically so S4/S5 wouldn't need a new one.
+## `profile` is a PersonProfile.to_dict() (or any Dictionary shaped like
+## one; PersonAppearance.apply_to() only reads the "appearance" key).
+func spawn_resident(profile: Dictionary, at: String = "street") -> DebugActor:
+	var resident := DebugActor.new()
+	resident.name = "Resident"
+	resident.position = route_markers.get(at, location_positions.get("street", Vector3.ZERO)) + Vector3(0, 0.1, 0)
+	add_child(resident)
+	resident.build_appearance(profile)
+	return resident
+
+
 ## A dev-only overview camera so this standalone scene always has something
 ## sensible to render (screenshots, tools/city_block_check.gd) without
 ## needing main.gd's player camera. Not meant to survive B5's integration —

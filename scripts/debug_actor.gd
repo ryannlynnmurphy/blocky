@@ -47,6 +47,24 @@ func _ready() -> void:
 	add_child(shape)
 
 
+## S4: attaches the same blocky-human rig/tinting the player and the
+## creator's live preview use (PersonAppearance.make_preview()), so a
+## resident visibly matches its own PersonProfile instead of being a bare
+## capsule. No extra vertical offset needed -- confirmed with a recorded
+## screenshot (checked, not assumed), the rig's own root already sits with
+## feet at its local origin at PersonAppearance's 1.08 scale, matching
+## this actor's own feet-at-origin convention (same as CityWalker/the
+## player) with no correction required.
+var _model: Node3D = null
+
+
+func build_appearance(profile: Dictionary) -> void:
+	if _model:
+		_model.queue_free()
+	_model = PersonAppearance.make_preview(profile)
+	add_child(_model)
+
+
 ## Starts (or replaces) the ordered waypoints this actor walks toward. An
 ## empty or single-point route counts as already complete -- there is
 ## nowhere left to walk to.

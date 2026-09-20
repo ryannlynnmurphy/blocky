@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
+<style>
+html,body{margin:0;padding:0;background:#14121c}
+*{box-sizing:border-box}
+img{image-rendering:pixelated;display:block}
+a{color:#e8a04a}a:hover{color:#f6e0b0}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#14121c;color:#f6e0b0;font-family:'DM Mono',ui-monospace,monospace;padding:40px 36px 72px">
+  <div style="max-width:1180px;margin:0 auto">
+    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:2px solid #3a3548;padding-bottom:18px">
+      <div>
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:44px;line-height:1;letter-spacing:-0.02em;color:#f6e0b0">City asset pack</div>
+        <div style="font-size:13px;color:#72849a;margin-top:8px">Blocky 32 palette · 16×16 tiles · 64×32 skins · OBJ+MTL props at 1 unit = 1 m</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="border:2px solid #3a3548;padding:8px 12px;font-size:12px"><span style="color:#72849a">BLOCKS</span> 16</div>
+        <div style="border:2px solid #3a3548;padding:8px 12px;font-size:12px"><span style="color:#72849a">ITEMS</span> 18</div>
+        <div style="border:2px solid #3a3548;padding:8px 12px;font-size:12px"><span style="color:#72849a">SKINS</span> 12</div>
+        <div style="border:2px solid #e8a04a;padding:8px 12px;font-size:12px;color:#e8a04a"><span style="opacity:.7">PROPS</span> 16</div>
+      </div>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:34px 0 14px">STANDALONE PROPS · models/ · OBJ + MTL, drag straight into Godot</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px">
+      <sc-for list="{{ models }}" as="m" hint-placeholder-count="16">
+        <div style="border:2px solid #3a3548;background:#1b1826;display:flex;flex-direction:column">
+          <canvas data-model="{{ m.id }}" width="440" height="330" style="width:100%;aspect-ratio:4/3;display:block;background:#1b1826"></canvas>
+          <div style="padding:10px 12px 12px;border-top:2px solid #262232">
+            <div style="font-size:13px;color:#f6e0b0">{{ m.name }}</div>
+            <div style="font-size:11px;color:#72849a;margin-top:3px;line-height:1.4">{{ m.note }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:40px 0 14px">THE DOOR · two halves that line up, plus frame and hinge side</div>
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start">
+      <div style="border:2px solid #3a3548;padding:14px;background:#1b1826;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;flex-direction:column;width:128px">
+          <img src="blocky/city/textures/blocks/door_upper.png" alt="door upper" style="width:128px;height:128px">
+          <img src="blocky/city/textures/blocks/door_lower.png" alt="door lower" style="width:128px;height:128px">
+        </div>
+        <div style="font-size:11px;color:#b3bfcc">door_upper + door_lower · 1×2 blocks</div>
+      </div>
+      <div style="display:flex;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <img src="blocky/city/textures/blocks/door_frame.png" alt="door frame" style="width:112px;height:112px;border:2px solid #3a3548">
+          <div style="font-size:11px;color:#b3bfcc">door_frame</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <img src="blocky/city/textures/blocks/door_side.png" alt="door side" style="width:112px;height:112px;border:2px solid #3a3548">
+          <div style="font-size:11px;color:#b3bfcc">door_side (hinges)</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:280px;border:2px solid #3a3548;padding:14px;font-size:12px;line-height:1.7;color:#b3bfcc">
+        <div style="color:#e8a04a;margin-bottom:6px">Make it open</div>
+        A working door is a 2-block entity, not a block texture: place <code>door_lower</code> + <code>door_upper</code> as one thin mesh (3/16 m deep) parented to a hinge Node3D at the frame edge, and rotate the hinge ±90° on interact. Use <code>door_side</code> on the narrow faces so the hinges read while it swings. The knob sits just under the seam so both halves line up when stacked.
+      </div>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:40px 0 14px">GUNS · items + two held props</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:14px">
+      <sc-for list="{{ guns }}" as="b" hint-placeholder-count="6">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <img src="{{ b.src }}" alt="{{ b.name }}" style="width:100%;aspect-ratio:1;border:2px solid #3a3548;background:#262232">
+          <div style="font-size:11px;color:#b3bfcc">{{ b.name }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:40px 0 14px">BLOCKS · textures/blocks/</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:14px">
+      <sc-for list="{{ blocks }}" as="b" hint-placeholder-count="16">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <img src="{{ b.src }}" alt="{{ b.name }}" style="width:100%;aspect-ratio:1;border:2px solid #3a3548">
+          <div style="font-size:11px;color:#b3bfcc;line-height:1.3">{{ b.name }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:40px 0 14px">ITEMS · textures/items/</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:14px">
+      <sc-for list="{{ items }}" as="b" hint-placeholder-count="12">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <img src="{{ b.src }}" alt="{{ b.name }}" style="width:100%;aspect-ratio:1;border:2px solid #3a3548;background:#262232">
+          <div style="font-size:11px;color:#b3bfcc">{{ b.name }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.22em;color:#72849a;margin:40px 0 14px">SKINS · textures/skins/ · base-pack UVs</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+      <sc-for list="{{ skins }}" as="s" hint-placeholder-count="12">
+        <div style="border:2px solid #3a3548;padding:10px;display:flex;flex-direction:column;gap:8px;background:#1b1826">
+          <img src="{{ s.src }}" alt="{{ s.name }}" style="width:100%;aspect-ratio:2;background:#262232">
+          <div style="font-size:12px;color:#f6e0b0">{{ s.name }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const MODELS = [
+  ["sedan","Sedan","4.2 m · 4 wheels, glazed cabin"],
+  ["taxi","Taxi","roof sign, door stripe"],
+  ["police_car","Police car","two-tone, light bar"],
+  ["box_van","Box van","5.4 m · cargo body, roller door"],
+  ["imbiss","Imbiss","street food hut: counter, grill, spit, flue, stools"],
+  ["hot_dog_cart","Hot dog cart","wheeled, striped umbrella"],
+  ["market_stall","Market stall","canopy, crates, produce"],
+  ["vending_machine","Vending machine","lit front, coin slot"],
+  ["dumpster","Dumpster","hinged lid, castors"],
+  ["bench","Bench","slatted, iron ends"],
+  ["street_lamp","Street lamp","3.9 m · emissive head"],
+  ["traffic_light","Traffic light","3-lamp housing"],
+  ["bus_stop","Bus stop","shelter, bench, sign"],
+  ["fire_hydrant","Fire hydrant","stubby, two ports"],
+  ["pistol_prop","Pistol (held)","hand-scale, 0.22 m"],
+  ["rifle_prop","Rifle (held)","hand-scale, 1.0 m"]
+];
+const B = ["cobblestone","brick","plaster","roof_tile","slate_roof","cobble_road","flagstone","door_lower","door_upper","door_frame","door_side","shop_window","tavern_floor","crate","hay","sign_board"];
+const I = ["coin","coin_stack","bread","ledger","key","letter","ballot","purse","lockpick","tonic","apple","flower"];
+const G = ["pistol","revolver","shotgun","rifle","smg","ammo_box"];
+const S = ["citizen_a","citizen_b","citizen_c","guard","mayor","merchant","baker","blacksmith","miner","healer","priest","thief"];
+
+class Component extends DCLogic {
+  renderVals(){
+    const t = s=>s.replace(/_/g," ");
+    return {
+      models: MODELS.map(([id,name,note])=>({id,name,note})),
+      blocks: B.map(n=>({name:t(n), src:"blocky/city/textures/blocks/"+n+".png"})),
+      items: I.map(n=>({name:t(n), src:"blocky/city/textures/items/"+n+".png"})),
+      guns: G.map(n=>({name:t(n), src:"blocky/city/textures/items/"+n+".png"})),
+      skins: S.map(n=>({name:t(n), src:"blocky/city/textures/skins/"+n+".png"}))
+    };
+  }
+  componentDidMount(){ const w=()=> window.THREE ? this.viewers() : setTimeout(w,80); w(); }
+  componentWillUnmount(){ this.stop = true; if(this.rend) this.rend.dispose(); }
+
+  parseMtl(src){
+    const out={}; let cur=null;
+    src.split("\n").forEach(l=>{ const p=l.trim().split(/\s+/);
+      if(p[0]==="newmtl"){cur=p[1];out[cur]=[1,1,1];}
+      else if(p[0]==="Kd"&&cur) out[cur]=[+p[1],+p[2],+p[3]]; });
+    return out;
+  }
+  parseObj(src, mtls){
+    const T=window.THREE, verts=[], pos=[], col=[], nrm=[];
+    let c=[1,1,1];
+    for(const line of src.split("\n")){
+      const p=line.trim().split(/\s+/);
+      if(p[0]==="v") verts.push([+p[1],+p[2],+p[3]]);
+      else if(p[0]==="usemtl") c = mtls[p[1]] || [1,1,1];
+      else if(p[0]==="f"){
+        const idx = p.slice(1).map(s=>parseInt(s.split("/")[0],10)-1);
+        for(let k=1;k<idx.length-1;k++){
+          for(const v of [idx[0],idx[k],idx[k+1]]){ const q=verts[v]; pos.push(q[0],q[1],q[2]); col.push(c[0],c[1],c[2]); }
+        }
+      }
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.Float32BufferAttribute(pos,3));
+    g.setAttribute("color", new T.Float32BufferAttribute(col,3));
+    g.computeVertexNormals();
+    return g;
+  }
+
+  async viewers(){
+    const T = window.THREE;
+    const canvases = [...document.querySelectorAll("canvas[data-model]")];
+    if(!canvases.length) return;
+    const rend = new T.WebGLRenderer({antialias:true, alpha:false});
+    this.rend = rend; rend.setPixelRatio(1); rend.setSize(440,330,false);
+    rend.setClearColor(0x1b1826,1);
+    const views = [];
+    for(const cv of canvases){
+      const id = cv.dataset.model;
+      try{
+          const [o,m] = await Promise.all([fetch("blocky/city/models/"+id+".obj").then(r=>r.text()), fetch("blocky/city/models/"+id+".mtl").then(r=>r.text())]);
+        const geo = this.parseObj(o, this.parseMtl(m));
+        const mesh = new T.Mesh(geo, new T.MeshLambertMaterial({vertexColors:true}));
+        const scene = new T.Scene();
+        scene.add(new T.HemisphereLight(0xbcd4e6, 0x2a2438, 1.05));
+        const key = new T.DirectionalLight(0xfff0d0, 1.15); key.position.set(3,6,4); scene.add(key);
+        const fill = new T.DirectionalLight(0x8ab0d0, 0.35); fill.position.set(-4,2,-3); scene.add(fill);
+        const pivot = new T.Group(); pivot.add(mesh); scene.add(pivot);
+        geo.computeBoundingBox();
+        const bb = geo.boundingBox, size = new T.Vector3(), ctr = new T.Vector3();
+        bb.getSize(size); bb.getCenter(ctr);
+        mesh.position.set(-ctr.x, -ctr.y, -ctr.z);
+        const grid = new T.Mesh(new T.PlaneGeometry(size.length()*1.6, size.length()*1.6), new T.MeshBasicMaterial({color:0x221f2e}));
+        grid.rotation.x = -Math.PI/2; grid.position.y = -size.y/2 - 0.005; pivot.add(grid);
+        const cam = new T.PerspectiveCamera(32, 4/3, 0.01, 200);
+        const r = Math.max(size.length(), 0.35) * 1.35;
+        cam.position.set(r*0.75, r*0.52, r*0.85); cam.lookAt(0,0,0);
+        views.push({ctx:cv.getContext("2d"), scene, cam, pivot, phase:Math.random()*6});
+      }catch(e){ console.warn("model failed", id, e); }
+    }
+    const tick = ()=>{
+      if(this.stop) return;
+      requestAnimationFrame(tick);
+      const t = performance.now()/1000;
+      for(const v of views){
+        v.pivot.rotation.y = t*0.35 + v.phase;
+        rend.render(v.scene, v.cam);
+        v.ctx.drawImage(rend.domElement, 0, 0, 440, 330);
+      }
+    };
+    tick();
+  }
+}
+</script>
+</body>
+</html>

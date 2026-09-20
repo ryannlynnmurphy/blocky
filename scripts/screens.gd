@@ -61,6 +61,13 @@ func _ready() -> void:
 	ng.pressed.connect(func(): new_game_pressed.emit(_seed_edit.text))
 	row.add_child(ng)
 	tv.add_child(row)
+	# Wired in ahead of B5 (the formal "integrate city entry" card) at
+	# Ryann's direct request, just to walk around the standalone B1 scene --
+	# a full scene swap (not a main.gd state), so the two modes stay exactly
+	# as decoupled as B1/B2 already built them. Esc in the city scene
+	# (scripts/city_walker.gd) swaps back the same way.
+	_button(tv, "Visit Hollowmark (preview)",
+		func(): get_tree().change_scene_to_file("res://scenes/city_block.tscn"))
 	_button(tv, "Quit", func(): quit_pressed.emit())
 
 	# ---- pause ----

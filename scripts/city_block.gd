@@ -23,6 +23,18 @@ extends Node3D
 ## path used here is in docs/lab/CITY_ASSET_MANIFEST.md (B2). The three
 ## content-boundary-excluded models (police_car, pistol_prop, rifle_prop)
 ## are never referenced.
+##
+## 2026-09-20 addendum, ahead of B5: reachable directly from the title
+## screen ("Visit Hollowmark (preview)", scripts/screens.gd) via a full
+## get_tree().change_scene_to_file() swap, at Ryann's direct request to be
+## able to walk around it -- NOT the formal B5 integration (a main.gd state
+## coexisting with the voxel world; needs B3/B4 first per Work Orders). This
+## is a preview-only detour: the two modes stay exactly as decoupled as
+## before, just reachable by a full scene swap instead of only a dev
+## command line. _spawn_walker() adds a CityWalker (scripts/city_walker.gd,
+## a minimal first-person controller, deliberately not the survival Player
+## class) so the scene has someone to look through; Esc returns to
+## scenes/main.tscn.
 
 const TEX_DIR := "res://blocky/city/textures/blocks/"
 
@@ -44,6 +56,36 @@ func _ready() -> void:
 	_build_workplace()
 	_build_street_furniture()
 	_build_overview_camera()
+	_spawn_walker()
+
+
+## A CityWalker (see scripts/city_walker.gd) on the street, camera made
+## current after the overview camera above -- Godot only ever treats the
+## most-recently-activated Camera3D as current, so this one wins without
+## needing to touch or remove the overview camera other callers still use
+## (tools/city_block_check.gd, and quick standalone screenshots).
+func _spawn_walker() -> void:
+	var walker := CharacterBody3D.new()
+	walker.set_script(load("res://scripts/city_walker.gd"))
+	walker.name = "Walker"
+	# The open street itself (46x6 along X/Z, centered at the origin) --
+	# clear of every building and prop. Default facing (-Z) already looks
+	# toward the building row at z=-8.5.
+	walker.position = location_positions.get("street", Vector3.ZERO) + Vector3(0, 0.1, 0)
+
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.25
+	capsule.height = 1.1   # see the board's 2026-09-20 CORRECTION entry: this IS the total height
+	var col := CollisionShape3D.new()
+	col.shape = capsule
+	col.position = Vector3(0, 0.55, 0)   # half of total height, centers the capsule on the origin/feet
+	walker.add_child(col)
+
+	var camera := Camera3D.new()
+	camera.name = "Camera3D"
+	walker.add_child(camera)
+
+	add_child(walker)
 
 
 ## A dev-only overview camera so this standalone scene always has something

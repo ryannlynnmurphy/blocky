@@ -683,6 +683,38 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: breath regenerating after surfacing: %d -> %d (expect it rose)"
 				% [_breath_before, player.breath])
 			print("selftest: audio unmuffled after surfacing: %s (expect false)" % Sfx.instance._underwater)
+		1530:
+			# Regression check for a real reported bug: a water_tile is a
+			# 2x2-block footprint, but WorldGen.fill_chunk used to decide
+			# whether to place one by checking only its anchor column's
+			# height. Near an irregular coastline the other 3 columns a
+			# tile visually covers could be dry land, so the tile still
+			# rendered there — you could stand on the real (dry) ground
+			# and it looked exactly like walking on water. Scans a chunk
+			# grid around the origin with a fresh WorldGen (same seed
+			# world.gd itself uses) and fails loudly if any placed tile's
+			# 2x2 footprint has a dry corner.
+			var gen := WorldGen.new(world.world_seed)
+			var bad := 0
+			var checked := 0
+			for cx in range(-4, 5):
+				for cz in range(-4, 5):
+					var cpos := Vector2i(cx, cz)
+					var chunk_props: Array = gen.fill_chunk(cpos)[3]
+					for p in chunk_props:
+						if p["type"] != "water_tile":
+							continue
+						checked += 1
+						var lx: int = p["lx"]
+						var lz: int = p["lz"]
+						var wx := cx * VoxelWorld.SIZE + lx
+						var wz := cz * VoxelWorld.SIZE + lz
+						for d in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
+							if gen.height_at(wx + d.x, wz + d.y) > WorldGen.SEA_LEVEL - 1:
+								bad += 1
+								break
+			print("selftest: water tiles never cover dry ground: checked %d tiles, %d bad (expect 0 bad)"
+				% [checked, bad])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

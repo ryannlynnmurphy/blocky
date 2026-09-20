@@ -290,7 +290,20 @@ func fill_chunk(cpos: Vector2i) -> Array:
 				if biome_i in REEDS_BIOMES and h == SEA_LEVEL + 1 \
 						and hash(Vector2i(wx + REEDS_SALT, wz)) % REEDS_CHANCE == 0:
 					props.append({"type": "reeds", "lx": lx, "lz": lz, "y": h + 1, "rot": rot})
-				elif h <= SEA_LEVEL - 1 and lx % 2 == 0 and lz % 2 == 0:
+				elif h <= SEA_LEVEL - 1 and lx % 2 == 0 and lz % 2 == 0 \
+						and heights[bi + 1] <= SEA_LEVEL - 1 \
+						and heights[bi + w] <= SEA_LEVEL - 1 \
+						and heights[bi + w + 1] <= SEA_LEVEL - 1:
+					# The tile is a 2x2 footprint but this check only looked
+					# at its own anchor column — near an irregular coastline
+					# the other 3 columns it visually covers could be dry,
+					# so the tile still rendered over real walkable ground
+					# (the same "walk on water" symptom, one level up: not
+					# because in_water's threshold was wrong, but because
+					# the tile lied about what was underneath it). All 4
+					# covered columns must now qualify, or the tile is
+					# skipped and that little scalloped gap at the
+					# coastline just shows plain terrain instead.
 					# h == SEA_LEVEL itself stands at y = h+1 = SEA_LEVEL+1 =
 					# 20, ABOVE the water surface (SEA_LEVEL+0.9 = 19.9) — a
 					# dry sandbar, not real water, so it doesn't get a tile;

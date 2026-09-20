@@ -16,6 +16,7 @@ signal sleep_requested   # right-clicked a Bed block
 signal tool_broke(item_name: String)   # a tool/weapon ran out of durability
 signal durability_changed   # any tool/weapon's remaining durability ticked down
 signal water_state_changed(state: int)   # see WaterState; HUD/audio (WATER-07) consume this
+signal ate_meat   # E successfully ate a Meat (eat() returned true); S2's PersonActions.eat() consumes this
 
 ## WATER-06: Dry/Wade/Swim/Sprint-swim, per docs/lab/WATER_AND_SWIMMING_SPEC.md.
 enum WaterState { DRY, WADE, SWIM, SPRINT_SWIM }
@@ -640,6 +641,7 @@ func eat() -> bool:
 	hunger = mini(hunger + MEAT_FOOD, MAX_HUNGER)
 	hunger_changed.emit(hunger, MAX_HUNGER)
 	Sfx.play("eat")
+	ate_meat.emit()
 	return true
 
 

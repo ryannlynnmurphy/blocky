@@ -181,6 +181,20 @@ func _apply() -> void:
 	_env.ambient_light_energy = lerpf(0.25, 1.0, smoothstep(-0.15, 0.25, e))
 
 
+## S2: advances the clock by `hours` all at once (a job shift, any other
+## action with a real time cost) -- the same day-rollover and
+## hour_changed/day_changed signal behavior as normal real-time ticking,
+## just applied in one step instead of over many frames. scripts/
+## person_actions.gd is the first caller.
+func advance(hours: float) -> void:
+	time_of_day += hours / 24.0
+	while time_of_day >= 1.0:
+		time_of_day -= 1.0
+		day_count += 1
+	_apply()
+	_update_derived_time()
+
+
 ## Sleeping in a bed: jump straight to the next sunrise.
 func skip_to_morning() -> void:
 	if time_of_day > 0.25:

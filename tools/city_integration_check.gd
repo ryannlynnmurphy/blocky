@@ -16,6 +16,7 @@ var main: Node
 var player: Player
 var _frame := 0
 var _player_pos_before_city := Vector3.ZERO
+var _work_minutes_before := 0.0
 
 
 func _physics_process(_delta: float) -> void:
@@ -45,13 +46,71 @@ func _physics_process(_delta: float) -> void:
 			var drift_while_visiting := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: player position while paused in the city: %.3f m drift from pre-visit baseline (expect ~0.0 -- get_tree().paused genuinely freezes the player)"
 				% [drift_while_visiting])
+		92:
+			# S2: teleport to the floor in front of the workplace workbench
+			# (exposed as CityBlock.workbench_position, in CityBlock's own
+			# LOCAL space -- main._city itself is offset by
+			# CITY_EMBED_Y_OFFSET, so this must go through to_global(), not
+			# be used as a global position directly) rather than re-walking
+			# the door transition B3's own tools/city_block_check.gd already
+			# verifies -- this check is only about the work trigger from
+			# here on. Y must be the interior FLOOR (workbench_position.y
+			# minus the 0.45 the workbench box itself sits above the floor),
+			# not the workbench's own table-height Y -- the walker's collision
+			# capsule is itself offset +0.55 above its origin (see
+			# CityBlock.spawn_walker()), so standing at table height would
+			# put the capsule's center too high, right at the trigger's edge.
+			var floor_y_local: float = main._city.workbench_position.y - 0.45
+			var stand_local := Vector3(main._city.workbench_position.x, floor_y_local, main._city.workbench_position.z)
+			var target: Vector3 = main._city.to_global(stand_local) + Vector3(0, 0.0, 1.0)
+			main._city_walker.global_position = target
+			main._city_walker.velocity = Vector3.ZERO
+		98:
+			# 6 physics frames of settle/overlap-detection budget, matching
+			# tools/city_block_check.gd's own entrance-trigger checks
+			# (_entrance_frame == 3, at 60fps -- this project runs
+			# --citytest at 60fps too) rather than assuming 1-2 is enough.
+			print("citytest: near_workbench after standing at the trigger: %s (expect true -- CityBlock.near_workbench_at() found the walker in range), walker now at %s"
+				% [main._city_walker.near_workbench, main._city_walker.global_position])
+			main.person_profile.data["needs"]["money"] = 0
+			_work_minutes_before = main.day_night.total_minutes()
+			# A real E keypress, not a direct signal.emit() -- exercises
+			# CityWalker._unhandled_input()'s own near_workbench gate, not a
+			# re-implementation of it.
+			var e_press := InputEventKey.new()
+			e_press.keycode = KEY_E
+			e_press.pressed = true
+			Input.parse_input_event(e_press)
+		102:
+			print("citytest: real E keypress near the workbench triggered PersonActions.work(): money %d (expect %d), clock advanced %.1f min (expect %.1f = %dh)"
+				% [main.person_profile.need("money"), PersonActions.WORK_PAY,
+					main.day_night.total_minutes() - _work_minutes_before,
+					PersonActions.WORK_SHIFT_HOURS * 60.0, PersonActions.WORK_SHIFT_HOURS])
+			main._city_walker.global_position = Vector3(0, -499.9, 0)   # back onto the open street floor, clear of the trigger
+		108:
+			print("citytest: near_workbench after leaving the trigger: %s (expect false)" % [main._city_walker.near_workbench])
+		112:
+			# Door transitions were the actual bug this card's work-trigger
+			# testing surfaced (see the CORRECTION comment on
+			# CityBlock._add_transition()): confirm walking through a real
+			# door -- not just the work trigger -- also works while
+			# genuinely embedded and paused, the exact condition that used
+			# to silently do nothing.
+			var door_local: Vector3 = main._city._entrances["apartment"]
+			var door_target: Vector3 = main._city.to_global(door_local) + Vector3(0, 1.0, 0.1)
+			main._city_walker.global_position = door_target
+			main._city_walker.velocity = Vector3.ZERO
+		116:
+			var walker_y: float = main._city_walker.global_position.y
+			print("citytest: apartment door transition while embedded+paused: walker y=%.1f (expect near %.1f -- INTERIOR_Y teleport fired, not the ~%.1f street/door level it started at)"
+				% [walker_y, main._city.position.y + main._city.INTERIOR_Y, main._city.position.y])
 			# Simulate Esc the same way a real keypress does: city_walker.gd's
 			# _unhandled_input emits this exact signal.
 			main._city_walker.exit_requested.emit()
-		93:
+		119:
 			print("citytest: after exit signal: state=%d (expect 2 = PLAYING), tree paused=%s (expect false)"
 				% [main.state, get_tree().paused])
-		110:
+		126:
 			var city_freed := main._city == null or not is_instance_valid(main._city)
 			print("citytest: city instance actually freed=%s (expect true -- queue_free() had a full frame budget to run)" % [city_freed])
 			var drift := player.global_position.distance_to(_player_pos_before_city)
@@ -60,7 +119,7 @@ func _physics_process(_delta: float) -> void:
 			# just that the state label says PLAYING -- same test_move
 			# technique tools/anim_check.gd and tools/selftest.gd both use.
 			player.test_move = Vector2(0, -1)
-		160:
+		180:
 			var moved := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: walked %.2f m after returning from the city (expect > 1.0 -- normal play resumed for real)" % [moved])
 			player.test_move = Vector2.ZERO

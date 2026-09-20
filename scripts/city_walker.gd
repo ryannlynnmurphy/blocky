@@ -29,9 +29,25 @@ var standalone := true
 ## internal exit behavior.
 signal exit_requested
 
+## S2: true while standing near CityBlock's workbench (polled every
+## physics frame in _check_triggers() -- see the CORRECTION comment on
+## CityBlock._add_transition() for why this isn't an Area3D signal).
+## Gates whether E does anything here.
+var near_workbench := false
+
+## Fired on E while near_workbench is true. main.gd (embedded mode) is the
+## only listener for now -- the standalone preview has no PersonActions
+## profile to apply this to, so it's a harmless no-op signal there.
+signal work_requested
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
+## The CityBlock this walker was spawned into (spawn_walker() always
+## add_child()s it directly under the CityBlock instance), used to poll
+## door/work triggers every physics frame. See the CORRECTION comment on
+## CityBlock._add_transition().
+@onready var _block: CityBlock = get_parent()
 
 
 func _ready() -> void:
@@ -40,14 +56,34 @@ func _ready() -> void:
 	_camera.position = Vector3(0, EYE_HEIGHT, 0)
 
 
-## Called by scripts/city_block.gd's door/interior Area3D triggers (B3).
-## Zeroing velocity matters: without it, whatever speed carried you into
-## the trigger keeps being applied for a frame or two on the other side,
-## which reads as a jarring shove out of a doorway rather than a clean cut.
+## Called by _check_triggers() when within CityBlock.TRANSITION_RADIUS of a
+## registered transition point. Zeroing velocity matters: without it,
+## whatever speed carried you into the trigger keeps being applied for a
+## frame or two on the other side, which reads as a jarring shove out of a
+## doorway rather than a clean cut.
 func teleport_to(pos: Vector3, yaw: float = 0.0) -> void:
 	global_position = pos
 	rotation.y = yaw
 	velocity = Vector3.ZERO
+
+
+## Polled every physics frame (not Area3D signals -- see the CORRECTION
+## comment on CityBlock._add_transition() for why): teleports through the
+## first door/interior transition within range, else updates
+## near_workbench from CityBlock.near_workbench_at().
+func _check_triggers() -> void:
+	if _block == null:
+		return
+	for t in _block.transitions:
+		# transitions[].pos/target are stored in CityBlock's own LOCAL space
+		# (the same values _add_transition() was called with while building
+		# the scene, before any embedding offset existed) -- must go
+		# through _block.to_global()/to_local(), not be compared/used
+		# directly against this walker's own global_position.
+		if global_position.distance_to(_block.to_global(t["pos"])) < CityBlock.TRANSITION_RADIUS:
+			teleport_to(_block.to_global(t["target"]), t["yaw"])
+			return
+	near_workbench = _block.near_workbench_at(global_position)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -59,6 +95,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		exit_requested.emit()
 		if standalone:
 			get_tree().change_scene_to_file("res://scenes/main.tscn")
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_E and near_workbench:
+		work_requested.emit()
 
 
 func _physics_process(delta: float) -> void:
@@ -86,3 +124,4 @@ func _physics_process(delta: float) -> void:
 	velocity.z = dir.z * speed
 
 	move_and_slide()
+	_check_triggers()

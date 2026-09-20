@@ -127,6 +127,24 @@ func set_value(slot: int, value: String) -> void:
 		data["values"][slot] = value
 
 
+## S2: current value of a needs key ("hunger", "energy", "social", "stress",
+## "money"). Unknown keys read as 0 rather than erroring -- callers driving
+## this from data-defined actions (Layer 5+) shouldn't crash on a typo.
+func need(key: String) -> int:
+	return int(data["needs"].get(key, 0))
+
+
+## Applies `delta` to a needs key, then re-clamps through the same
+## _sanitize() every load already runs (0-100 for hunger/energy/social/
+## stress, non-negative for money) so an action can never leave a need out
+## of its valid range. Unknown keys are ignored, not created.
+func adjust_need(key: String, delta: int) -> void:
+	if not data["needs"].has(key):
+		return
+	data["needs"][key] = int(data["needs"][key]) + delta
+	_sanitize()
+
+
 func randomize_visuals() -> void:
 	for key in APPEARANCE_OPTIONS:
 		var options: Array = APPEARANCE_OPTIONS[key]

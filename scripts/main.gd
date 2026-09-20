@@ -117,6 +117,7 @@ func _ready() -> void:
 			_enter(State.FURNACE))
 	player.sleep_requested.connect(_try_sleep)
 	player.tool_broke.connect(func(item_name: String): hud.show_message("%s broke!" % item_name))
+	player.ate_meat.connect(func(): PersonActions.eat(day_night, person_profile))
 	_load_settings()
 
 	# We save on close, so ask Godot not to quit on its own.
@@ -269,7 +270,19 @@ func _enter_city() -> void:
 	_city_walker = city.spawn_walker()
 	_city_walker.standalone = false
 	_city_walker.exit_requested.connect(_exit_city)
+	_city_walker.work_requested.connect(_on_city_work_requested)
 	_enter(State.CITY)
+
+
+## S2: E pressed near the workplace workbench (scripts/city_walker.gd's
+## work_requested, gated by CityBlock's work trigger). No visible in-city
+## feedback yet (the HUD is hidden throughout State.CITY, and a proper "you
+## earned $X" moment is presentation work, not this card's job) -- printed
+## so it's still verifiable, same as every other dev/test print in this
+## project.
+func _on_city_work_requested() -> void:
+	PersonActions.work(day_night, person_profile)
+	print("Worked a shift: +$%d, needs now %s" % [PersonActions.WORK_PAY, person_profile.data["needs"]])
 
 
 ## scripts/city_walker.gd's exit_requested signal (Esc), only reachable
@@ -305,7 +318,13 @@ func _try_sleep() -> void:
 	if world.hostile_near(player.global_position, Hostile.SIGHT):
 		hud.show_message("Too dangerous to sleep")
 		return
+	# S2: measure the real jump via day_night's own clock (total_minutes(),
+	# added by S0) instead of re-deriving sunrise math here -- correct
+	# whether skip_to_morning() rolls into the next day or not.
+	var before_minutes := day_night.total_minutes()
 	day_night.skip_to_morning()
+	var hours_asleep := (day_night.total_minutes() - before_minutes) / 60.0
+	PersonActions.sleep(person_profile, hours_asleep)
 	hud.show_message("Slept until morning")
 
 

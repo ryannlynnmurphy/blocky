@@ -163,7 +163,12 @@ func _physics_process(delta: float) -> bool:
 			var cam := Camera3D.new()
 			cam.name = "Camera3D"
 			_entrance_walker.add_child(cam)
-			get_root().add_child(_entrance_walker)
+			# Parented under `block`, matching CityBlock.spawn_walker()'s
+			# real production parenting -- CityWalker._check_triggers()
+			# (S2 CORRECTION) resolves its CityBlock via get_parent(), so a
+			# walker parented elsewhere (e.g. the tree root, as this used to
+			# do) can never find its door/work triggers at all.
+			block.add_child(_entrance_walker)
 			var door: Vector3 = block._entrances[key]
 			_entrance_walker.global_position = door + Vector3(0, 1.0, 0.1)
 			_entrance_frame = 0

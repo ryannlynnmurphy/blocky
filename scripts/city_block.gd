@@ -75,6 +75,12 @@ var _rng := RandomNumberGenerator.new()
 var route_markers := {}
 var _route_edges := {}
 
+## S2: the workplace interior's workbench trigger center, exposed the same
+## way location_positions/_entrances already are, so a test/future caller
+## doesn't have to re-derive interior room geometry from scratch. Set by
+## _build_workplace_interior(); Vector3.ZERO until then.
+var workbench_position := Vector3.ZERO
+
 ## See the class doc comment above. main.gd sets this false before
 ## add_child()-ing an instance for State.CITY.
 var standalone := true
@@ -454,21 +460,48 @@ func _build_room_shell(prefix: String, center: Vector3, size: Vector2, wall_mate
 	add_child(light)
 
 
-## A trigger volume that teleports any body with a `teleport_to(pos, yaw)`
-## method (CityWalker; guarded so an unrelated physics body could never
-## crash this) to `target`, facing `target_yaw`.
+## S2 CORRECTION: door/interior transitions were originally Area3D triggers
+## (`body_entered`/`body_exited`). That works fine standalone (how B3's own
+## tools/city_block_check.gd has only ever tested it) but was discovered,
+## while building this card's work trigger, to NOT fire at all once
+## get_tree().paused is true -- which main.gd's State.CITY always sets, to
+## keep the voxel player frozen while visiting. Area3D monitoring turns out
+## to depend on the tree's own paused state, not a node's `process_mode`
+## (ALWAYS or not) the way `_process`/`_physics_process` callbacks do. That
+## meant every door in the embedded (real, B5) city was silently unusable --
+## walking into one just did nothing -- from the moment B5 landed, entirely
+## unnoticed because nothing had exercised an in-city trigger while embedded
+## until this card's work-trigger test did. Both transitions and the work
+## trigger now use plain distance checks instead, polled every physics
+## frame from CityWalker._physics_process() (a callback already proven to
+## keep running correctly while paused, per B5's own verification) --
+## works identically whether standalone or embedded, so there is only one
+## mechanism to reason about instead of two.
+const TRANSITION_RADIUS := 1.3   # generous: covers the real ~1.0 vertical
+	## gap between city_block_check.gd's own exit-check position and this
+	## trigger's nominal point, not just the zero-distance entry case.
+const WORK_TRIGGER_RADIUS := 2.0   # horizontal only -- see near_workbench_at()
+
+## Ordered door/interior transition points: each {"pos": Vector3 (world/local
+## trigger point), "target": Vector3, "yaw": float}. Populated by
+## _add_transition(); read every physics frame by every spawned CityWalker.
+var transitions: Array = []
+
+
+## Registers a transition point: get within TRANSITION_RADIUS of `pos` and
+## a CityWalker teleports to `target`, facing `target_yaw`.
 func _add_transition(pos: Vector3, target: Vector3, target_yaw: float = 0.0) -> void:
-	var area := Area3D.new()
-	area.position = pos
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(1.4, 2.2, 0.8)
-	var cs := CollisionShape3D.new()
-	cs.shape = shape
-	area.add_child(cs)
-	add_child(area)
-	area.body_entered.connect(func(body: Node3D):
-		if body.has_method("teleport_to"):
-			body.teleport_to(target, target_yaw))
+	transitions.append({"pos": pos, "target": target, "yaw": target_yaw})
+
+
+## S2: true when `global_pos` is within WORK_TRIGGER_RADIUS of the
+## workbench, horizontal distance only -- the workbench's own solid box
+## sits above floor height (table height, not standing height), so a
+## vertical component would make this needlessly sensitive to exactly how
+## tall whatever body is asking happens to be.
+func near_workbench_at(global_pos: Vector3) -> bool:
+	var wb: Vector3 = to_global(workbench_position)
+	return Vector2(global_pos.x - wb.x, global_pos.z - wb.z).length() < WORK_TRIGGER_RADIUS
 
 
 func _build_apartment_interior() -> void:
@@ -520,11 +553,20 @@ func _build_workplace_interior() -> void:
 		_material("brick", Vector2(size.x, WALL_HEIGHT)), _material("cobblestone", size))
 
 	# A long workbench, and stacked crates as shelving against the back wall.
-	_add_solid_box("Workbench", center + Vector3(0.5, 0.45, -size.y * 0.5 + 0.6), Vector3(3.0, 0.9, 0.8),
+	var workbench_pos := center + Vector3(0.5, 0.45, -size.y * 0.5 + 0.6)
+	workbench_position = workbench_pos
+	_add_solid_box("Workbench", workbench_pos, Vector3(3.0, 0.9, 0.8),
 		_flat_material(Color(0.35, 0.24, 0.16)))
 	for i in 3:
 		_add_visual_box("Shelf%d" % i, center + Vector3(-2.6, 0.35 + i * 0.72, -size.y * 0.5 + 0.5),
 			Vector3(0.7, 0.6, 0.7), _material("crate"))
+	# S2: standing near the workbench and pressing E triggers a work shift
+	# (see CityWalker.near_workbench/work_requested) -- a real, reachable
+	# trigger for PersonActions.work() rather than only a programmatic call
+	# nothing in actual play could ever fire. near_workbench_at() (polled
+	# by CityWalker, not an Area3D -- see the CORRECTION comment above
+	# _add_transition()) reads workbench_position directly, so nothing
+	# further is registered here.
 
 	_add_transition(door + Vector3(0, 1.0, 0.1), center + Vector3(0, 0, -0.8), 0.0)
 	_add_transition(center + Vector3(0, 1.0, size.y * 0.5 - 0.4), out, PI)

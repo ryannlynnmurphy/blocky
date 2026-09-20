@@ -35,6 +35,9 @@ extends Node
 ##                      day()/total_minutes() derivation, hour_changed/
 ##                      day_changed firing through the real load_save_data()
 ##                      path, and get_save_data()/load_save_data() round-trip
+##   frames 1850..1870 S2: PersonActions.eat()/work() math, then the real
+##                      main._try_sleep() integration (clock + needs move
+##                      together through one actual player action)
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -940,6 +943,62 @@ func _physics_process(_delta: float) -> void:
 			var restored: bool = is_equal_approx(main.day_night.time_of_day, 0.42) and main.day_night.day_count == 7
 			print("selftest: S0 get_save_data()/load_save_data() round trip: restored=%s (time_of_day %.3f, day %d; expect ~0.42, 7)"
 				% [restored, main.day_night.time_of_day, main.day_night.day_count])
+		1850:
+			# S2: PersonActions.eat() -- the person-need/time side of an
+			# existing meal (Player.eat() itself, already tested around
+			# frame 230, is untouched -- this is the new hook alongside it).
+			main.person_profile.data["needs"]["hunger"] = 40
+			main.person_profile.data["needs"]["energy"] = 50
+			var eat_minutes_before: float = main.day_night.total_minutes()
+			PersonActions.eat(main.day_night, main.person_profile)
+			print("selftest: S2 PersonActions.eat(): hunger %d (expect 65 = 40+25), energy %d (expect 53 = 50+3), clock advanced %.1f min (expect 10.0)"
+				% [main.person_profile.need("hunger"), main.person_profile.need("energy"),
+					main.day_night.total_minutes() - eat_minutes_before])
+		1860:
+			# S2: PersonActions.work() -- v1 placeholder for the real job
+			# system (Layer 6's L4), proving the action->time/needs/money
+			# pipeline end-to-end for a paid action.
+			main.person_profile.data["needs"]["money"] = 100
+			main.person_profile.data["needs"]["energy"] = 80
+			main.person_profile.data["needs"]["social"] = 60
+			main.person_profile.data["needs"]["stress"] = 20
+			var work_minutes_before: float = main.day_night.total_minutes()
+			PersonActions.work(main.day_night, main.person_profile)
+			print("selftest: S2 PersonActions.work(): money %d (expect 140), energy %d (expect 50), social %d (expect 50), stress %d (expect 30), clock advanced %.1f min (expect 240.0 = 4h)"
+				% [main.person_profile.need("money"), main.person_profile.need("energy"),
+					main.person_profile.need("social"), main.person_profile.need("stress"),
+					main.day_night.total_minutes() - work_minutes_before])
+		1868:
+			# S2 setup, a couple of frames ahead of the sleep test itself:
+			# a hostile spawned (and left lingering, never freed) by an
+			# earlier phase -- e.g. the shelter test's _shelter_shade -- can
+			# still be alive and near enough by this late frame to make
+			# _try_sleep() correctly refuse ("too dangerous"), which isn't
+			# what this phase is testing. clear_entities() uses queue_free()
+			# (deferred), so it needs a real frame gap before the hostile is
+			# actually gone from world.hostile_near()'s query -- calling it
+			# and checking _try_sleep() in the very same frame isn't enough;
+			# observed exactly that (0.00 h slept, still refused) before
+			# adding the gap, not assumed.
+			world.clear_entities()
+		1870:
+			# S2: the REAL sleep integration (main._try_sleep(), not just
+			# PersonActions.sleep() in isolation) -- back at the original
+			# spawn column, deep night, a known starting needs state,
+			# confirming the clock (via skip_to_morning(), untouched by this
+			# card) and the needs actually move together through one real
+			# player action.
+			player.global_position = Vector3(8.5, world.height_at(8, 8) + 2.0, 8.5)
+			player.velocity = Vector3.ZERO
+			main.day_night.time_of_day = 0.85   # well into night
+			main.day_night._apply()
+			main.person_profile.data["needs"]["energy"] = 20
+			main.person_profile.data["needs"]["stress"] = 50
+			var sleep_minutes_before: float = main.day_night.total_minutes()
+			main._try_sleep()
+			var slept_hours: float = (main.day_night.total_minutes() - sleep_minutes_before) / 60.0
+			print("selftest: S2 main._try_sleep(): slept %.2f h (expect > 0), energy %d (expect > 20), stress %d (expect < 50), time_of_day %.2f (expect ~0.25 = sunrise)"
+				% [slept_hours, main.person_profile.need("energy"), main.person_profile.need("stress"), main.day_night.time_of_day])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

@@ -11,6 +11,13 @@ of truth for it.
 Read `README.md`, `docs/PRODUCTION_BIBLE.md`, `docs/WORK_ORDERS.md`, and
 `docs/AGENT_BOARD.md` before taking a task.
 
+**Status (2026-09-20):** Codex is out of usage and not currently active on
+this repo. Claude is picking up the board (claimed and finished C8; audited
+and logged WATER-05 which had landed without a board entry; fixed a real
+regression found while verifying C8 — see the board's handoff log). If
+Codex resumes, check the board's current queue before claiming a card
+someone else already has in progress.
+
 ## Agent capability tiers
 
 | Tier | Best use | May change | Must not own alone |

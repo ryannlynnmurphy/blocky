@@ -24,11 +24,12 @@ agents can all use it. The detailed requirements live in `WORK_ORDERS.md`.
 | C5 | DONE | Codex | T2 | C3 | existing creator form/profile | Existing name/pronoun controls retain in-memory navigation state. |
 | C6 | DONE | Codex | T1 | C2 | `scripts/wardrobe_catalog.gd`, catalog docs | Stable item IDs/slots and honest rig/placeholder refs are defined. |
 | C7 | DONE | Codex | T2 | C4, C6 | profile, appearance, creator screen | Catalog selection visibly recolors the live preview via the shared rig. |
-| C8 | READY | unassigned | T2 | C7 | appearance/creator screen, future wrist mesh | Pants/belt/shoes render; finish a visible bracelet attachment and replace-per-slot review. |
+| C8 | DONE | Claude | T2 | C7 | `scripts/person_appearance.gd`, `scripts/wardrobe_catalog.gd`, `scripts/main.gd`, docs | Bracelet is a real procedural wrist attachment now; one-per-slot replacement verified by reading existing sanitize() logic. |
+| C9 | READY | unassigned | T2 | C5, C8 | creator screen, person_profile.gd | Skin/hair controls, cosmetic randomize, Back, Continue. No persistence yet. |
 | WATER-03 | DONE | Codex | T3 | — | `docs/lab/WATER_AND_SWIMMING_SPEC.md`, board only | v1 contract/special mechanics approved from the current design request. |
 | WATER-04 | DONE | Codex | T2 | WATER-03 | `scripts/world_gen.gd`, `scripts/world.gd`, tests | Deterministic terrain water data/query layer. |
-| WATER-05 | READY | unassigned | T2 | WATER-04 | world visuals/assets/tests | Dedicated transparent water visuals, never opaque blocks. |
-| WATER-06 | BLOCKED | unassigned | T3 | WATER-04, WATER-05 | player/world integration/tests | Swimming and special mechanics. |
+| WATER-05 | DONE | Codex | T2 | WATER-04 | `scripts/world.gd`, tests | Chunk-aligned transparent water surfaces, no collision, streams with chunk lifecycle. Code and test (frame 30) already existed uncommitted-to-board; logging accurately after verifying it passes. |
+| WATER-06 | READY | unassigned | T3 | WATER-04, WATER-05 | player/world integration/tests | Swimming and special mechanics. Codex is out of usage as of 2026-09-20; Claude is picking up active work on this repo. |
 | WATER-07 | BLOCKED | unassigned | T2 | WATER-06 | HUD/audio/main | Presentation-only water response. |
 | WATER-08 | BLOCKED | unassigned | T3 | WATER-07 | review/tests | Edges, save decision, creatures, performance. |
 | WATER-09 | BLOCKED | unassigned | T3 | WATER-08 | regression tools/board | Full water release gate. |
@@ -129,3 +130,24 @@ Changed: `scripts/world_gen.gd`, `scripts/world.gd`, `tools/selftest.gd`
 Verified: Godot 4.7.2 headless self-test prints a deterministic dry/surface/submerged fixture with all expected states true.
 Next: WATER-05 — render dedicated transparent chunk-aligned water surfaces.
 Notes: This layer changes no visual geometry, collision, player movement, or save data. The surface-boundary epsilon prevents an exact returned water height from being classified as submerged.
+
+### 2026-09-20 — WATER-05 — done (logged retroactively)
+Owner: Codex (T2)
+Changed: `scripts/world.gd`, `tools/selftest.gd`
+Verified: full `--selftest` run, frame 30: "water visuals N, streamed surfaces valid true". Code (`_update_water_surface`, `water_visuals_match_streamed_chunks`) and the test already existed in two commits that landed after the board's last update; this entry just makes the board match what's actually on `main`.
+Next: WATER-06 — player swim integration.
+Notes: Flat transparent per-chunk mesh (`WATER_MATERIAL`, alpha-blended, no collision), parented to its Chunk so it streams/frees with terrain. Never covers a dry/solid column.
+
+### 2026-09-20 — C8 — done
+Owner: Claude (T2)
+Changed: `scripts/person_appearance.gd`, `scripts/wardrobe_catalog.gd`, `docs/lab/WARDROBE_CATALOG.md`, `scripts/main.gd`
+Verified: headless movie of `--show-creator`, pixel-sampled to confirm the bracelet renders in a distinct color from bare skin at each of two placement attempts (first attempt was invisible — wrong local-space assumption; fixed by matching the sword's proven zero-offset attachment convention instead of computing an AABB offset). Full `--selftest` suite unaffected.
+Next: C9 — skin/hair controls, randomize, Back/Continue.
+Notes: `asset_ref` for bracelet items is now `generated:bracelet_wrist`, not `rig:`, since it's a procedural TorusMesh, not authored GLB art — kept distinct so the docs stay honest if real art replaces it later. Added `--show-creator` dev arg (mirrors `--show-inventory`) for headless UI screenshots of the creator screen.
+
+### 2026-09-20 — REGRESSION FIX — done
+Owner: Claude (T2)
+Changed: `scenes/player.tscn`, `tools/selftest.gd`
+Verified: full `--selftest --quit-after 6000` (raised from 2200 — heavier city/wardrobe scenes need more real-time budget to reach the same physics frame under the physics-substep cap), run 3x clean, 0 engine errors, corridor traversal 6.0-6.1 blocks (was 1.3, needs >5.0), furnace smelts Iron again.
+Next: none blocking — flagged for whoever picks up C9 or WATER-06 next.
+Notes: Found while verifying C8 by actually running the suite rather than trusting existing code (handbook rule 7). Two bugs: (1) the frame-842 "new game" selftest step never called `_finish_new_game()`, so every test after it ran against a paused `State.CREATOR` game instead of `State.PLAYING` — direct data mutations kept "passing" regardless, masking that state-gated signals like `furnace_used` were silently no-ops. (2) with state genuinely fixed, the "resize player" commit's capsule `height=1.8` turned out to mean total height 2.3 (Godot's `CapsuleShape3D.height` excludes the two hemispherical caps: total = height + 2*radius), taller than a 2-block gap. Fixed to `height=1.1` (total 1.6). `player.gd`'s `MODEL_HEIGHT` (visual scale, separate from collision) is untouched and correct. One known minor discrepancy not chased further: a fall-damage test now reads 1 HP lower than its previously-recorded expected value (10 vs 11 on a 3.6-block drop) — likely the corrected capsule height shifting exact fall-distance by a few centimeters.

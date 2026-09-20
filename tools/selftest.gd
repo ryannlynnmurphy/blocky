@@ -48,6 +48,21 @@ func _physics_process(_delta: float) -> void:
 			player.set_look(0.0, -1.0)   # look down at the ground just ahead
 			print("selftest: music loop playing: %s (expect true)"
 				% (Sfx.instance != null and Sfx.instance._music.playing))
+		2:
+			# Water-table data must be independent of loaded chunks and have a
+			# dry surface boundary.  This does not create visual water or alter
+			# player movement; WATER-05/06 own those later layers.
+			var sample := _find_water_table_fixture()
+			var sx: int = sample.x
+			var sz: int = sample.y
+			var ground_top := float(world.height_at(sx, sz) + 1)
+			var surface := world.water_surface_y_at(sx, sz)
+			var submerged := Vector3(sx + 0.5, ground_top + 0.1, sz + 0.5)
+			var at_surface := Vector3(sx + 0.5, surface, sz + 0.5)
+			var dry := Vector3(sx + 0.5, surface + 0.1, sz + 0.5)
+			print("selftest: water table fixture (%d, %d), surface %.1f, depth %.1f; submerged %s, surface dry %s, above dry %s (expect true, true, true)"
+				% [sx, sz, surface, world.water_depth_at(submerged), world.is_water_at(submerged),
+					not world.is_water_at(at_surface), not world.is_water_at(dry)])
 		3:
 			# Exercise the real click path (slot_clicked), not just direct
 			# grid mutation — the reported "doubles the item" bug can only
@@ -615,3 +630,14 @@ func _find_slot_view(ui: InventoryUI, inv: Inventory, index: int) -> InventoryUI
 		if v.inv == inv and v.index == index:
 			return v
 	return null
+
+
+## Finds a generated water column using only deterministic terrain data, so the
+## fixture does not depend on chunk streaming order or player position.
+func _find_water_table_fixture() -> Vector2i:
+	for z in range(-128, 129):
+		for x in range(-128, 129):
+			if float(world.height_at(x, z) + 1) < world.water_surface_y_at(x, z):
+				return Vector2i(x, z)
+	push_error("selftest: no generated water-table fixture found")
+	return Vector2i.ZERO

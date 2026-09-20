@@ -447,6 +447,31 @@ func height_at(x: int, z: int) -> int:
 	return gen.height_at(x, z)
 
 
+## Water belongs to a deterministic terrain table, not the voxel block grid.
+## These queries work before a chunk is streamed and do not create collision
+## or rendering.  A column whose generated ground reaches the surface is dry.
+func water_surface_y_at(x: int, z: int) -> float:
+	return gen.water_surface_y_at(x, z)
+
+
+## Returns the vertical water remaining above this point, or zero when the
+## point is on/above the surface, inside generated terrain, or in a dry column.
+func water_depth_at(world_position: Vector3) -> float:
+	var x := floori(world_position.x)
+	var z := floori(world_position.z)
+	var surface := water_surface_y_at(x, z)
+	var ground_top := float(gen.height_at(x, z) + 1)
+	# Surface callers commonly reuse the returned float. Allow a tiny epsilon so
+	# float representation never classifies the exact surface as submerged.
+	if ground_top >= surface or world_position.y < ground_top or world_position.y >= surface - 0.001:
+		return 0.0
+	return surface - world_position.y
+
+
+func is_water_at(world_position: Vector3) -> bool:
+	return water_depth_at(world_position) > 0.0
+
+
 func biome_name_at(x: int, z: int) -> String:
 	return gen.biome_name_at(x, z)
 

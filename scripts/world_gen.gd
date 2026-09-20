@@ -16,6 +16,10 @@ const SIZE := Chunk.SIZE
 const HEIGHT := Chunk.HEIGHT
 
 const LOWLAND_LEVEL := 19    # low terrain gets sand instead of biome ground
+## The water table is world data, rather than a voxel block.  Keeping the
+## surface just below the next whole block makes an h == LOWLAND_LEVEL column
+## a dry sandbar, while columns below it have a positive water volume.
+const WATER_TABLE_Y := LOWLAND_LEVEL + 0.9
 const SNOW_LINE := 44    # columns at/over this get snow, whatever the biome
 
 enum { PLAINS, FOREST, DESERT, TUNDRA }
@@ -129,6 +133,12 @@ func height_at(x: int, z: int) -> int:
 	var h := hills.get_noise_2d(x, z)       # -1 .. 1
 	var height := 24.0 + c * 16.0 + h * 5.0
 	return clampi(int(height), 3, HEIGHT - 10)
+
+
+## Global v1 water-table query.  It deliberately accepts x/z now so a later
+## terrain contract can vary the table without changing World callers.
+func water_surface_y_at(_x: int, _z: int) -> float:
+	return WATER_TABLE_Y
 
 
 ## Which biome (index into BIOMES) is at world column (x, z).

@@ -25,6 +25,21 @@ const WORK_PAY := 40
 const TALK_MINUTES := 10.0
 const TALK_AFFINITY_GAIN := 5
 
+## L4 (Work Orders Layer 6): a real, if still simple, daily economy.
+## Residents earn DAILY_WAGE automatically (main.gd ties this to
+## day_night.day_changed, S0's real day boundary, not a fake schedule) --
+## unlike the player, who has no job yet (their own identity starts
+## "Looking for work"; WORK_PAY above, from the workbench, is their income
+## until a real employment status exists). DAILY_RENT applies to everyone
+## with a home, player included -- "The Player's Apartment" (B3) already
+## establishes the player lives there too. SHOP_FOOD_COST/HUNGER give money
+## an actual sink (buying food at the cafe), not just a number that only
+## ever goes up.
+const DAILY_WAGE := 30
+const DAILY_RENT := 15
+const SHOP_FOOD_COST := 8
+const SHOP_FOOD_HUNGER := 20
+
 
 ## The one real primitive: advances `clock` by `hours`, then applies every
 ## (need_key -> delta) in `need_deltas` to `profile`. Money is just another
@@ -85,3 +100,38 @@ static func talk(clock: DayNight, a: PersonProfile, b: PersonProfile) -> void:
 	var at: float = clock.total_minutes()
 	a.add_memory({"type": "conversation", "with": b.id(), "with_name": b.display_name(), "at_minutes": at})
 	b.add_memory({"type": "conversation", "with": a.id(), "with_name": a.display_name(), "at_minutes": at})
+
+
+## L4: a resident's automatic daily wage -- called once per resident per
+## day_night.day_changed (see main.gd), not a manual action like work().
+## Recorded as a memory too: a payday is exactly the kind of "important
+## event" L3's inspector should be able to show, and L5's consequence
+## chains (a missed shift, a firing) will need a real payday history to
+## reference against.
+static func payday(clock: DayNight, profile: PersonProfile) -> void:
+	profile.adjust_need("money", DAILY_WAGE)
+	profile.add_memory({"type": "payday", "amount": DAILY_WAGE, "at_minutes": clock.total_minutes()})
+
+
+## L4: daily rent for having a home -- applies to the player too (they
+## live in the same Apartment building B3 named "The Player's Apartment").
+## Deliberately does not block or refuse when money is already 0
+## (PersonProfile.adjust_need() already keeps money non-negative, never
+## letting it go below 0) -- L5's consequence chains are where a real
+## "can't pay rent" event belongs, not this card, which only owns the flow
+## itself existing and persisting.
+static func charge_rent(clock: DayNight, profile: PersonProfile) -> void:
+	profile.adjust_need("money", -DAILY_RENT)
+	profile.add_memory({"type": "rent", "amount": -DAILY_RENT, "at_minutes": clock.total_minutes()})
+
+
+## L4: a shop purchase at the cafe -- spends money for a real hunger
+## restoration, the first genuine money *sink* (every other action so far
+## only ever adds to it). Returns false (and changes nothing) if the buyer
+## can't afford it, so a broke player/resident is honestly refused rather
+## than going into debt a 0-floor "money" need can't actually represent.
+static func buy_food(clock: DayNight, profile: PersonProfile) -> bool:
+	if profile.need("money") < SHOP_FOOD_COST:
+		return false
+	apply_action(clock, profile, 5.0 / MINUTES_PER_HOUR, {"money": -SHOP_FOOD_COST, "hunger": SHOP_FOOD_HUNGER})
+	return true

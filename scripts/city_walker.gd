@@ -56,6 +56,13 @@ signal talk_requested(resident: DebugActor)
 ## proximity query rather than building a second one just for this.
 signal inspect_requested(resident: DebugActor)
 
+## L4: true while standing near the cafe's own outdoor point (polled every
+## physics frame in _check_triggers(), same pattern as near_workbench).
+var near_shop := false
+
+## Fired on B while near_shop is true.
+signal buy_requested
+
 var _pitch := 0.0
 
 @onready var _camera: Camera3D = $Camera3D
@@ -101,6 +108,7 @@ func _check_triggers() -> void:
 			return
 	near_workbench = _block.near_workbench_at(global_position)
 	near_resident = _block.nearest_resident_to(global_position)
+	near_shop = _block.near_shop_at(global_position)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -118,6 +126,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		talk_requested.emit(near_resident)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_I and near_resident != null:
 		inspect_requested.emit(near_resident)
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_B and near_shop:
+		buy_requested.emit()
 
 
 func _physics_process(delta: float) -> void:

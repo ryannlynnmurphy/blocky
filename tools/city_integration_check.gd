@@ -196,6 +196,47 @@ func _physics_process(_delta: float) -> void:
 		136:
 			print("citytest: near_workbench after leaving the trigger: %s (expect false)" % [main._city_walker.near_workbench])
 		140:
+			# L4: teleport to the cafe's own outdoor point (location_positions,
+			# already public/reused throughout B4-B5) and confirm the shop
+			# trigger finds it -- no new geometry needed, unlike the workbench.
+			var cafe_local: Vector3 = main._city.location_positions["cafe"]
+			main._city_walker.global_position = main._city.to_global(cafe_local) + Vector3(0, 0.1, 0.5)
+			main._city_walker.velocity = Vector3.ZERO
+		146:
+			print("citytest: near_shop after standing at the cafe: %s (expect true -- CityBlock.near_shop_at() found it)"
+				% [main._city_walker.near_shop])
+			main.person_profile.data["needs"]["money"] = 100
+			main.person_profile.data["needs"]["hunger"] = 30
+			# A real B keypress, not a direct call -- exercises
+			# CityWalker._unhandled_input()'s own near_shop gate.
+			var b_press := InputEventKey.new()
+			b_press.keycode = KEY_B
+			b_press.pressed = true
+			Input.parse_input_event(b_press)
+		150:
+			print("citytest: real B keypress at the cafe triggered PersonActions.buy_food(): money %d (expect %d), hunger %d (expect %d)"
+				% [main.person_profile.need("money"), 100 - PersonActions.SHOP_FOOD_COST,
+					main.person_profile.need("hunger"), 30 + PersonActions.SHOP_FOOD_HUNGER])
+			main._city_walker.global_position = Vector3(0, -499.9, 0)   # away from the cafe, clear of the shop trigger
+		154:
+			print("citytest: near_shop after leaving the cafe: %s (expect false)" % [main._city_walker.near_shop])
+			# L4: a real day_changed (through load_save_data(), same real
+			# public path S0 already proved fires this signal) should pay
+			# every resident and charge rent on everyone, player included --
+			# through main._on_city_day_changed(), not a direct call.
+			for entry in main._city_residents:
+				entry["profile"].data["needs"]["money"] = 50
+			main.person_profile.data["needs"]["money"] = 50
+			main.day_night.load_save_data({"time_of_day": main.day_night.time_of_day, "day_count": main.day_night.day_count + 1})
+		157:
+			var resident_money: int = main._city_residents[0]["profile"].need("money")
+			var expected_resident: int = 50 + PersonActions.DAILY_WAGE - PersonActions.DAILY_RENT
+			print("citytest: L4 real day_changed paid a resident and charged rent: money %d (expect %d)"
+				% [resident_money, expected_resident])
+			var expected_player: int = 50 - PersonActions.DAILY_RENT
+			print("citytest: L4 real day_changed charged the player rent (no payday -- no job yet): money %d (expect %d)"
+				% [main.person_profile.need("money"), expected_player])
+		160:
 			# Door transitions were the actual bug this card's work-trigger
 			# testing surfaced (see the CORRECTION comment on
 			# CityBlock._add_transition()): confirm walking through a real
@@ -206,17 +247,17 @@ func _physics_process(_delta: float) -> void:
 			var door_target: Vector3 = main._city.to_global(door_local) + Vector3(0, 1.0, 0.1)
 			main._city_walker.global_position = door_target
 			main._city_walker.velocity = Vector3.ZERO
-		144:
+		164:
 			var walker_y: float = main._city_walker.global_position.y
 			print("citytest: apartment door transition while embedded+paused: walker y=%.1f (expect near %.1f -- INTERIOR_Y teleport fired, not the ~%.1f street/door level it started at)"
 				% [walker_y, main._city.position.y + main._city.INTERIOR_Y, main._city.position.y])
 			# Simulate Esc the same way a real keypress does: city_walker.gd's
 			# _unhandled_input emits this exact signal.
 			main._city_walker.exit_requested.emit()
-		147:
+		167:
 			print("citytest: after exit signal: state=%d (expect 2 = PLAYING), tree paused=%s (expect false)"
 				% [main.state, get_tree().paused])
-		154:
+		174:
 			var city_freed := main._city == null or not is_instance_valid(main._city)
 			print("citytest: city instance actually freed=%s (expect true -- queue_free() had a full frame budget to run)" % [city_freed])
 			var drift := player.global_position.distance_to(_player_pos_before_city)
@@ -225,7 +266,7 @@ func _physics_process(_delta: float) -> void:
 			# just that the state label says PLAYING -- same test_move
 			# technique tools/anim_check.gd and tools/selftest.gd both use.
 			player.test_move = Vector2(0, -1)
-		210:
+		230:
 			var moved := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: walked %.2f m after returning from the city (expect > 1.0 -- normal play resumed for real)" % [moved])
 			player.test_move = Vector2.ZERO

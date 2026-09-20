@@ -53,6 +53,8 @@ extends Node
 ##   frame  2030        L3: a conversation leaves a real, correctly-
 ##                      timestamped memory, still inspectable (debug_summary())
 ##                      after the clock advances days later; memory cap holds
+##   frame  2040        L4: payday/rent/shop-purchase math, and a genuine
+##                      refusal when too broke to afford the shop
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1211,6 +1213,34 @@ func _physics_process(_delta: float) -> void:
 				carol.add_memory({"type": "test", "n": i})
 			print("selftest: L3 memory cap holds: size=%d (expect %d), oldest kept is n=%d (expect 10 -- FIFO, not unbounded)"
 				% [carol.memories().size(), PersonProfile.MAX_MEMORIES, carol.memories()[0].get("n", -1)])
+		2040:
+			# L4: a real daily economy -- payday (resident income), rent
+			# (everyone with a home, player included), and a shop purchase
+			# (the first real money sink) all change money and persist
+			# (adjust_need() already round-trips through the same save
+			# path every other need does; not re-tested here, D2/S2 already
+			# proved that for "needs" generally).
+			var worker := PersonProfile.new_resident("Eve Marchetti", "apartment", "cafe")
+			worker.data["needs"]["money"] = 100
+			PersonActions.payday(main.day_night, worker)
+			print("selftest: L4 payday: money %d (expect %d = 100+%d)"
+				% [worker.need("money"), 100 + PersonActions.DAILY_WAGE, PersonActions.DAILY_WAGE])
+			PersonActions.charge_rent(main.day_night, worker)
+			print("selftest: L4 rent: money %d (expect %d)"
+				% [worker.need("money"), 100 + PersonActions.DAILY_WAGE - PersonActions.DAILY_RENT])
+			print("selftest: L4 payday/rent are memories too: %s (expect true -- inspectable the same way a conversation is)"
+				% [worker.memories().any(func(m): return m.get("type") in ["payday", "rent"])])
+			# The shop: a real sink, and a real refusal when broke.
+			worker.data["needs"]["hunger"] = 30
+			var before_money: int = worker.need("money")
+			var bought: bool = PersonActions.buy_food(main.day_night, worker)
+			print("selftest: L4 buy_food() succeeds when affordable: %s, money %d (expect %d), hunger %d (expect %d)"
+				% [bought, worker.need("money"), before_money - PersonActions.SHOP_FOOD_COST,
+					worker.need("hunger"), 30 + PersonActions.SHOP_FOOD_HUNGER])
+			worker.data["needs"]["money"] = 0
+			var refused: bool = PersonActions.buy_food(main.day_night, worker)
+			print("selftest: L4 buy_food() refuses when broke (changes nothing): bought=%s, money still %d (expect false, 0)"
+				% [refused, worker.need("money")])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

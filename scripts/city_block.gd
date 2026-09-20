@@ -520,6 +520,7 @@ const TRANSITION_RADIUS := 1.3   # generous: covers the real ~1.0 vertical
 	## trigger's nominal point, not just the zero-distance entry case.
 const WORK_TRIGGER_RADIUS := 2.0   # horizontal only -- see near_workbench_at()
 const TALK_RADIUS := 1.8   # horizontal only, same reasoning as WORK_TRIGGER_RADIUS
+const SHOP_TRIGGER_RADIUS := 2.5   # generous: location_positions["cafe"] is an open outdoor point, not a tight doorway
 
 ## Ordered door/interior transition points: each {"pos": Vector3 (world/local
 ## trigger point), "target": Vector3, "yaw": float}. Populated by
@@ -541,6 +542,16 @@ func _add_transition(pos: Vector3, target: Vector3, target_yaw: float = 0.0) -> 
 func near_workbench_at(global_pos: Vector3) -> bool:
 	var wb: Vector3 = to_global(workbench_position)
 	return Vector2(global_pos.x - wb.x, global_pos.z - wb.z).length() < WORK_TRIGGER_RADIUS
+
+
+## L4: true when `global_pos` is within SHOP_TRIGGER_RADIUS of the cafe's
+## own outdoor point (location_positions["cafe"], the same point every
+## resident/route already uses -- no new geometry needed, unlike the
+## workbench which sits inside the workplace's teleport-only interior).
+## Horizontal only, same reasoning as near_workbench_at().
+func near_shop_at(global_pos: Vector3) -> bool:
+	var shop: Vector3 = to_global(location_positions.get("cafe", Vector3.ZERO))
+	return Vector2(global_pos.x - shop.x, global_pos.z - shop.z).length() < SHOP_TRIGGER_RADIUS
 
 
 ## L2: the closest resident (any DebugActor child -- not the walker itself,

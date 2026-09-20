@@ -281,6 +281,7 @@ func _enter_city() -> void:
 	_city_walker.work_requested.connect(_on_city_work_requested)
 	_city_walker.talk_requested.connect(_on_city_talk_requested)
 	_city_walker.inspect_requested.connect(_on_city_inspect_requested)
+	_city_walker.buy_requested.connect(_on_city_buy_requested)
 	# L1: the full 20-resident roster (L0) now appears in the city, each
 	# standing at home, and S5's routine loop drives every one of them from
 	# here on -- real hour boundaries (day_night.hour_changed, S0), not a
@@ -296,6 +297,17 @@ func _enter_city() -> void:
 		actor.position += CityBlock.spread_offset(i, roster.size())
 		_city_residents.append({"actor": actor, "profile": profile, "location": home})
 	day_night.hour_changed.connect(_on_city_resident_hour_changed)
+	# L4: payday/rent for everyone with a home/job -- scoped to the same
+	# "while actually visiting the city" lifecycle as hour_changed above,
+	# not a separate always-on economy clock. The player's own rent still
+	# matters outside city visits (they live in the same Apartment
+	# building), but a real detached-from-the-city economy tick is new
+	# scope this card doesn't need to own; every other Layer 5/6 mechanic
+	# so far has been scoped the same way (city-only), and residents
+	# themselves don't persist between visits regardless (S4/S5), so
+	# paying them only while they exist is honest, not a limitation this
+	# card introduces.
+	day_night.day_changed.connect(_on_city_day_changed)
 	_drive_all_city_residents(day_night.hour())   # also act on the hour we're already in, not just the next change
 	_enter(State.CITY)
 
@@ -338,6 +350,34 @@ func _on_city_inspect_requested(resident_actor: DebugActor) -> void:
 	if resident_profile == null:
 		return
 	print(resident_profile.debug_summary())
+
+
+## L4: B pressed near the cafe (scripts/city_walker.gd's buy_requested).
+## Refuses (PersonActions.buy_food() returns false, changes nothing) if the
+## player can't afford it -- printed either way so both outcomes are
+## verifiable, same as every other action's dev-visible feedback.
+func _on_city_buy_requested() -> void:
+	var bought := PersonActions.buy_food(day_night, person_profile)
+	if bought:
+		print("Bought food at the cafe: -$%d, hunger now %d, money now %d"
+			% [PersonActions.SHOP_FOOD_COST, person_profile.need("hunger"), person_profile.need("money")])
+	else:
+		print("Can't afford food at the cafe (need $%d, have $%d)" % [PersonActions.SHOP_FOOD_COST, person_profile.need("money")])
+
+
+## L4: day_night.day_changed while the city is visited -- pays every
+## resident their daily wage and charges everyone (player included) rent.
+## Both are recorded as memories (PersonActions.payday()/charge_rent()), so
+## L3's inspector can already show them even though nothing has built a UI
+## around that yet.
+func _on_city_day_changed(_day: int) -> void:
+	if _city_residents.is_empty():
+		return
+	PersonActions.charge_rent(day_night, person_profile)
+	for entry in _city_residents:
+		var profile: PersonProfile = entry["profile"]
+		PersonActions.payday(day_night, profile)
+		PersonActions.charge_rent(day_night, profile)
 
 
 ## Finds which tracked resident (see _city_residents) a given DebugActor
@@ -400,6 +440,10 @@ func _exit_city() -> void:
 	# disconnect is for every hour after that.
 	if day_night.hour_changed.is_connected(_on_city_resident_hour_changed):
 		day_night.hour_changed.disconnect(_on_city_resident_hour_changed)
+	# L4: same reasoning as hour_changed just above -- day_changed also
+	# outlives a city visit.
+	if day_night.day_changed.is_connected(_on_city_day_changed):
+		day_night.day_changed.disconnect(_on_city_day_changed)
 	_city_residents.clear()
 	player.activate_camera()
 	_enter(State.PLAYING)

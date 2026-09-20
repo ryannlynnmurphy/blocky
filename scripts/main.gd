@@ -415,6 +415,13 @@ func _drive_all_city_residents(hour: int) -> void:
 			continue
 		var profile: PersonProfile = entry["profile"]
 		var goal := ResidentRoutine.current_goal(profile.data["routine"], hour)
+		# L5: a resident too stressed to function calls in instead of
+		# actually heading to work -- redirected home rather than left
+		# stranded wherever they happened to be. Enough of these in a row
+		# gets them fired (PersonActions.maybe_miss_shift() owns the
+		# threshold/streak/firing logic; this is just the dispatch hook).
+		if goal == profile.routine("job") and PersonActions.maybe_miss_shift(day_night, profile):
+			goal = profile.routine("home")
 		if goal == entry["location"]:
 			continue
 		var route: Array = _city.get_route(entry["location"], goal)

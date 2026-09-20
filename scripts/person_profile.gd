@@ -71,6 +71,13 @@ static func default_data() -> Dictionary:
 			"work_start_hour": 9,
 			"work_end_hour": 17,
 			"sleep_hour": 22,
+			# L5: employment status lives here, not a new section -- it's
+			# just another fact about this person's job, the same as
+			# "job"/the work hours already are. "employed" starts true;
+			# PersonActions.maybe_miss_shift()/_fire() are the only writers
+			# once a resident is actually live in the city.
+			"employed": true,
+			"missed_shifts": 0,
 		},
 	}
 
@@ -309,6 +316,12 @@ func _sanitize() -> void:
 		routine_data["job"] = DEFAULT_ROUTINE_JOB
 	for key in ["wake_hour", "work_start_hour", "work_end_hour", "sleep_hour"]:
 		routine_data[key] = posmod(int(routine_data.get(key, 0)), 24)
+	# L5: employment status -- "employed" is a real bool (not just
+	# "truthy"), "missed_shifts" a real non-negative count, so a corrupted
+	# or hand-edited save can't smuggle a garbage-typed value past this the
+	# same way relationships/needs already can't.
+	routine_data["employed"] = bool(routine_data.get("employed", true))
+	routine_data["missed_shifts"] = maxi(int(routine_data.get("missed_shifts", 0)), 0)
 	data["routine"] = routine_data
 	# L2: every relationship record's affinity stays in range even after a
 	# raw load from disk (adjust_relationship() already clamps its own

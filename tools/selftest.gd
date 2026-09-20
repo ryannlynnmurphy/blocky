@@ -55,6 +55,10 @@ extends Node
 ##                      after the clock advances days later; memory cap holds
 ##   frame  2040        L4: payday/rent/shop-purchase math, and a genuine
 ##                      refusal when too broke to afford the shop
+##   frame  2050        L5: the consequence chain -- stress causes a missed
+##                      shift, enough of those get a resident fired, and a
+##                      fired resident stops getting paid (real, ongoing
+##                      money pressure), all explainable from memories alone
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -1241,6 +1245,36 @@ func _physics_process(_delta: float) -> void:
 			var refused: bool = PersonActions.buy_food(main.day_night, worker)
 			print("selftest: L4 buy_food() refuses when broke (changes nothing): bought=%s, money still %d (expect false, 0)"
 				% [refused, worker.need("money")])
+		2050:
+			# L5: the consequence chain -- too much stress makes a resident
+			# miss their shift instead of a coin flip; low stress must NOT
+			# trigger it (deterministic threshold, not randomness).
+			var frank := PersonProfile.new_resident("Frank Osei", "apartment", "workplace")
+			frank.data["needs"]["stress"] = 20
+			var missed_low_stress: bool = PersonActions.maybe_miss_shift(main.day_night, frank)
+			print("selftest: L5 low stress (20) does not miss a shift: %s (expect false)" % [missed_low_stress])
+			frank.data["needs"]["stress"] = 90
+			var missed_1: bool = PersonActions.maybe_miss_shift(main.day_night, frank)
+			print("selftest: L5 high stress (90) misses a shift: %s, streak=%d, still employed=%s (expect true, 1, true)"
+				% [missed_1, frank.routine("missed_shifts"), frank.routine("employed")])
+			# Two more in a row crosses SHIFTS_BEFORE_FIRING -- fired, and
+			# payday() genuinely stops paying them from here on (real,
+			# ongoing money pressure, not a one-time penalty).
+			PersonActions.maybe_miss_shift(main.day_night, frank)
+			PersonActions.maybe_miss_shift(main.day_night, frank)
+			print("selftest: L5 after %d missed shifts: employed=%s (expect false), stress=%d (expect a spike from %d)"
+				% [PersonActions.SHIFTS_BEFORE_FIRING, frank.routine("employed"), frank.need("stress"), PersonActions.MISSED_SHIFT_STRESS_THRESHOLD])
+			var money_before_fired_payday: int = frank.need("money")
+			PersonActions.payday(main.day_night, frank)
+			print("selftest: L5 payday no longer pays a fired resident: money %d (expect unchanged at %d)"
+				% [frank.need("money"), money_before_fired_payday])
+			PersonActions.charge_rent(main.day_night, frank)
+			print("selftest: L5 rent still applies after firing (real money pressure): money %d (expect %d)"
+				% [frank.need("money"), money_before_fired_payday - PersonActions.DAILY_RENT])
+			# "Explainable": the whole chain reads back from memories alone.
+			var chain_visible: bool = frank.memories().any(func(m): return m.get("type") == "missed_shift") \
+				and frank.memories().any(func(m): return m.get("type") == "fired")
+			print("selftest: L5 chain is explainable from memories alone (missed_shift + fired both present): %s" % [chain_visible])
 
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,

@@ -18,6 +18,7 @@ var _frame := 0
 var _player_pos_before_city := Vector3.ZERO
 var _work_minutes_before := 0.0
 var _talked_to_actor: DebugActor = null
+var _l5_missed_before := 0
 
 
 func _physics_process(_delta: float) -> void:
@@ -236,7 +237,48 @@ func _physics_process(_delta: float) -> void:
 			var expected_player: int = 50 - PersonActions.DAILY_RENT
 			print("citytest: L4 real day_changed charged the player rent (no payday -- no job yet): money %d (expect %d)"
 				% [main.person_profile.need("money"), expected_player])
+		158:
+			# L5: prove the missed-shift/firing consequence chain actually
+			# fires through the real hour_changed -> _on_city_resident_
+			# hour_changed() -> _drive_all_city_residents() chain, not a
+			# direct call to PersonActions.maybe_miss_shift() the way
+			# tools/selftest.gd's own L5 frame 2050 already covers the pure
+			# logic. Picks the first tracked resident, pushes their stress
+			# above the real threshold, and points them at home so the real
+			# dispatch has an actual redirect to make (not a no-op because
+			# they're already wherever the goal says).
+			var l5_entry: Dictionary = main._city_residents[0]
+			var l5_profile: PersonProfile = l5_entry["profile"]
+			l5_profile.data["needs"]["stress"] = 90
+			l5_entry["location"] = l5_profile.routine("home")
+			_l5_missed_before = int(l5_profile.routine("missed_shifts"))
+			print("citytest: L5 setup -- %s stress=%d (expect >= %d threshold), missed_shifts before=%d, employed=%s (expect true)"
+				% [l5_profile.display_name(), l5_profile.need("stress"), PersonActions.MISSED_SHIFT_STRESS_THRESHOLD,
+					_l5_missed_before, l5_profile.routine("employed")])
 		160:
+			# A real hour boundary through DayNight.load_save_data() -- the
+			# same public entry point every other hour-jump check in this
+			# session uses -- landed on this resident's own work_start_hour
+			# so ResidentRoutine.current_goal() genuinely says "job" right
+			# now, not a fake/forced goal. Bumped by 1 in the (unlikely)
+			# case the clock already happens to be sitting on that hour, so
+			# hour_changed is guaranteed to actually fire (equal hours
+			# would silently no-op, matching DayNight's own "only real
+			# transitions signal" contract) -- still inside the job window
+			# either way, since the roster (L0) always gives at least a
+			# 6-hour work_start/work_end span.
+			var l5_profile2: PersonProfile = main._city_residents[0]["profile"]
+			var l5_work_hour: int = int(l5_profile2.routine("work_start_hour"))
+			if l5_work_hour == main.day_night.hour():
+				l5_work_hour += 1
+			main.day_night.load_save_data({"time_of_day": float(l5_work_hour) / 24.0 + 0.001, "day_count": main.day_night.day_count})
+		163:
+			var l5_entry2: Dictionary = main._city_residents[0]
+			var l5_profile3: PersonProfile = l5_entry2["profile"]
+			print("citytest: L5 real hour_changed redirected the stressed resident home instead of to work: location=%s (expect %s = home), missed_shifts=%d (expect %d), employed=%s (expect true -- one miss doesn't fire yet)"
+				% [l5_entry2["location"], l5_profile3.routine("home"), int(l5_profile3.routine("missed_shifts")),
+					_l5_missed_before + 1, l5_profile3.routine("employed")])
+		168:
 			# Door transitions were the actual bug this card's work-trigger
 			# testing surfaced (see the CORRECTION comment on
 			# CityBlock._add_transition()): confirm walking through a real
@@ -247,17 +289,17 @@ func _physics_process(_delta: float) -> void:
 			var door_target: Vector3 = main._city.to_global(door_local) + Vector3(0, 1.0, 0.1)
 			main._city_walker.global_position = door_target
 			main._city_walker.velocity = Vector3.ZERO
-		164:
+		172:
 			var walker_y: float = main._city_walker.global_position.y
 			print("citytest: apartment door transition while embedded+paused: walker y=%.1f (expect near %.1f -- INTERIOR_Y teleport fired, not the ~%.1f street/door level it started at)"
 				% [walker_y, main._city.position.y + main._city.INTERIOR_Y, main._city.position.y])
 			# Simulate Esc the same way a real keypress does: city_walker.gd's
 			# _unhandled_input emits this exact signal.
 			main._city_walker.exit_requested.emit()
-		167:
+		175:
 			print("citytest: after exit signal: state=%d (expect 2 = PLAYING), tree paused=%s (expect false)"
 				% [main.state, get_tree().paused])
-		174:
+		182:
 			var city_freed := main._city == null or not is_instance_valid(main._city)
 			print("citytest: city instance actually freed=%s (expect true -- queue_free() had a full frame budget to run)" % [city_freed])
 			var drift := player.global_position.distance_to(_player_pos_before_city)
@@ -266,7 +308,7 @@ func _physics_process(_delta: float) -> void:
 			# just that the state label says PLAYING -- same test_move
 			# technique tools/anim_check.gd and tools/selftest.gd both use.
 			player.test_move = Vector2(0, -1)
-		230:
+		238:
 			var moved := player.global_position.distance_to(_player_pos_before_city)
 			print("citytest: walked %.2f m after returning from the city (expect > 1.0 -- normal play resumed for real)" % [moved])
 			player.test_move = Vector2.ZERO

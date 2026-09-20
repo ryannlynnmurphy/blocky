@@ -40,6 +40,19 @@ const DAILY_RENT := 15
 const SHOP_FOOD_COST := 8
 const SHOP_FOOD_HUNGER := 20
 
+## L5 (Work Orders Layer 6): a small, simulation-driven consequence chain
+## -- too much stress makes a resident miss their shift instead of a coin
+## flip; enough missed shifts gets them fired; being fired stops payday()
+## from paying them (below), so rent (which keeps charging regardless)
+## creates real, ongoing money pressure with no scripted "and now they're
+## broke" event needed -- it just falls out of mechanics that already
+## exist. Every step is a plain threshold on real state, so the whole
+## chain is explainable from a resident's own memories after the fact
+## (this card's own "done when").
+const MISSED_SHIFT_STRESS_THRESHOLD := 80
+const SHIFTS_BEFORE_FIRING := 3
+const FIRING_STRESS_SPIKE := 15
+
 
 ## The one real primitive: advances `clock` by `hours`, then applies every
 ## (need_key -> delta) in `need_deltas` to `profile`. Money is just another
@@ -109,6 +122,8 @@ static func talk(clock: DayNight, a: PersonProfile, b: PersonProfile) -> void:
 ## chains (a missed shift, a firing) will need a real payday history to
 ## reference against.
 static func payday(clock: DayNight, profile: PersonProfile) -> void:
+	if not profile.routine("employed"):
+		return   # L5: fired -- no more automatic income; rent still runs, real money pressure
 	profile.adjust_need("money", DAILY_WAGE)
 	profile.add_memory({"type": "payday", "amount": DAILY_WAGE, "at_minutes": clock.total_minutes()})
 
@@ -135,3 +150,35 @@ static func buy_food(clock: DayNight, profile: PersonProfile) -> bool:
 		return false
 	apply_action(clock, profile, 5.0 / MINUTES_PER_HOUR, {"money": -SHOP_FOOD_COST, "hunger": SHOP_FOOD_HUNGER})
 	return true
+
+
+## L5: called instead of dispatching a resident to work (main.gd's
+## _drive_all_city_residents(), right when ResidentRoutine.current_goal()
+## would send them to their job) -- checks whether their own stress is too
+## high to function. Returns true if the shift was actually missed (the
+## caller should keep them home instead of routing to work this time);
+## false means nothing changed and the normal dispatch should proceed.
+## Already-unemployed residents have no shift left to miss.
+static func maybe_miss_shift(clock: DayNight, profile: PersonProfile) -> bool:
+	if not profile.routine("employed"):
+		return false
+	if profile.need("stress") < MISSED_SHIFT_STRESS_THRESHOLD:
+		return false
+	var streak: int = int(profile.routine("missed_shifts")) + 1
+	profile.data["routine"]["missed_shifts"] = streak
+	profile.add_memory({"type": "missed_shift", "streak": streak, "at_minutes": clock.total_minutes()})
+	if streak >= SHIFTS_BEFORE_FIRING:
+		_fire(clock, profile)
+	return true
+
+
+## L5: the end of the chain -- employed becomes false (payday() above
+## stops paying them from here on), a real stress spike from the shock,
+## and a memory recording exactly why (the streak that caused it), so the
+## whole chain reads back as one explainable story afterward: missed
+## shifts accumulating, then this, then declining money with rent still
+## running and no more payday to offset it.
+static func _fire(clock: DayNight, profile: PersonProfile) -> void:
+	profile.data["routine"]["employed"] = false
+	profile.adjust_need("stress", FIRING_STRESS_SPIKE)
+	profile.add_memory({"type": "fired", "after_missed_shifts": profile.routine("missed_shifts"), "at_minutes": clock.total_minutes()})

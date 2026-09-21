@@ -15,7 +15,6 @@ signal respawn_pressed
 signal sfx_volume_changed(value: float)
 signal person_confirmed
 signal creator_cancelled
-signal visit_city_pressed
 
 var _title: Control
 var _pause: Control
@@ -62,11 +61,6 @@ func _ready() -> void:
 	ng.pressed.connect(func(): new_game_pressed.emit(_seed_edit.text))
 	row.add_child(ng)
 	tv.add_child(row)
-	# B5: real integration, not the preview-only scene swap this used before
-	# (main.gd's _enter_city() embeds scenes/city_block.tscn inside the live
-	# game via State.CITY instead of replacing the whole scene tree) -- so
-	# it's also on the pause menu below, reachable mid-game.
-	_button(tv, "Visit Hollowmark", func(): visit_city_pressed.emit())
 	_button(tv, "Quit", func(): quit_pressed.emit())
 
 	# ---- pause ----
@@ -89,7 +83,6 @@ func _ready() -> void:
 	_volume.value_changed.connect(func(v: float): sfx_volume_changed.emit(v))
 	vol_row.add_child(_volume)
 	pv.add_child(vol_row)
-	_button(pv, "Visit Hollowmark", func(): visit_city_pressed.emit())
 	_button(pv, "Quit to Title", func(): to_title_pressed.emit())
 
 	# ---- death ----
@@ -231,7 +224,7 @@ func _build_creator() -> void:
 	back.pressed.connect(func(): creator_cancelled.emit())
 	actions.add_child(back)
 	var begin := Button.new()
-	begin.text = "Enter Hollowmark  →"
+	begin.text = "Begin  →"
 	begin.custom_minimum_size = Vector2(240, 42)
 	begin.add_theme_font_size_override("font_size", 18)
 	# The one action that actually starts the game deserves to look like it,

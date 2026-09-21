@@ -35,30 +35,15 @@ extends Node
 ##                      day()/total_minutes() derivation, hour_changed/
 ##                      day_changed firing through the real load_save_data()
 ##                      path, and get_save_data()/load_save_data() round-trip
-##   frames 1850..1870 S2: PersonActions.eat()/work() math, then the real
+##   frames 1850..1870 S2: PersonActions.eat() math, then the real
 ##                      main._try_sleep() integration (clock + needs move
 ##                      together through one actual player action)
-##   frame  1890        S3: one resident PersonProfile record (home/job/
-##                      routine/appearance), sanitizing bad home/job, and a
-##                      save/load round trip preserving the routine
-##   frame  1900        S5: ResidentRoutine.current_goal() pure logic across
-##                      a full day (sleep/work/food, both sides of midnight)
 ##   frames 1910..2000  S1: the HUD clock reads DayNight.clock_text()
 ##                      exactly, and holding T measurably speeds up time
-##   frame  2010        L0: 20 deterministic resident records validate and
-##                      rebuild identically (name/appearance), no id reuse
-##   frame  2020        L2: PersonActions.talk() moves both people's
-##                      affinity by the same fixed amount, cumulatively,
-##                      and it survives a save/load round trip
-##   frame  2030        L3: a conversation leaves a real, correctly-
-##                      timestamped memory, still inspectable (debug_summary())
-##                      after the clock advances days later; memory cap holds
-##   frame  2040        L4: payday/rent/shop-purchase math, and a genuine
-##                      refusal when too broke to afford the shop
-##   frame  2050        L5: the consequence chain -- stress causes a missed
-##                      shift, enough of those get a resident fired, and a
-##                      fired resident stops getting paid (real, ongoing
-##                      money pressure), all explainable from memories alone
+##
+## The city/resident/economy system (S3-S5, L0-L5, and everything under
+## Work Orders Layers 4-7) was torn out at Ryann's direction on 2026-09-20
+## in favor of a block-built town -- see docs/AGENT_BOARD.md's dated entry.
 
 const TEST_SAVE := "user://selftest_save.json"
 
@@ -437,12 +422,12 @@ func _physics_process(_delta: float) -> void:
 		842:
 			# New Game now stops at Create a Person (main.State.CREATOR, which
 			# also pauses the tree) rather than starting play directly; confirm
-			# it the same way clicking "Enter Hollowmark" would, or every test
-			# below this point silently runs against a paused, non-PLAYING
-			# game (state-gated signals like furnace_used no-op, even though
-			# direct data calls like inventory/world edits keep "working"
-			# regardless of pause -- this is exactly how WATER-05's sibling
-			# regression was found).
+			# it the same way clicking "Begin" would, or every test below this
+			# point silently runs against a paused, non-PLAYING game
+			# (state-gated signals like furnace_used no-op, even though direct
+			# data calls like inventory/world edits keep "working" regardless
+			# of pause -- this is exactly how WATER-05's sibling regression
+			# was found).
 			main._new_game("42")
 			main._finish_new_game()
 			print("selftest: new game: seed %d (expect 42), inventory %s, health %d, playing: %s (expect true)"
@@ -978,20 +963,6 @@ func _physics_process(_delta: float) -> void:
 			print("selftest: S2 PersonActions.eat(): hunger %d (expect 65 = 40+25), energy %d (expect 53 = 50+3), clock advanced %.1f min (expect 10.0)"
 				% [main.person_profile.need("hunger"), main.person_profile.need("energy"),
 					main.day_night.total_minutes() - eat_minutes_before])
-		1860:
-			# S2: PersonActions.work() -- v1 placeholder for the real job
-			# system (Layer 6's L4), proving the action->time/needs/money
-			# pipeline end-to-end for a paid action.
-			main.person_profile.data["needs"]["money"] = 100
-			main.person_profile.data["needs"]["energy"] = 80
-			main.person_profile.data["needs"]["social"] = 60
-			main.person_profile.data["needs"]["stress"] = 20
-			var work_minutes_before: float = main.day_night.total_minutes()
-			PersonActions.work(main.day_night, main.person_profile)
-			print("selftest: S2 PersonActions.work(): money %d (expect 140), energy %d (expect 50), social %d (expect 50), stress %d (expect 30), clock advanced %.1f min (expect 240.0 = 4h)"
-				% [main.person_profile.need("money"), main.person_profile.need("energy"),
-					main.person_profile.need("social"), main.person_profile.need("stress"),
-					main.day_night.total_minutes() - work_minutes_before])
 		1868:
 			# S2 setup, a couple of frames ahead of the sleep test itself:
 			# a hostile spawned (and left lingering, never freed) by an
@@ -1023,49 +994,6 @@ func _physics_process(_delta: float) -> void:
 			var slept_hours: float = (main.day_night.total_minutes() - sleep_minutes_before) / 60.0
 			print("selftest: S2 main._try_sleep(): slept %.2f h (expect > 0), energy %d (expect > 20), stress %d (expect < 50), time_of_day %.2f (expect ~0.25 = sunrise)"
 				% [slept_hours, main.person_profile.need("energy"), main.person_profile.need("stress"), main.day_night.time_of_day])
-		1890:
-			# S3: one resident data record, the same PersonProfile shape the
-			# player uses (see that class's own doc comment) -- a real,
-			# distinct person, not just schema support nothing constructs.
-			var resident: PersonProfile = PersonProfile.new_resident("Priya Nair", "apartment", "workplace")
-			var resident_valid: bool = resident.display_name() == "Priya Nair" \
-				and resident.id() != main.person_profile.id() and not resident.id().is_empty() \
-				and resident.routine("home") == "apartment" and resident.routine("job") == "workplace" \
-				and resident.routine("work_start_hour") == 9 and resident.appearance("body") in PersonProfile.APPEARANCE_OPTIONS["body"] \
-				and resident.need("hunger") >= 0 and resident.need("hunger") <= 100
-			print("selftest: S3 resident record valid=%s (name=%s, id=%s, home=%s, job=%s, work_start_hour=%d, body=%s, hunger=%d)"
-				% [resident_valid, resident.display_name(), resident.id(), resident.routine("home"), resident.routine("job"),
-					resident.routine("work_start_hour"), resident.appearance("body"), resident.need("hunger")])
-			# An invalid home/job must sanitize to a real location, not stick
-			# around as garbage a route lookup would silently fail on.
-			var bad_resident: PersonProfile = PersonProfile.new_resident("Test Ghost", "nowhere", "void")
-			print("selftest: S3 an invalid home/job sanitizes to real locations: home=%s job=%s (expect both in %s)"
-				% [bad_resident.routine("home"), bad_resident.routine("job"), PersonProfile.ROUTINE_LOCATIONS])
-			# A round trip through the real save format (to_dict()/load_dict(),
-			# the same calls save_game()/load_game() use) must preserve the
-			# routine too, not just identity/needs (already proven at D3).
-			var round_trip := PersonProfile.new()
-			round_trip.load_dict(resident.to_dict())
-			var routine_survived: bool = round_trip.routine("home") == "apartment" and round_trip.routine("job") == "workplace" \
-				and round_trip.display_name() == "Priya Nair"
-			print("selftest: S3 routine survives a save/load round trip: %s" % [routine_survived])
-		1900:
-			# S5: ResidentRoutine.current_goal() pure logic, against Priya's
-			# actual routine (sleep 22, wake 7, work 9-17) -- covers all
-			# three goal kinds and both sides of the midnight wrap.
-			var pr: Dictionary = PersonProfile.new_resident("Priya Nair", "apartment", "workplace").data["routine"]
-			var goals := {
-				23: ResidentRoutine.current_goal(pr, 23),   # deep night, wrapped sleep range
-				3: ResidentRoutine.current_goal(pr, 3),     # deep night, other side of the wrap
-				8: ResidentRoutine.current_goal(pr, 8),     # awake, before work: breakfast
-				12: ResidentRoutine.current_goal(pr, 12),   # mid-shift
-				18: ResidentRoutine.current_goal(pr, 18),   # after work, before bed: dinner
-				22: ResidentRoutine.current_goal(pr, 22),   # bedtime starts
-			}
-			print("selftest: S5 ResidentRoutine.current_goal() by hour: %s (expect 23,3=apartment; 8,18=cafe; 12=workplace; 22=apartment)" % [goals])
-			var goals_ok: bool = goals[23] == "apartment" and goals[3] == "apartment" and goals[8] == "cafe" \
-				and goals[12] == "workplace" and goals[18] == "cafe" and goals[22] == "apartment"
-			print("selftest: S5 all expected goals correct: %s" % [goals_ok])
 		1910:
 			# S1: the HUD clock (already built for the biome+clock status
 			# line P2 added) reads legibly and matches DayNight's own
@@ -1115,167 +1043,6 @@ func _physics_process(_delta: float) -> void:
 			var ff_ratio := (_ff_fast_delta / _ff_normal_delta) if _ff_normal_delta > 0.0 else 0.0
 			print("selftest: S1 fast-forward (T held): normal advance %.5f, held advance %.5f, ratio %.1fx (expect > 5x)"
 				% [_ff_normal_delta, _ff_fast_delta, ff_ratio])
-		2010:
-			# L0: 20 deterministic resident records -- data only, no
-			# spawning change (still just Priya, confirmed a different way
-			# below: main._enter_city() is unchanged by this card and its
-			# own S4 test already proves exactly one "Resident" node exists).
-			var roster: Array[PersonProfile] = ResidentRoster.build()
-			var ids := {}
-			var all_valid := true
-			for p in roster:
-				ids[p.id()] = true
-				if p.display_name().is_empty():
-					all_valid = false
-				if p.routine("home") not in PersonProfile.ROUTINE_LOCATIONS or p.routine("job") not in PersonProfile.ROUTINE_LOCATIONS:
-					all_valid = false
-				for hour_key in ["wake_hour", "work_start_hour", "work_end_hour", "sleep_hour"]:
-					var h: int = p.routine(hour_key)
-					if h < 0 or h > 23:
-						all_valid = false
-				for key in PersonProfile.APPEARANCE_OPTIONS:
-					if p.appearance(key) not in PersonProfile.APPEARANCE_OPTIONS[key]:
-						all_valid = false
-			print("selftest: L0 roster size=%d (expect 20), unique ids=%d (expect 20, no collisions), all valid=%s"
-				% [roster.size(), ids.size(), all_valid])
-			print("selftest: L0 index 0 matches S3/S4's own live resident: name=%s home=%s job=%s (expect Priya Nair, apartment, workplace)"
-				% [roster[0].display_name(), roster[0].routine("home"), roster[0].routine("job")])
-			# Determinism: building the roster twice must produce the exact
-			# same names/routine in the same order, not a fresh random draw.
-			var roster2: Array[PersonProfile] = ResidentRoster.build()
-			var deterministic := true
-			for i in roster.size():
-				if roster[i].display_name() != roster2[i].display_name() or roster[i].appearance("skin") != roster2[i].appearance("skin"):
-					deterministic = false
-			print("selftest: L0 roster is deterministic across builds: %s" % [deterministic])
-		2020:
-			# L2: PersonActions.talk() -- a conversation deterministically
-			# moves BOTH people's affinity toward each other by the same
-			# fixed amount (this card's own "done when"), not a dice roll.
-			var alice := PersonProfile.new_resident("Alice Ghent", "apartment", "workplace")
-			var bob := PersonProfile.new_resident("Bob Ilič", "apartment", "cafe")
-			print("selftest: L2 before talking: alice->bob=%d, bob->alice=%d (expect 0, 0 -- strangers)"
-				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id())])
-			var talk_minutes_before: float = main.day_night.total_minutes()
-			PersonActions.talk(main.day_night, alice, bob)
-			print("selftest: L2 after one conversation: alice->bob=%d, bob->alice=%d (expect both %d), clock advanced %.1f min (expect %.1f)"
-				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id()), PersonActions.TALK_AFFINITY_GAIN,
-					main.day_night.total_minutes() - talk_minutes_before, PersonActions.TALK_MINUTES])
-			# Deterministic and cumulative: a second conversation adds the
-			# same fixed amount again, not a fresh random roll.
-			PersonActions.talk(main.day_night, alice, bob)
-			print("selftest: L2 after a second conversation: alice->bob=%d, bob->alice=%d (expect both %d)"
-				% [alice.relationship_affinity(bob.id()), bob.relationship_affinity(alice.id()), PersonActions.TALK_AFFINITY_GAIN * 2])
-			# Relationships round-trip through the real save format
-			# (to_dict()/load_dict(), same as routine at S3) -- not just
-			# held in memory for as long as the process happens to run.
-			var alice_loaded := PersonProfile.new()
-			alice_loaded.load_dict(alice.to_dict())
-			print("selftest: L2 relationship survives a save/load round trip: %s (loaded affinity=%d)"
-				% [alice_loaded.relationship_affinity(bob.id()) == PersonActions.TALK_AFFINITY_GAIN * 2, alice_loaded.relationship_affinity(bob.id())])
-		2030:
-			# L3: memory records -- a conversation leaves both parties with
-			# a real, inspectable memory of it, not just a relationship number.
-			var carol := PersonProfile.new_resident("Carol Nkemelu", "apartment", "workplace")
-			var dan := PersonProfile.new_resident("Dan Osei", "apartment", "cafe")
-			main.day_night.time_of_day = 0.3
-			main.day_night.day_count = 1
-			main.day_night._apply()
-			PersonActions.talk(main.day_night, carol, dan)
-			# talk_at is read back from the memory itself, not predicted
-			# from a before-the-call snapshot -- apply_action() advances
-			# the clock by TALK_MINUTES *before* talk() records the memory,
-			# so the correct timestamp is ~10 minutes after time_of_day was
-			# set above, not equal to it (observed directly: an earlier
-			# draft of this test assumed equal-to and was wrong).
-			print("selftest: L3 memories after one conversation: carol=%d, dan=%d (expect both 1)"
-				% [carol.memories().size(), dan.memories().size()])
-			var carol_memory: Dictionary = carol.memories()[0]
-			var talk_at: float = float(carol_memory.get("at_minutes", -1.0))
-			var content_ok: bool = carol_memory.get("type") == "conversation" and carol_memory.get("with") == dan.id() \
-				and talk_at > 432.0 and talk_at < 443.0   # day 1, time_of_day 0.3 = minute 432, plus the ~10 min talk() itself costs
-			print("selftest: L3 memory content correct: %s (%s)" % [content_ok, carol_memory])
-			# "Inspectable after time advances" -- this card's own literal
-			# acceptance check: jump the clock forward several days after
-			# the conversation happened, then confirm the memory is still
-			# there, unchanged, still correctly timestamped in the past.
-			main.day_night.time_of_day = 0.5
-			main.day_night.day_count = 5
-			main.day_night._apply()
-			var still_there: bool = carol.memories().size() == 1 and is_equal_approx(float(carol.memories()[0].get("at_minutes", -1.0)), talk_at) \
-				and carol.memories()[0]["at_minutes"] < main.day_night.total_minutes()
-			print("selftest: L3 memory still inspectable after time advances (now day %d vs conversation at day 1): %s"
-				% [main.day_night.day_count, still_there])
-			# debug_summary() -- the "resident debug inspector" itself --
-			# includes the relationship and memory, not just identity/needs.
-			var summary := carol.debug_summary()
-			var summary_ok: bool = summary.find(dan.id()) != -1 and summary.find("conversation") != -1
-			print("selftest: L3 debug_summary() includes the relationship and memory: %s" % [summary_ok])
-			# Cap: MAX_MEMORIES stays bounded even after many events, oldest
-			# evicted first (FIFO), not unbounded growth.
-			for i in PersonProfile.MAX_MEMORIES + 10:
-				carol.add_memory({"type": "test", "n": i})
-			print("selftest: L3 memory cap holds: size=%d (expect %d), oldest kept is n=%d (expect 10 -- FIFO, not unbounded)"
-				% [carol.memories().size(), PersonProfile.MAX_MEMORIES, carol.memories()[0].get("n", -1)])
-		2040:
-			# L4: a real daily economy -- payday (resident income), rent
-			# (everyone with a home, player included), and a shop purchase
-			# (the first real money sink) all change money and persist
-			# (adjust_need() already round-trips through the same save
-			# path every other need does; not re-tested here, D2/S2 already
-			# proved that for "needs" generally).
-			var worker := PersonProfile.new_resident("Eve Marchetti", "apartment", "cafe")
-			worker.data["needs"]["money"] = 100
-			PersonActions.payday(main.day_night, worker)
-			print("selftest: L4 payday: money %d (expect %d = 100+%d)"
-				% [worker.need("money"), 100 + PersonActions.DAILY_WAGE, PersonActions.DAILY_WAGE])
-			PersonActions.charge_rent(main.day_night, worker)
-			print("selftest: L4 rent: money %d (expect %d)"
-				% [worker.need("money"), 100 + PersonActions.DAILY_WAGE - PersonActions.DAILY_RENT])
-			print("selftest: L4 payday/rent are memories too: %s (expect true -- inspectable the same way a conversation is)"
-				% [worker.memories().any(func(m): return m.get("type") in ["payday", "rent"])])
-			# The shop: a real sink, and a real refusal when broke.
-			worker.data["needs"]["hunger"] = 30
-			var before_money: int = worker.need("money")
-			var bought: bool = PersonActions.buy_food(main.day_night, worker)
-			print("selftest: L4 buy_food() succeeds when affordable: %s, money %d (expect %d), hunger %d (expect %d)"
-				% [bought, worker.need("money"), before_money - PersonActions.SHOP_FOOD_COST,
-					worker.need("hunger"), 30 + PersonActions.SHOP_FOOD_HUNGER])
-			worker.data["needs"]["money"] = 0
-			var refused: bool = PersonActions.buy_food(main.day_night, worker)
-			print("selftest: L4 buy_food() refuses when broke (changes nothing): bought=%s, money still %d (expect false, 0)"
-				% [refused, worker.need("money")])
-		2050:
-			# L5: the consequence chain -- too much stress makes a resident
-			# miss their shift instead of a coin flip; low stress must NOT
-			# trigger it (deterministic threshold, not randomness).
-			var frank := PersonProfile.new_resident("Frank Osei", "apartment", "workplace")
-			frank.data["needs"]["stress"] = 20
-			var missed_low_stress: bool = PersonActions.maybe_miss_shift(main.day_night, frank)
-			print("selftest: L5 low stress (20) does not miss a shift: %s (expect false)" % [missed_low_stress])
-			frank.data["needs"]["stress"] = 90
-			var missed_1: bool = PersonActions.maybe_miss_shift(main.day_night, frank)
-			print("selftest: L5 high stress (90) misses a shift: %s, streak=%d, still employed=%s (expect true, 1, true)"
-				% [missed_1, frank.routine("missed_shifts"), frank.routine("employed")])
-			# Two more in a row crosses SHIFTS_BEFORE_FIRING -- fired, and
-			# payday() genuinely stops paying them from here on (real,
-			# ongoing money pressure, not a one-time penalty).
-			PersonActions.maybe_miss_shift(main.day_night, frank)
-			PersonActions.maybe_miss_shift(main.day_night, frank)
-			print("selftest: L5 after %d missed shifts: employed=%s (expect false), stress=%d (expect a spike from %d)"
-				% [PersonActions.SHIFTS_BEFORE_FIRING, frank.routine("employed"), frank.need("stress"), PersonActions.MISSED_SHIFT_STRESS_THRESHOLD])
-			var money_before_fired_payday: int = frank.need("money")
-			PersonActions.payday(main.day_night, frank)
-			print("selftest: L5 payday no longer pays a fired resident: money %d (expect unchanged at %d)"
-				% [frank.need("money"), money_before_fired_payday])
-			PersonActions.charge_rent(main.day_night, frank)
-			print("selftest: L5 rent still applies after firing (real money pressure): money %d (expect %d)"
-				% [frank.need("money"), money_before_fired_payday - PersonActions.DAILY_RENT])
-			# "Explainable": the whole chain reads back from memories alone.
-			var chain_visible: bool = frank.memories().any(func(m): return m.get("type") == "missed_shift") \
-				and frank.memories().any(func(m): return m.get("type") == "fired")
-			print("selftest: L5 chain is explainable from memories alone (missed_shift + fired both present): %s" % [chain_visible])
-
 
 ## Finds the SlotView the InventoryUI built for a given (inv, index) pair,
 ## so a test can drive the real click handler instead of poking data.

@@ -58,6 +58,17 @@ water a normal opaque block. The precise contract lives in
 | P1 | T2 | Apply saved appearance to the actual player actor. | P0 | Spawned player matches preview. |
 | P2 | T3 | Verify reload, HUD name, and survival-system regression. | P1 | Save/load and existing self-test pass. |
 
+## Layers 4-7 — SUPERSEDED 2026-09-20, see docs/AGENT_BOARD.md
+
+Ryann discarded the entire Hollowmark Sims-style city (this layer through
+Layer 7) and directed a restart as a Minecraft/New-York-inspired city built
+from real voxel blocks in the open world instead. Every card below is void
+-- left here as a record of what was tried, not a plan to resume. Do not
+pick up B0-B5/S3-S5/L0-L5/A0 as if they were still open or still done; the
+code behind them has been deleted. See the dated AGENT_BOARD.md entry
+"MAJOR DIRECTION CHANGE" for what was removed, what was kept, and where
+the new direction (scripts/city_builder.gd) actually stands.
+
 ## Layer 4 — city block
 
 | Card | Tier | Task | Needs | Done when |

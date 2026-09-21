@@ -6,15 +6,8 @@ extends Node3D
 const SAVE_PATH := "user://save.json"
 const SETTINGS_PATH := "user://settings.json"
 const AUTOSAVE_SECONDS := 30.0
-## How far below the voxel world's own terrain (which never generates below
-## y=0 -- one vertical chunk per column, see README) an embedded city-block
-## instance is offset, so the two can share one scene tree/physics world
-## with zero chance of spatial or collision overlap however far the player
-## has explored. Same "pocket dimension via a Y offset" technique
-## scripts/city_block.gd already uses for its own interiors (INTERIOR_Y).
-const CITY_EMBED_Y_OFFSET := -500.0
 
-enum State { TITLE, CREATOR, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE, CITY }
+enum State { TITLE, CREATOR, PLAYING, PAUSED, DEAD, INVENTORY, WORKBENCH, FURNACE }
 
 @onready var world: VoxelWorld = $World
 @onready var player: Player = $Player
@@ -32,18 +25,6 @@ var _was_night := false
 var _spawn_col := Vector2i(8, 8)
 var person_profile := PersonProfile.new()
 var _pending_seed := 0
-## B5: the embedded city-block instance and its walker while State.CITY is
-## active, else null. See _enter_city()/_exit_city().
-var _city: Node3D = null
-var _city_walker: CityWalker = null
-## L1: every active resident while State.CITY is active, else empty. Each
-## entry is {"actor": DebugActor, "profile": PersonProfile, "location":
-## String}. "location" is the last CityBlock location key that resident was
-## dispatched to or arrived at -- an approximation of "where they currently
-## are" good enough for CityBlock.get_route()'s "from" (see S5's handoff
-## for why exact arrival-tracking wasn't needed; still true at 20 residents
-## for the same reason -- every leg is well under an hour).
-var _city_residents: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -94,6 +75,14 @@ func _ready() -> void:
 	hud.bind_world(world, player)
 	_build_ground_under_player()
 
+	# First milestone of the New York-inspired block city (2026-09-20):
+	# one real voxel tower a short walk from wherever the player actually
+	# is (fresh spawn or a loaded save), built from real world blocks --
+	# not a separate scene. Re-stamping identical blocks on every boot is
+	# harmless (set_block() is idempotent); no "already built" flag yet.
+	var city_col := Vector2i(int(player.global_position.x), int(player.global_position.z)) + Vector2i(12, 0)
+	CityBuilder.build_tower(world, city_col)
+
 	# Menus.
 	screens = Screens.new()
 	screens.name = "Screens"
@@ -113,7 +102,6 @@ func _ready() -> void:
 		_enter(State.TITLE))
 	screens.respawn_pressed.connect(respawn_from_death)
 	screens.sfx_volume_changed.connect(_set_sfx_volume)
-	screens.visit_city_pressed.connect(_enter_city)
 	player.died.connect(func():
 		if state == State.PLAYING:
 			_enter(State.DEAD))
@@ -157,16 +145,6 @@ func _ready() -> void:
 		anim_test.player = player
 		anim_test.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(anim_test)
-
-	# Testing aid: `-- --citytest` drives a full State.CITY round trip (see
-	# tools/city_integration_check.gd) to prove B5's real main.gd
-	# integration, not just the standalone city_block.tscn preview.
-	if "--citytest" in args:
-		var city_test: Node = load("res://tools/city_integration_check.gd").new()
-		city_test.main = self
-		city_test.player = player
-		city_test.process_mode = Node.PROCESS_MODE_ALWAYS
-		add_child(city_test)
 
 	# Start on the title screen, unless a test or recording wants to skip it.
 	if selftest or "--skiptitle" in args:
@@ -255,205 +233,11 @@ func _enter(s: State) -> void:
 		State.FURNACE:
 			hud.set_inventory_open(true, "furnace")
 	var playing := s == State.PLAYING
-	hud.visible = s != State.TITLE and s != State.CITY
+	hud.visible = s != State.TITLE
 	player.ui_open = not playing
-	get_tree().paused = s in [State.TITLE, State.CREATOR, State.PAUSED, State.DEAD, State.CITY]
-	var mouse_needed := s in [State.PLAYING, State.CITY]
+	get_tree().paused = s in [State.TITLE, State.CREATOR, State.PAUSED, State.DEAD]
+	var mouse_needed := s == State.PLAYING
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if mouse_needed else Input.MOUSE_MODE_VISIBLE
-
-
-## B5: "Visit Hollowmark" on the title screen AND the pause menu call this
-## instead of _enter(State.CITY) directly -- entering the city needs to
-## build and embed the scene first, which a plain state switch can't do.
-## Ignores a repeat press while already visiting.
-func _enter_city() -> void:
-	if _city:
-		return
-	var city: Node3D = load("res://scenes/city_block.tscn").instantiate()
-	city.standalone = false
-	city.process_mode = Node.PROCESS_MODE_ALWAYS   # keep working while get_tree().paused is true, same technique `world` already uses
-	city.position = Vector3(0, CITY_EMBED_Y_OFFSET, 0)
-	add_child(city)
-	_city = city
-	_city_walker = city.spawn_walker()
-	_city_walker.standalone = false
-	_city_walker.exit_requested.connect(_exit_city)
-	_city_walker.work_requested.connect(_on_city_work_requested)
-	_city_walker.talk_requested.connect(_on_city_talk_requested)
-	_city_walker.inspect_requested.connect(_on_city_inspect_requested)
-	_city_walker.buy_requested.connect(_on_city_buy_requested)
-	# L1: the full 20-resident roster (L0) now appears in the city, each
-	# standing at home, and S5's routine loop drives every one of them from
-	# here on -- real hour boundaries (day_night.hour_changed, S0), not a
-	# fake clock. spread_offset() spaces them around each shared home point
-	# (many residents share the one Apartment as home) so 20 bodies don't
-	# spawn stacked on top of each other or jostling too close together.
-	var roster := ResidentRoster.build()
-	_city_residents.clear()
-	for i in roster.size():
-		var profile: PersonProfile = roster[i]
-		var home: String = profile.routine("home")
-		var actor: DebugActor = city.spawn_resident(profile.to_dict(), home)
-		actor.position += CityBlock.spread_offset(i, roster.size())
-		_city_residents.append({"actor": actor, "profile": profile, "location": home})
-	day_night.hour_changed.connect(_on_city_resident_hour_changed)
-	# L4: payday/rent for everyone with a home/job -- scoped to the same
-	# "while actually visiting the city" lifecycle as hour_changed above,
-	# not a separate always-on economy clock. The player's own rent still
-	# matters outside city visits (they live in the same Apartment
-	# building), but a real detached-from-the-city economy tick is new
-	# scope this card doesn't need to own; every other Layer 5/6 mechanic
-	# so far has been scoped the same way (city-only), and residents
-	# themselves don't persist between visits regardless (S4/S5), so
-	# paying them only while they exist is honest, not a limitation this
-	# card introduces.
-	day_night.day_changed.connect(_on_city_day_changed)
-	_drive_all_city_residents(day_night.hour())   # also act on the hour we're already in, not just the next change
-	_enter(State.CITY)
-
-
-## S2: E pressed near the workplace workbench (scripts/city_walker.gd's
-## work_requested, gated by CityBlock's work trigger). No visible in-city
-## feedback yet (the HUD is hidden throughout State.CITY, and a proper "you
-## earned $X" moment is presentation work, not this card's job) -- printed
-## so it's still verifiable, same as every other dev/test print in this
-## project.
-func _on_city_work_requested() -> void:
-	PersonActions.work(day_night, person_profile)
-	print("Worked a shift: +$%d, needs now %s" % [PersonActions.WORK_PAY, person_profile.data["needs"]])
-
-
-## L2: F pressed near a resident (scripts/city_walker.gd's talk_requested,
-## gated by CityWalker.near_resident -- a live proximity query, not a
-## fixed trigger, since residents move on their own routine). Same "no
-## visible in-city feedback yet, printed instead" reasoning as
-## _on_city_work_requested() -- a real "you talked with X" moment is
-## presentation work, not this card's job.
-func _on_city_talk_requested(resident_actor: DebugActor) -> void:
-	var resident_profile := _profile_for_resident_actor(resident_actor)
-	if resident_profile == null:
-		return
-	PersonActions.talk(day_night, person_profile, resident_profile)
-	print("Talked with %s: your affinity %d, their affinity %d"
-		% [resident_profile.display_name(),
-			person_profile.relationship_affinity(resident_profile.id()),
-			resident_profile.relationship_affinity(person_profile.id())])
-
-
-## L3: I pressed near a resident (scripts/city_walker.gd's
-## inspect_requested, reusing near_resident's same live proximity query as
-## talk). The "resident debug inspector" this card asks for -- prints the
-## full PersonProfile.debug_summary(), inspectable however long after any
-## of it happened, not just the instant it occurred.
-func _on_city_inspect_requested(resident_actor: DebugActor) -> void:
-	var resident_profile := _profile_for_resident_actor(resident_actor)
-	if resident_profile == null:
-		return
-	print(resident_profile.debug_summary())
-
-
-## L4: B pressed near the cafe (scripts/city_walker.gd's buy_requested).
-## Refuses (PersonActions.buy_food() returns false, changes nothing) if the
-## player can't afford it -- printed either way so both outcomes are
-## verifiable, same as every other action's dev-visible feedback.
-func _on_city_buy_requested() -> void:
-	var bought := PersonActions.buy_food(day_night, person_profile)
-	if bought:
-		print("Bought food at the cafe: -$%d, hunger now %d, money now %d"
-			% [PersonActions.SHOP_FOOD_COST, person_profile.need("hunger"), person_profile.need("money")])
-	else:
-		print("Can't afford food at the cafe (need $%d, have $%d)" % [PersonActions.SHOP_FOOD_COST, person_profile.need("money")])
-
-
-## L4: day_night.day_changed while the city is visited -- pays every
-## resident their daily wage and charges everyone (player included) rent.
-## Both are recorded as memories (PersonActions.payday()/charge_rent()), so
-## L3's inspector can already show them even though nothing has built a UI
-## around that yet.
-func _on_city_day_changed(_day: int) -> void:
-	if _city_residents.is_empty():
-		return
-	PersonActions.charge_rent(day_night, person_profile)
-	for entry in _city_residents:
-		var profile: PersonProfile = entry["profile"]
-		PersonActions.payday(day_night, profile)
-		PersonActions.charge_rent(day_night, profile)
-
-
-## Finds which tracked resident (see _city_residents) a given DebugActor
-## is, so a signal that only carries the actor (CityWalker doesn't know
-## about PersonProfiles) can still get to the right one.
-func _profile_for_resident_actor(actor: DebugActor) -> PersonProfile:
-	for entry in _city_residents:
-		if entry["actor"] == actor:
-			return entry["profile"]
-	return null
-
-
-## S5/L1: day_night.hour_changed while residents are present -- the real
-## hour boundary, whether it arrived through normal play, a sleep-skip, or
-## a load. Ignores it if a State.CITY visit ended in the same beat this
-## signal fires in (residents/city are already freed by then).
-func _on_city_resident_hour_changed(hour: int) -> void:
-	if _city_residents.is_empty():
-		return
-	_drive_all_city_residents(hour)
-
-
-## ResidentRoutine.current_goal() decides where each resident should be
-## right now; if that's not where they're already heading, get a fresh
-## route there and start walking it. No-ops (correctly) per-resident if
-## they're already at/heading to the right place -- most hour changes
-## shouldn't interrupt an in-progress walk with a route to the exact same
-## destination. Skips (not crashes on) a resident whose actor was freed
-## some other way, same defensive pattern as everywhere else this project
-## touches a node across a frame boundary.
-func _drive_all_city_residents(hour: int) -> void:
-	for entry in _city_residents:
-		var actor: DebugActor = entry["actor"]
-		if not is_instance_valid(actor):
-			continue
-		var profile: PersonProfile = entry["profile"]
-		var goal := ResidentRoutine.current_goal(profile.data["routine"], hour)
-		# L5: a resident too stressed to function calls in instead of
-		# actually heading to work -- redirected home rather than left
-		# stranded wherever they happened to be. Enough of these in a row
-		# gets them fired (PersonActions.maybe_miss_shift() owns the
-		# threshold/streak/firing logic; this is just the dispatch hook).
-		if goal == profile.routine("job") and PersonActions.maybe_miss_shift(day_night, profile):
-			goal = profile.routine("home")
-		if goal == entry["location"]:
-			continue
-		var route: Array = _city.get_route(entry["location"], goal)
-		if route.is_empty():
-			continue
-		actor.follow_route(route)
-		entry["location"] = goal
-
-
-## scripts/city_walker.gd's exit_requested signal (Esc), only reachable
-## while embedded (standalone = false, i.e. actually State.CITY).
-func _exit_city() -> void:
-	if _city:
-		_city.queue_free()   # deferred: safe to call from a signal this same node's own subtree just emitted
-		_city = null
-		_city_walker = null
-	# S5/L1: disconnect before dropping the resident refs -- day_night keeps
-	# running (and ticking hours) long after the city is gone, so a stale
-	# connection would call _drive_all_city_residents() against a freed
-	# city/residents on the very next hour boundary. The is_empty() guard
-	# in _on_city_resident_hour_changed() covers the same-frame case (this
-	# signal firing before queue_free() above actually takes effect); this
-	# disconnect is for every hour after that.
-	if day_night.hour_changed.is_connected(_on_city_resident_hour_changed):
-		day_night.hour_changed.disconnect(_on_city_resident_hour_changed)
-	# L4: same reasoning as hour_changed just above -- day_changed also
-	# outlives a city visit.
-	if day_night.day_changed.is_connected(_on_city_day_changed):
-		day_night.day_changed.disconnect(_on_city_day_changed)
-	_city_residents.clear()
-	player.activate_camera()
-	_enter(State.PLAYING)
 
 
 ## Kept for tests: opens/closes the inventory screen.
